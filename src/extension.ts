@@ -1,7 +1,9 @@
 import * as childProcess from 'node:child_process';
+import * as fs from 'node:fs';
 import * as vscode from 'vscode';
 
 const PROBE_TEXT = '[Universal Dictate probe]';
+const NATIVE_PASTE_RELATIVE_PATH = ['resources', 'bin', 'windows-fast-paste.exe'];
 
 export function activate(context: vscode.ExtensionContext): void {
   const insertProbe = vscode.commands.registerCommand(
@@ -15,7 +17,7 @@ export function activate(context: vscode.ExtensionContext): void {
       }
 
       try {
-        await pasteIntoFocusedControl(PROBE_TEXT);
+        await pasteIntoFocusedControl(context, PROBE_TEXT);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         void vscode.window.showErrorMessage(
@@ -33,13 +35,15 @@ export function activate(context: vscode.ExtensionContext): void {
       );
       const extensionKind = extension?.extensionKind ?? 'unknown';
       const remoteName = vscode.env.remoteName ?? 'none';
+      const nativeHelper = getNativePasteHelperPath(context);
 
       await vscode.window.showInformationMessage(
         [
           `platform=${process.platform}`,
           `arch=${process.arch}`,
           `remote=${remoteName}`,
-          `extensionKind=${String(extensionKind)}`
+          `extensionKind=${String(extensionKind)}`,
+          `nativePaste=${fs.existsSync(nativeHelper) ? 'available' : 'fallback'}`
         ].join(' | '),
         { modal: true }
       );
@@ -53,39 +57,57 @@ export function deactivate(): void {
   // Nothing to clean up yet.
 }
 
-async function pasteIntoFocusedControl(text: string): Promise<void> {
+async function pasteIntoFocusedControl(
+  context: vscode.ExtensionContext,
+  text: string
+): Promise<void> {
   const previousClipboard = await vscode.env.clipboard.readText();
   await vscode.env.clipboard.writeText(text);
 
   try {
-    await sendPasteKeystroke();
+    await sendPasteKeystroke(context);
   } finally {
-    // SendKeys is synchronous, but give the receiving control a short window to
-    // consume clipboard contents before restoring the user's clipboard.
-    await delay(120);
+    // Let the target consume clipboard contents before restoring the user's text.
+    await delay(150);
     await vscode.env.clipboard.writeText(previousClipboard);
   }
 }
 
-function sendPasteKeystroke(): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const script = [
-      'Add-Type -AssemblyName System.Windows.Forms',
-      '[System.Windows.Forms.SendKeys]::SendWait("^v")'
-    ].join('; ');
+async function sendPasteKeystroke(context: vscode.ExtensionContext): Promise<void> {
+  const nativeHelper = getNativePasteHelperPath(context);
 
-    childProcess.execFile(
-      'powershell.exe',
-      ['-NoProfile', '-NonInteractive', '-Command', script],
-      { windowsHide: true },
-      (error) => {
-        if (error) {
-          reject(error);
-          return;
-        }
-        resolve();
+  if (fs.existsSync(nativeHelper)) {
+    await execFile(nativeHelper, []);
+    return;
+  }
+
+  // Development fallback only. Release packages should contain the native helper.
+  const script = [
+    'Add-Type -AssemblyName System.Windows.Forms',
+    '[System.Windows.Forms.SendKeys]::SendWait("^v")'
+  ].join('; ');
+
+  await execFile('powershell.exe', [
+    '-NoProfile',
+    '-NonInteractive',
+    '-Command',
+    script
+  ]);
+}
+
+function getNativePasteHelperPath(context: vscode.ExtensionContext): string {
+  return vscode.Uri.joinPath(context.extensionUri, ...NATIVE_PASTE_RELATIVE_PATH).fsPath;
+}
+
+function execFile(file: string, args: string[]): Promise<void> {
+  return new Promise((resolve, reject) => {
+    childProcess.execFile(file, args, { windowsHide: true }, (error) => {
+      if (error) {
+        reject(error);
+        return;
       }
-    );
+      resolve();
+    });
   });
 }
 
