@@ -1,0 +1,55 @@
+{
+  "name": "vscode-universal-dictate",
+  "displayName": "Universal Dictate",
+  "description": "Open-source, fully local speech-to-text for any VS Code text input on Windows, including Remote - WSL.",
+  "version": "0.0.1",
+  "private": true,
+  "license": "MIT",
+  "publisher": "gcalpay",
+  "engines": {
+    "vscode": "^1.96.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "dictation",
+    "speech-to-text",
+    "voice",
+    "whisper",
+    "offline",
+    "wsl"
+  ],
+  "extensionKind": [
+    "ui"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onCommand:universalDictate.insertProbe"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "universalDictate.insertProbe",
+        "title": "Universal Dictate: Insert Probe Text"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "universalDictate.insertProbe",
+        "key": "ctrl+alt+d",
+        "when": "!terminalFocus"
+      }
+    ]
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "check": "tsc --noEmit -p ./"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/vscode": "^1.96.0",
+    "typescript": "^5.7.2"
+  }
+}
