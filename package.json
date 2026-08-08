@@ -25,13 +25,18 @@
   ],
   "main": "./dist/extension.js",
   "activationEvents": [
-    "onCommand:universalDictate.insertProbe"
+    "onCommand:universalDictate.insertProbe",
+    "onCommand:universalDictate.showDiagnostics"
   ],
   "contributes": {
     "commands": [
       {
         "command": "universalDictate.insertProbe",
         "title": "Universal Dictate: Insert Probe Text"
+      },
+      {
+        "command": "universalDictate.showDiagnostics",
+        "title": "Universal Dictate: Show Diagnostics"
       }
     ],
     "keybindings": [
@@ -45,11 +50,13 @@
   "scripts": {
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
-    "check": "tsc --noEmit -p ./"
+    "check": "tsc --noEmit -p ./",
+    "package:vsix": "npm run compile && vsce package --out universal-dictate-dev.vsix"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
     "@types/vscode": "^1.96.0",
+    "@vscode/vsce": "^3.9.2",
     "typescript": "^5.7.2"
   }
 }
