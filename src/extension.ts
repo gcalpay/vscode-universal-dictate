@@ -4,19 +4,14 @@ import * as vscode from 'vscode';
 const PROBE_TEXT = '[Universal Dictate probe]';
 
 export function activate(context: vscode.ExtensionContext): void {
-  const disposable = vscode.commands.registerCommand(
+  const insertProbe = vscode.commands.registerCommand(
     'universalDictate.insertProbe',
     async () => {
       if (process.platform !== 'win32') {
         void vscode.window.showErrorMessage(
-          'Universal Dictate currently supports Windows only.'
+          `Universal Dictate must run in the Windows UI extension host. Current platform: ${process.platform}.`
         );
         return;
-      }
-
-      if (vscode.window.activeTerminal) {
-        // activeTerminal is not equivalent to terminal focus, but the keybinding is
-        // already disabled when terminalFocus is true. Keep this conservative for M1.
       }
 
       try {
@@ -30,7 +25,28 @@ export function activate(context: vscode.ExtensionContext): void {
     }
   );
 
-  context.subscriptions.push(disposable);
+  const showDiagnostics = vscode.commands.registerCommand(
+    'universalDictate.showDiagnostics',
+    async () => {
+      const extension = vscode.extensions.getExtension(
+        'gcalpay.vscode-universal-dictate'
+      );
+      const extensionKind = extension?.extensionKind ?? 'unknown';
+      const remoteName = vscode.env.remoteName ?? 'none';
+
+      await vscode.window.showInformationMessage(
+        [
+          `platform=${process.platform}`,
+          `arch=${process.arch}`,
+          `remote=${remoteName}`,
+          `extensionKind=${String(extensionKind)}`
+        ].join(' | '),
+        { modal: true }
+      );
+    }
+  );
+
+  context.subscriptions.push(insertProbe, showDiagnostics);
 }
 
 export function deactivate(): void {
