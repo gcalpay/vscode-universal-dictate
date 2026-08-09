@@ -5,6 +5,8 @@ on:
     branches: [ui/final-0.1.1-assets]
     paths:
       - .github/workflows/materialize-overview.yml
+  pull_request:
+    branches: [main]
 
 permissions:
   contents: write
@@ -13,12 +15,23 @@ jobs:
   materialize:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout branch
         uses: actions/checkout@v7
         with:
           ref: ui/final-0.1.1-assets
 
+      - name: Detect staged artwork
+        id: staged
+        shell: bash
+        run: |
+          if test -f .asset-staging/overview.b64; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Decode staged artwork
+        if: steps.staged.outputs.present == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -29,6 +42,7 @@ jobs:
           file media/universal-dictate-overview.webp
 
       - name: Commit binary artwork
+        if: steps.staged.outputs.present == 'true'
         shell: bash
         run: |
           set -euo pipefail
