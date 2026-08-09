@@ -9,11 +9,15 @@ const START_TIMEOUT_MS = 10000;
 
 export class RecorderSession {
   private readonly child: childProcess.ChildProcessWithoutNullStreams;
+  private readonly ready: Promise<void>;
   private readonly completion: Promise<void>;
+  private readyResolve!: () => void;
+  private readyReject!: (error: Error) => void;
   private completionResolve!: () => void;
   private completionReject!: (error: Error) => void;
   private stderr = '';
   private stopped = false;
+  private readySettled = false;
 
   private constructor(
     child: childProcess.ChildProcessWithoutNullStreams,
@@ -21,6 +25,10 @@ export class RecorderSession {
     onLevel: (level: number) => void
   ) {
     this.child = child;
+    this.ready = new Promise<void>((resolve, reject) => {
+      this.readyResolve = resolve;
+      this.readyReject = reject;
+    });
     this.completion = new Promise<void>((resolve, reject) => {
       this.completionResolve = resolve;
       this.completionReject = reject;
@@ -33,6 +41,12 @@ export class RecorderSession {
 
     const lines = readline.createInterface({ input: child.stdout });
     lines.on('line', (line) => {
+      if (line === 'READY' && !this.readySettled) {
+        this.readySettled = true;
+        this.readyResolve();
+        return;
+      }
+
       if (line.startsWith('LEVEL ')) {
         const level = Number(line.slice('LEVEL '.length));
         if (Number.isFinite(level)) {
@@ -42,19 +56,33 @@ export class RecorderSession {
     });
 
     child.on('error', (error) => {
+      if (!this.readySettled) {
+        this.readySettled = true;
+        this.readyReject(error);
+      }
       this.completionReject(error);
     });
 
     child.on('exit', (code) => {
       lines.close();
       if (code === 0) {
+        if (!this.readySettled) {
+          this.readySettled = true;
+          this.readyReject(new Error('Microphone recorder exited before becoming ready.'));
+        }
         this.completionResolve();
-      } else {
-        const details = this.stderr.trim();
-        this.completionReject(
-          new Error(`Microphone recorder exited with code ${String(code)}${details ? `: ${details}` : ''}`)
-        );
+        return;
       }
+
+      const details = this.stderr.trim();
+      const error = new Error(
+        `Microphone recorder exited with code ${String(code)}${details ? `: ${details}` : ''}`
+      );
+      if (!this.readySettled) {
+        this.readySettled = true;
+        this.readyReject(error);
+      }
+      this.completionReject(error);
     });
   }
 
@@ -100,37 +128,22 @@ export class RecorderSession {
   }
 
   private async waitUntilReady(): Promise<void> {
-    await new Promise<void>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        reject(new Error('Microphone recorder did not become ready in time.'));
-      }, START_TIMEOUT_MS);
-
-      const lines = readline.createInterface({ input: this.child.stdout });
-      const finish = () => {
+    let timer: NodeJS.Timeout | undefined;
+    try {
+      await Promise.race([
+        this.ready,
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(
+            () => reject(new Error('Microphone recorder did not become ready in time.')),
+            START_TIMEOUT_MS
+          );
+        })
+      ]);
+    } finally {
+      if (timer) {
         clearTimeout(timer);
-        lines.close();
-      };
-
-      lines.on('line', (line) => {
-        if (line === 'READY') {
-          finish();
-          resolve();
-        }
-      });
-
-      this.child.once('exit', (code) => {
-        finish();
-        const details = this.stderr.trim();
-        reject(
-          new Error(`Microphone recorder exited before ready (code ${String(code)})${details ? `: ${details}` : ''}`)
-        );
-      });
-
-      this.child.once('error', (error) => {
-        finish();
-        reject(error);
-      });
-    });
+      }
+    }
   }
 }
 
