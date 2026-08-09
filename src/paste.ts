@@ -31,10 +31,12 @@ export async function pasteIntoFocusedControl(
   }
 }
 
+export function getNativePasteHelperPath(context: vscode.ExtensionContext): string {
+  return context.asAbsolutePath(path.join('resources', 'bin', 'windows-fast-paste.exe'));
+}
+
 async function sendPasteKeystroke(context: vscode.ExtensionContext): Promise<void> {
-  const helperPath = context.asAbsolutePath(
-    path.join('resources', 'bin', 'windows-fast-paste.exe')
-  );
+  const helperPath = getNativePasteHelperPath(context);
 
   try {
     await execFile(helperPath, []);
