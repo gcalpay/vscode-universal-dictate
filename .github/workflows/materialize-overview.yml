@@ -36,7 +36,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p media
-          base64 --decode .asset-staging/overview.b64 > media/universal-dictate-overview.webp
+          tr -cd 'A-Za-z0-9+/=' < .asset-staging/overview.b64 | base64 --decode > media/universal-dictate-overview.webp
           test "$(head -c 4 media/universal-dictate-overview.webp)" = "RIFF"
           test "$(dd if=media/universal-dictate-overview.webp bs=1 skip=8 count=4 status=none)" = "WEBP"
           file media/universal-dictate-overview.webp
