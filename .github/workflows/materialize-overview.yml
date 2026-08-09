@@ -1,0 +1,41 @@
+name: Materialize overview artwork
+
+on:
+  push:
+    branches: [ui/final-0.1.1-assets]
+    paths:
+      - .github/workflows/materialize-overview.yml
+
+permissions:
+  contents: write
+
+jobs:
+  materialize:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v7
+        with:
+          ref: ui/final-0.1.1-assets
+
+      - name: Decode and verify overview artwork
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p media
+          cat .asset-staging/part*.b64 | base64 --decode > media/universal-dictate-overview.webp
+          test "$(head -c 4 media/universal-dictate-overview.webp)" = "RIFF"
+          test "$(dd if=media/universal-dictate-overview.webp bs=1 skip=8 count=4 status=none)" = "WEBP"
+          echo "5d6c85b7d811971aa5f5f44f59c5c5b539bbbc1db941d8b4de0df3c9134b59ab  media/universal-dictate-overview.webp" | sha256sum -c -
+          file media/universal-dictate-overview.webp
+
+      - name: Commit binary artwork and remove staging data
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm -r .asset-staging
+          git add media/universal-dictate-overview.webp
+          git commit -m "Add Universal Dictate overview artwork"
+          git push origin HEAD:ui/final-0.1.1-assets
