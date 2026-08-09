@@ -1,17 +1,22 @@
 # Dependency strategy
 
-Universal Dictate keeps product-specific behavior in this repository and uses mature permissively licensed libraries/runtimes only where they provide substantial value.
+Universal Dictate keeps product-specific behavior in this repository and uses mature permissively licensed libraries/runtimes where they provide substantial value.
 
 ## Windows text injection
 
-The focused-input paste helper is an original Universal Dictate C++ implementation in `native/windows-fast-paste.cpp`.
+The focused-input paste helper is maintained as a C++20 implementation in `native/windows-fast-paste.cpp`.
 
 - Language: C++20
-- External source dependency: none
 - Windows API: documented Win32 `SendInput` / keyboard state APIs
 - Role: temporarily release shortcut modifiers, synthesize Ctrl+V, then restore modifier state
+- Historical source lineage: OpenWhispr `resources/windows-fast-paste.c`
+- Upstream revision used by the early Universal Dictate adaptation: `1866ecf6641b9fa4851f19c7838cb18f3662def7`
+- OpenWhispr license: MIT
+- Retained upstream license: `third_party/OpenWhispr-LICENSE.txt`
 
-The helper never sends Enter and does not depend on any other dictation application.
+The current helper has been substantially rewritten in C++20 and reduced to Universal Dictate's focused Ctrl+V use case. It does not include OpenWhispr's terminal detection, copy mode or application architecture, but the MIT notice is retained because the implementation evolved from the earlier attributed helper.
+
+The helper never sends Enter.
 
 ## Microphone capture
 
@@ -70,11 +75,11 @@ The authoritative list used in the extension is maintained in `src/languages.ts`
 
 ## Universal Dictate code
 
-The project owns the code that defines the product:
+The project maintains the code that defines the product:
 
 - VS Code extension lifecycle and Remote - WSL behavior
 - dictation state machine
-- Windows focused-input paste helper
+- current Windows focused-input paste helper, with the OpenWhispr lineage documented above
 - Windows recorder process and native IPC protocol
 - target/focus preservation
 - terminal safety policy
@@ -87,4 +92,4 @@ The project owns the code that defines the product:
 
 ## Policy
 
-Do not copy application source code from other projects into this repository. Prefer documented platform APIs for small native functionality and pinned upstream dependencies for substantial external libraries/runtimes. For every redistributed third-party binary, model or library, record its source, version/revision and license before release.
+Do not copy application source code from other projects without explicit provenance and license tracking. Prefer documented platform APIs for small native functionality and pinned upstream dependencies for substantial external libraries/runtimes. For every redistributed third-party binary, model, library or retained source lineage, record its source, version/revision and license before release.
