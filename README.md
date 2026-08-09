@@ -2,9 +2,9 @@
 
 **Local, offline, multilingual dictation for VS Code on Windows. Supports 99 Whisper languages, Remote - WSL and focused-input dictation into agent/chat extensions such as the OpenAI Codex composer.**
 
-Universal Dictate is an open-source VS Code extension for speech-to-text without API keys or cloud transcription. It runs the multilingual OpenAI Whisper `base` model locally through `whisper.cpp`, automatically detects the spoken language by default and can be fixed to any of the model's 99 supported languages. Because text is inserted through the focused Windows input control rather than a private extension API, it can also be used with extension-owned agent/chat composers such as OpenAI Codex where normal VS Code text insertion APIs are not available.
+Universal Dictate is an open-source VS Code extension for speech-to-text without API keys or cloud transcription. **Source code, issue tracking and release artifacts are public on [GitHub](https://github.com/gcalpay/vscode-universal-dictate).** It runs the multilingual OpenAI Whisper `base` model locally through `whisper.cpp`, automatically detects the spoken language by default and can be fixed to any of the model's 99 supported languages. Because text is inserted through the focused Windows input control rather than a private extension API, it can also be used with extension-owned agent/chat composers such as OpenAI Codex where normal VS Code text insertion APIs are not available.
 
-> **Version:** 0.1.0 for Windows x64. End-to-end dictation and focused-input insertion have been validated against the OpenAI Codex composer under Remote - WSL on Windows. The extension includes Windows microphone capture, an always-available VS Code status-bar microphone button, a non-activating recording overlay and local Whisper transcription.
+> **Version:** 0.1.1 for Windows x64. End-to-end dictation and focused-input insertion have been validated against the OpenAI Codex composer under Remote - WSL on Windows. The extension includes Windows microphone capture, an always-available VS Code status-bar microphone button, a non-activating recording overlay and local Whisper transcription.
 
 ## Installation
 
@@ -14,14 +14,14 @@ Public releases are distributed as a Windows x64 VS Code extension. In VS Code, 
 
 ### VSIX
 
-A packaged release can also be installed directly:
+For manual/offline installation, download the latest Windows x64 `.vsix` from [GitHub Releases](https://github.com/gcalpay/vscode-universal-dictate/releases/latest), then install it directly:
 
 ```text
 Ctrl+Shift+P
 Extensions: Install from VSIX...
 ```
 
-Select the `universal-dictate-win32-x64.vsix` file and reload VS Code if prompted.
+Select the downloaded `universal-dictate-win32-x64.vsix` file and reload VS Code if prompted. Marketplace installation is recommended for normal users because VS Code handles extension updates automatically. VS Code disables auto-update by default for extensions installed manually from a VSIX.
 
 Do not install a separate copy inside WSL. Universal Dictate declares `extensionKind: ["ui"]` so it runs in the local Windows extension host while a workspace may remain connected through Remote - WSL.
 
