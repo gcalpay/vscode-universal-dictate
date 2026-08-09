@@ -53,6 +53,7 @@
     "onCommand:universalDictate.toggle",
     "onCommand:universalDictate.cancel",
     "onCommand:universalDictate.selectLanguage",
+    "onCommand:universalDictate.openSettings",
     "onCommand:universalDictate.showDiagnostics"
   ],
   "contributes": {
@@ -68,6 +69,10 @@
       {
         "command": "universalDictate.selectLanguage",
         "title": "Universal Dictate: Select Language"
+      },
+      {
+        "command": "universalDictate.openSettings",
+        "title": "Universal Dictate: Settings"
       },
       {
         "command": "universalDictate.showDiagnostics",
