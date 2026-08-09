@@ -7,6 +7,7 @@ import { ensureModel } from './model';
 
 const execFile = util.promisify(childProcess.execFile);
 const WHISPER_RELATIVE_PATH = ['resources', 'whisper', 'whisper-cli.exe'];
+const MIN_AUDIO_BYTES = 4000;
 
 export function getWhisperCliPath(context: vscode.ExtensionContext): string {
   return vscode.Uri.joinPath(context.extensionUri, ...WHISPER_RELATIVE_PATH).fsPath;
@@ -21,12 +22,17 @@ export async function transcribe(
     throw new Error(`Bundled whisper.cpp runtime is missing: ${whisperPath}`);
   }
 
+  const audioStat = await fs.promises.stat(audioPath);
+  if (audioStat.size < MIN_AUDIO_BYTES) {
+    return '';
+  }
+
   const modelPath = await ensureModel(context);
   const configuration = vscode.workspace.getConfiguration('universalDictate');
   const language = configuration.get<string>('language', 'auto');
   const threadCount = Math.max(1, Math.min(8, os.cpus().length - 2));
 
-  const { stdout, stderr } = await execFile(
+  const { stdout } = await execFile(
     whisperPath,
     [
       '-m', modelPath,
@@ -44,11 +50,7 @@ export async function transcribe(
     }
   );
 
-  const transcript = normalizeTranscript(stdout);
-  if (!transcript && stderr.trim()) {
-    throw new Error(`whisper.cpp produced no transcript: ${stderr.trim()}`);
-  }
-  return transcript;
+  return normalizeTranscript(stdout);
 }
 
 function normalizeTranscript(text: string): string {
