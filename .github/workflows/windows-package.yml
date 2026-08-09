@@ -3,6 +3,7 @@ name: Windows package
 on:
   push:
     branches: [main]
+  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -34,12 +35,34 @@ jobs:
           Invoke-WebRequest https://raw.githubusercontent.com/mackron/miniaudio/0.11.25/miniaudio.c -OutFile .deps/miniaudio/miniaudio.c
 
       - name: Compile native Windows helpers
-        shell: cmd
+        shell: pwsh
         run: |
-          if not exist resources\bin mkdir resources\bin
-          call "%ProgramFiles%\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
-          cl /nologo /O2 native\windows-fast-paste.c /Fe:resources\bin\windows-fast-paste.exe user32.lib
-          cl /nologo /O2 /I .deps\miniaudio native\record-audio.c .deps\miniaudio\miniaudio.c /Fe:resources\bin\universal-dictate-recorder.exe
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          if (-not (Test-Path $vswhere)) {
+            throw "vswhere.exe not found at $vswhere"
+          }
+
+          $vsInstall = (& $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath | Select-Object -First 1)
+          if (-not $vsInstall) {
+            throw "No Visual Studio installation with the C++ toolchain was found"
+          }
+
+          $vcvars = Join-Path $vsInstall 'VC\Auxiliary\Build\vcvars64.bat'
+          if (-not (Test-Path $vcvars)) {
+            throw "vcvars64.bat not found at $vcvars"
+          }
+
+          $commands = @(
+            "call `"$vcvars`"",
+            "if not exist resources\bin mkdir resources\bin",
+            "cl /nologo /O2 native\windows-fast-paste.c /Fe:resources\bin\windows-fast-paste.exe user32.lib",
+            "cl /nologo /O2 /I .deps\miniaudio native\record-audio.c .deps\miniaudio\miniaudio.c /Fe:resources\bin\universal-dictate-recorder.exe"
+          ) -join ' && '
+
+          cmd.exe /D /S /C $commands
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
 
       - name: Package VSIX
         run: npm run package:vsix
