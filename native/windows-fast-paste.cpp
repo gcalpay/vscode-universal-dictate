@@ -1,8 +1,15 @@
 /*
  * Universal Dictate - Windows focused-input paste helper
  *
- * Original implementation for Universal Dictate using the documented Win32
- * keyboard input APIs. It synthesizes Ctrl+V only and never sends Enter.
+ * This C++ implementation evolved from an early Universal Dictate adaptation
+ * of OpenWhispr's MIT-licensed resources/windows-fast-paste.c at revision
+ * 1866ecf6641b9fa4851f19c7838cb18f3662def7. It has since been substantially
+ * rewritten and reduced to Universal Dictate's Ctrl+V-only focused-input use
+ * case. The OpenWhispr MIT notice is retained in
+ * third_party/OpenWhispr-LICENSE.txt.
+ *
+ * The helper uses documented Win32 keyboard input APIs. It synthesizes Ctrl+V
+ * only and never sends Enter.
  *
  * SPDX-License-Identifier: MIT
  */
