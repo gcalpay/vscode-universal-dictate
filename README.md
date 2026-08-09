@@ -27,6 +27,8 @@ Do not install a separate copy inside WSL. Universal Dictate declares `extension
 
 On first dictation, Universal Dictate downloads the multilingual Whisper `base` model (about 148 MB), verifies its SHA-256 checksum and stores it in VS Code's local extension storage. After that, normal dictation can run offline.
 
+For lower post-recording latency, Universal Dictate 0.1.1 starts a local `whisper-server` worker when recording begins and keeps the model loaded for later dictations. Model initialization therefore overlaps with the time you are speaking instead of starting only after you press confirm. The worker listens only on `127.0.0.1` behind a randomized per-session request path. If it cannot start or exits unexpectedly, Universal Dictate automatically falls back to the one-shot `whisper-cli` path. The current Windows build remains CPU-only.
+
 ## Product goals
 
 - Local speech-to-text with no API key or cloud transcription.
@@ -38,6 +40,7 @@ On first dictation, Universal Dictate downloads the multilingual Whisper `base` 
 - Terminal dictation disabled by default.
 - No Python, Conda, FFmpeg or WSL-side runtime dependency for end users.
 - Live microphone visualization with confirm and cancel controls that do not activate another window or steal the target caret.
+- Reuse a persistent local Whisper worker after first use to avoid reloading the model for every utterance.
 
 ## Current controls
 
@@ -89,14 +92,14 @@ The relevant upstream license notices are retained in `third_party/`.
 - C++20: Universal Dictate's native Windows microphone process, non-activating recording overlay and focused-input paste helper.
 - miniaudio: permissively licensed microphone/audio backend.
 - OpenAI Whisper: MIT-licensed speech-recognition model and weights.
-- whisper.cpp: MIT-licensed local Whisper inference runtime.
+- whisper.cpp: MIT-licensed local Whisper inference runtime, using its local HTTP server to keep the model warm between dictations and its CLI as a fallback.
 - OpenWhispr: MIT-licensed historical source lineage for the Windows focused-input paste helper. The current helper has been substantially rewritten in C++20 and reduced to Universal Dictate's Ctrl+V-only use case; the upstream MIT notice is retained.
 
 The recorder, overlay and VS Code integration are maintained as Universal Dictate code. Provenance for the focused-input paste helper is documented explicitly in [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) and [`docs/DEPENDENCIES.md`](docs/DEPENDENCIES.md).
 
 ## Privacy
 
-Normal dictation is local. Microphone audio is written to a temporary local WAV file, transcribed locally and deleted after transcription. Audio and transcripts are not sent to a transcription service.
+Normal dictation is local. Microphone audio is written to a temporary local WAV file, sent only to the bundled `whisper.cpp` worker over the local loopback interface, transcribed locally and deleted after transcription. Audio and transcripts are not sent to a remote transcription service.
 
 The only network operation required for normal setup is the initial Whisper model download.
 
