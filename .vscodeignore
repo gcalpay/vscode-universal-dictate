@@ -8,5 +8,9 @@ src/**
 tsconfig.json
 **/*.ts
 **/*.map
+**/*.obj
+**/*.lib
+**/*.exp
+**/*.pdb
 **/*.vsix
 node_modules/**
