@@ -1,8 +1,8 @@
 # VS Code Universal Dictate
 
-**Local, offline, multilingual dictation for VS Code on Windows. Supports 99 Whisper languages, including Remote - WSL and extension-owned text inputs such as the OpenAI Codex composer.**
+**Local, offline, multilingual dictation for VS Code on Windows. Supports 99 Whisper languages, Remote - WSL and focused-input dictation into agent/chat extensions such as the OpenAI Codex composer.**
 
-Universal Dictate is an open-source VS Code extension for speech-to-text without API keys or cloud transcription. It runs the multilingual OpenAI Whisper `base` model locally through `whisper.cpp`, automatically detects the spoken language by default and can be fixed to any of the model's 99 supported languages.
+Universal Dictate is an open-source VS Code extension for speech-to-text without API keys or cloud transcription. It runs the multilingual OpenAI Whisper `base` model locally through `whisper.cpp`, automatically detects the spoken language by default and can be fixed to any of the model's 99 supported languages. Because text is inserted through the focused Windows input control rather than a private extension API, it can also be used with extension-owned agent/chat composers such as OpenAI Codex where normal VS Code text insertion APIs are not available.
 
 > **Status:** early working MVP. Focused-input insertion has been validated against the OpenAI Codex composer under Remote - WSL. The current build includes Windows microphone capture, a clickable VS Code status-bar microphone button, a non-activating recording overlay and local Whisper transcription.
 
@@ -12,7 +12,7 @@ Universal Dictate is an open-source VS Code extension for speech-to-text without
 - Multilingual dictation with automatic language detection and explicit selection from 99 Whisper languages.
 - Windows 10/11 as the supported desktop platform.
 - Works from a Windows VS Code client while the workspace is connected through Remote - WSL.
-- Inserts dictated text into the text control that had focus, including extension-owned composers where practical.
+- Inserts dictated text into the text control that had focus, including extension-owned agent/chat composers such as OpenAI Codex where practical.
 - Never submits dictated text automatically.
 - Terminal dictation disabled by default.
 - No Python, Conda, FFmpeg or WSL-side runtime dependency for end users.
@@ -29,14 +29,14 @@ Ctrl+Alt+D                   Stop, transcribe locally and insert
 Esc                          Cancel the current recording
 ```
 
-While recording, Universal Dictate shows a small native Windows overlay with a centered, mirrored rolling microphone-energy field rather than a conventional ascending volume meter. Recent signal energy flows from left to right as layered traces and filaments, giving the display a waveform/spectral-field appearance while remaining lightweight and responsive.
+While recording, Universal Dictate shows a native Windows overlay with a large, centered, mirrored rolling microphone-energy field. The visualization uses adaptive display normalization so ordinary speech produces substantial vertical motion, then renders a filled central ribbon, layered contour lines and fine vertical filaments rather than a conventional ascending volume meter.
 
 ```text
 ✓   confirm, transcribe and insert
 ×   cancel and discard
 ```
 
-The VS Code status-bar item also becomes a rolling nine-sample signal history during recording instead of a single level character. The native overlay uses the Win32 `WS_EX_NOACTIVATE` behavior so clicking ✓ or × does not intentionally move keyboard focus away from the VS Code editor/composer where the transcript will be inserted.
+The VS Code status-bar item also becomes a rolling signal history during recording. The native overlay uses the Win32 `WS_EX_NOACTIVATE` behavior so clicking ✓ or × does not intentionally move keyboard focus away from the VS Code editor/composer where the transcript will be inserted.
 
 ## Languages
 
