@@ -16,7 +16,7 @@ Universal Dictate is an open-source VS Code extension for speech-to-text without
 - Never submits dictated text automatically.
 - Terminal dictation disabled by default.
 - No Python, Conda, FFmpeg or WSL-side runtime dependency for end users.
-- Visible microphone input level with confirm and cancel controls that do not activate another window or steal the target caret.
+- Live microphone visualization with confirm and cancel controls that do not activate another window or steal the target caret.
 
 ## Current controls
 
@@ -29,14 +29,14 @@ Ctrl+Alt+D                   Stop, transcribe locally and insert
 Esc                          Cancel the current recording
 ```
 
-While recording, Universal Dictate also shows a small native Windows overlay with a live input-level meter:
+While recording, Universal Dictate shows a small native Windows overlay with a centered, mirrored rolling microphone-energy field rather than a conventional ascending volume meter. Recent signal energy flows from left to right as layered traces and filaments, giving the display a waveform/spectral-field appearance while remaining lightweight and responsive.
 
 ```text
 ✓   confirm, transcribe and insert
 ×   cancel and discard
 ```
 
-The status-bar item becomes a non-clickable level/progress indicator during recording and transcription. The native overlay uses the Win32 `WS_EX_NOACTIVATE` behavior so clicking ✓ or × does not intentionally move keyboard focus away from the VS Code editor/composer where the transcript will be inserted.
+The VS Code status-bar item also becomes a rolling nine-sample signal history during recording instead of a single level character. The native overlay uses the Win32 `WS_EX_NOACTIVATE` behavior so clicking ✓ or × does not intentionally move keyboard focus away from the VS Code editor/composer where the transcript will be inserted.
 
 ## Languages
 

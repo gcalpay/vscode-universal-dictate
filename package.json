@@ -2,7 +2,7 @@
   "name": "vscode-universal-dictate",
   "displayName": "Universal Dictate",
   "description": "Open-source VS Code extension for local, offline, multilingual speech-to-text in 99 Whisper languages on Windows, including Remote - WSL.",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "private": true,
   "license": "MIT",
   "publisher": "gcalpay",
