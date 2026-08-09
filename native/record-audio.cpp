@@ -5,7 +5,7 @@
  * compiled at build time; it is not a runtime dependency.
  *
  * The recorder also owns a small non-activating Win32 overlay. The overlay
- * displays the live microphone level and exposes confirm/cancel controls
+ * displays a live rolling signal field and exposes confirm/cancel controls
  * without taking keyboard focus away from the VS Code input being dictated
  * into.
  *
@@ -34,6 +34,7 @@
 #include "miniaudio.h"
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <chrono>
 #include <cmath>
@@ -51,9 +52,10 @@ namespace {
 constexpr ma_uint32 kSampleRate = 16000;
 constexpr ma_uint32 kChannels = 1;
 constexpr auto kLevelInterval = std::chrono::milliseconds(50);
-constexpr int kOverlayWidth = 330;
-constexpr int kOverlayHeight = 76;
+constexpr int kOverlayWidth = 390;
+constexpr int kOverlayHeight = 92;
 constexpr int kOverlayMargin = 18;
+constexpr int kSignalPoints = 28;
 constexpr wchar_t kOverlayClassName[] = L"UniversalDictateRecordingOverlay";
 
 enum class RecorderCommand : int {
@@ -180,17 +182,18 @@ struct OverlayState {
     HFONT textFont = nullptr;
     HFONT symbolFont = nullptr;
     int levelMilli = 0;
+    std::array<int, kSignalPoints> levelHistory{};
     std::atomic<bool> actionSent{false};
 };
 
 OverlayState g_overlay;
 
 RECT confirmRect(const RECT& client) {
-    return RECT{client.right - 92, 14, client.right - 52, client.bottom - 14};
+    return RECT{client.right - 92, 18, client.right - 52, client.bottom - 18};
 }
 
 RECT cancelRect(const RECT& client) {
-    return RECT{client.right - 46, 14, client.right - 6, client.bottom - 14};
+    return RECT{client.right - 46, 18, client.right - 6, client.bottom - 18};
 }
 
 void emitOverlayAction(const char* action) {
@@ -204,11 +207,69 @@ void emitOverlayAction(const char* action) {
     }
 }
 
+void drawSignalField(HDC dc, const RECT& client) {
+    const int left = 108;
+    const int right = client.right - 108;
+    const int top = 20;
+    const int bottom = client.bottom - 16;
+    const int centerY = (top + bottom) / 2;
+    const int width = std::max(1, right - left);
+    const int maxAmplitude = std::max(6, (bottom - top) / 2 - 2);
+
+    HPEN axisPen = CreatePen(PS_SOLID, 1, RGB(55, 67, 74));
+    HGDIOBJ previousPen = SelectObject(dc, axisPen);
+    MoveToEx(dc, left, centerY, nullptr);
+    LineTo(dc, right, centerY);
+    SelectObject(dc, previousPen);
+    DeleteObject(axisPen);
+
+    std::array<POINT, kSignalPoints> upperOuter{};
+    std::array<POINT, kSignalPoints> lowerOuter{};
+    std::array<POINT, kSignalPoints> upperInner{};
+    std::array<POINT, kSignalPoints> lowerInner{};
+
+    HPEN filamentPen = CreatePen(PS_SOLID, 1, RGB(42, 88, 112));
+    previousPen = SelectObject(dc, filamentPen);
+
+    for (int index = 0; index < kSignalPoints; ++index) {
+        const int x = left + (index * width) / (kSignalPoints - 1);
+        const double normalized = std::sqrt(
+            std::clamp(g_overlay.levelHistory[index], 0, 1000) / 1000.0);
+        const int amplitude = 1 + static_cast<int>(normalized * maxAmplitude);
+        const int innerAmplitude = std::max(1, static_cast<int>(amplitude * 0.55));
+
+        MoveToEx(dc, x, centerY - amplitude, nullptr);
+        LineTo(dc, x, centerY + amplitude);
+
+        upperOuter[index] = POINT{x, centerY - amplitude};
+        lowerOuter[index] = POINT{x, centerY + amplitude};
+        upperInner[index] = POINT{x, centerY - innerAmplitude};
+        lowerInner[index] = POINT{x, centerY + innerAmplitude};
+    }
+
+    SelectObject(dc, previousPen);
+    DeleteObject(filamentPen);
+
+    HPEN innerPen = CreatePen(PS_SOLID, 1, RGB(74, 142, 176));
+    previousPen = SelectObject(dc, innerPen);
+    Polyline(dc, upperInner.data(), static_cast<int>(upperInner.size()));
+    Polyline(dc, lowerInner.data(), static_cast<int>(lowerInner.size()));
+    SelectObject(dc, previousPen);
+    DeleteObject(innerPen);
+
+    HPEN outerPen = CreatePen(PS_SOLID, 2, RGB(0, 153, 255));
+    previousPen = SelectObject(dc, outerPen);
+    Polyline(dc, upperOuter.data(), static_cast<int>(upperOuter.size()));
+    Polyline(dc, lowerOuter.data(), static_cast<int>(lowerOuter.size()));
+    SelectObject(dc, previousPen);
+    DeleteObject(outerPen);
+}
+
 void drawOverlay(HWND window, HDC dc) {
     RECT client{};
     GetClientRect(window, &client);
 
-    HBRUSH background = CreateSolidBrush(RGB(31, 31, 31));
+    HBRUSH background = CreateSolidBrush(RGB(24, 27, 30));
     FillRect(dc, &client, background);
     DeleteObject(background);
 
@@ -216,35 +277,14 @@ void drawOverlay(HWND window, HDC dc) {
     SetTextColor(dc, RGB(245, 245, 245));
 
     HFONT previousFont = reinterpret_cast<HFONT>(SelectObject(dc, g_overlay.textFont));
-    RECT title{14, 8, client.right - 104, 30};
-    DrawTextW(dc, L"Universal Dictate", -1, &title, DT_LEFT | DT_SINGLELINE | DT_VCENTER);
+    RECT title{14, 10, 104, 31};
+    DrawTextW(dc, L"Universal", -1, &title, DT_LEFT | DT_SINGLELINE | DT_VCENTER);
 
-    RECT subtitle{14, 31, 118, 57};
-    SetTextColor(dc, RGB(190, 190, 190));
+    RECT subtitle{14, 34, 104, 61};
+    SetTextColor(dc, RGB(179, 188, 194));
     DrawTextW(dc, L"Recording", -1, &subtitle, DT_LEFT | DT_SINGLELINE | DT_VCENTER);
 
-    constexpr int kBars = 8;
-    constexpr int kBarWidth = 7;
-    constexpr int kBarGap = 3;
-    const int meterLeft = 116;
-    const int meterBottom = 57;
-    const int activeBars = std::clamp(
-        static_cast<int>(std::ceil(std::sqrt(g_overlay.levelMilli / 1000.0) * kBars)),
-        0,
-        kBars);
-
-    for (int index = 0; index < kBars; ++index) {
-        const int height = 5 + index * 2;
-        RECT bar{
-            meterLeft + index * (kBarWidth + kBarGap),
-            meterBottom - height,
-            meterLeft + index * (kBarWidth + kBarGap) + kBarWidth,
-            meterBottom};
-        HBRUSH brush = CreateSolidBrush(
-            index < activeBars ? RGB(0, 122, 204) : RGB(74, 74, 74));
-        FillRect(dc, &bar, brush);
-        DeleteObject(brush);
-    }
+    drawSignalField(dc, client);
 
     const RECT okRect = confirmRect(client);
     const RECT xRect = cancelRect(client);
@@ -398,6 +438,12 @@ void pumpOverlayMessages() {
 
 void updateOverlayLevel(int levelMilli) {
     g_overlay.levelMilli = std::clamp(levelMilli, 0, 1000);
+    std::move(
+        g_overlay.levelHistory.begin() + 1,
+        g_overlay.levelHistory.end(),
+        g_overlay.levelHistory.begin());
+    g_overlay.levelHistory.back() = g_overlay.levelMilli;
+
     if (g_overlay.window != nullptr) {
         InvalidateRect(g_overlay.window, nullptr, FALSE);
     }
