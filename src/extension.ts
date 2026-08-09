@@ -7,7 +7,7 @@ import {
 } from './languages';
 import { getModelPath, ensureModel } from './model';
 import { getNativePasteHelperPath, pasteIntoFocusedControl } from './paste';
-import { getRecorderPath, RecorderSession } from './recorder';
+import { getRecorderPath, RecorderAction, RecorderSession } from './recorder';
 import { getWhisperCliPath, transcribe } from './whisper';
 
 class DictationController implements vscode.Disposable {
@@ -43,10 +43,11 @@ class DictationController implements vscode.Disposable {
 
   async cancel(): Promise<void> {
     const session = this.session;
-    if (!session) {
+    if (!session || this.busy) {
       return;
     }
 
+    this.busy = true;
     this.session = undefined;
     await vscode.commands.executeCommand('setContext', 'universalDictate.recording', false);
     this.statusBar.text = '$(circle-slash) Universal Dictate: cancelling';
@@ -55,6 +56,7 @@ class DictationController implements vscode.Disposable {
       await session.cancel();
     } finally {
       this.statusBar.hide();
+      this.busy = false;
     }
   }
 
@@ -76,9 +78,12 @@ class DictationController implements vscode.Disposable {
       await ensureModel(this.context);
       this.statusBar.text = '$(loading~spin) Universal Dictate: opening microphone';
 
-      this.session = await RecorderSession.start(this.context, (level) => {
+      const session = await RecorderSession.start(this.context, (level) => {
         this.updateRecordingLevel(level);
       });
+      this.session = session;
+      session.onAction((action) => this.handleRecorderAction(session, action));
+
       await vscode.commands.executeCommand('setContext', 'universalDictate.recording', true);
       this.updateRecordingLevel(0);
     } catch (error) {
@@ -88,6 +93,26 @@ class DictationController implements vscode.Disposable {
       this.showError(error);
     } finally {
       this.busy = false;
+    }
+  }
+
+  private handleRecorderAction(session: RecorderSession, action: RecorderAction): void {
+    if (this.session !== session) {
+      return;
+    }
+
+    // READY can be followed by an extremely fast overlay click while the
+    // controller is still completing startup. Preserve that action rather than
+    // acknowledging it and silently dropping it.
+    if (this.busy) {
+      setTimeout(() => this.handleRecorderAction(session, action), 25);
+      return;
+    }
+
+    if (action === 'stop') {
+      void this.stopAndTranscribe();
+    } else {
+      void this.cancel();
     }
   }
 
@@ -128,7 +153,8 @@ class DictationController implements vscode.Disposable {
     const bars = '▁▂▃▄▅▆▇█';
     const index = Math.max(0, Math.min(bars.length - 1, Math.floor(Math.sqrt(level) * bars.length)));
     this.statusBar.text = `$(record) Universal Dictate: ${bars[index]}  Ctrl+Alt+D to stop`;
-    this.statusBar.tooltip = 'Recording locally. Press Ctrl+Alt+D to stop and insert, or Esc to cancel.';
+    this.statusBar.tooltip =
+      'Recording locally. Use the non-activating ✓/× overlay, Ctrl+Alt+D to confirm, or Esc to cancel.';
     this.statusBar.show();
   }
 

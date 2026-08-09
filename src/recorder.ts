@@ -7,6 +7,8 @@ import * as vscode from 'vscode';
 const RECORDER_RELATIVE_PATH = ['resources', 'bin', 'universal-dictate-recorder.exe'];
 const START_TIMEOUT_MS = 10000;
 
+export type RecorderAction = 'stop' | 'cancel';
+
 export class RecorderSession {
   private readonly child: childProcess.ChildProcessWithoutNullStreams;
   private readonly ready: Promise<void>;
@@ -18,6 +20,9 @@ export class RecorderSession {
   private stderr = '';
   private stopped = false;
   private readySettled = false;
+  private nativeAction: RecorderAction | undefined;
+  private nativeActionDelivered = false;
+  private nativeActionListener: ((action: RecorderAction) => void) | undefined;
 
   private constructor(
     child: childProcess.ChildProcessWithoutNullStreams,
@@ -55,6 +60,16 @@ export class RecorderSession {
         if (Number.isFinite(level)) {
           onLevel(Math.max(0, Math.min(1, level)));
         }
+        return;
+      }
+
+      if (line === 'ACTION STOP') {
+        this.queueNativeAction('stop');
+        return;
+      }
+
+      if (line === 'ACTION CANCEL') {
+        this.queueNativeAction('cancel');
       }
     });
 
@@ -118,10 +133,17 @@ export class RecorderSession {
     }
   }
 
+  onAction(listener: (action: RecorderAction) => void): void {
+    this.nativeActionListener = listener;
+    this.deliverNativeAction();
+  }
+
   async stop(): Promise<string> {
     if (!this.stopped) {
       this.stopped = true;
-      this.child.stdin.write('STOP\n');
+      if (!this.child.stdin.destroyed) {
+        this.child.stdin.write('STOP\n');
+      }
     }
     await this.completion;
     return this.outputPath;
@@ -136,6 +158,24 @@ export class RecorderSession {
     }
     await this.completion.catch(() => undefined);
     await fs.promises.rm(this.outputPath, { force: true }).catch(() => undefined);
+  }
+
+  private queueNativeAction(action: RecorderAction): void {
+    if (this.nativeAction) {
+      return;
+    }
+    this.nativeAction = action;
+    this.deliverNativeAction();
+  }
+
+  private deliverNativeAction(): void {
+    if (this.nativeActionDelivered || !this.nativeAction || !this.nativeActionListener) {
+      return;
+    }
+
+    this.nativeActionDelivered = true;
+    const action = this.nativeAction;
+    queueMicrotask(() => this.nativeActionListener?.(action));
   }
 
   private async waitUntilReady(): Promise<void> {
