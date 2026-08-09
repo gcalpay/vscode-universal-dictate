@@ -8,9 +8,10 @@ Performance, UI and Marketplace polish.
 - Start warming the worker as soon as recording begins, overlapping model initialization with the time the user is speaking.
 - Fall back automatically to the proven one-shot `whisper-cli` path if the warm worker cannot start or exits unexpectedly.
 - Keep the worker bound only to `127.0.0.1` behind a per-session randomized request path; no audio or transcript leaves the machine.
-- Move the clickable `Dictate` status-bar action from the left workspace/source-control cluster to the right-aligned utility area.
-- Replace the malformed Marketplace extension icon with the final orange/red 256×256 microphone/waveform PNG.
+- Place the clickable `Dictate` status-bar action toward the left edge of VS Code's right-side utility group instead of at the extreme right.
+- Use the blue-to-orange microphone/waveform Marketplace icon matching the project artwork.
 - Make the public GitHub source, issue tracker and manual VSIX release path explicit in the README.
+- Add the full Universal Dictate overview/instructions artwork to the README and Marketplace description.
 
 ## 0.1.0
 
