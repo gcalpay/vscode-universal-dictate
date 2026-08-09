@@ -27,14 +27,13 @@ jobs:
       - name: Type-check
         run: npm run check
 
-      - name: Fetch pinned miniaudio source
+      - name: Fetch pinned miniaudio header
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force .deps/miniaudio | Out-Null
           Invoke-WebRequest https://raw.githubusercontent.com/mackron/miniaudio/0.11.25/miniaudio.h -OutFile .deps/miniaudio/miniaudio.h
-          Invoke-WebRequest https://raw.githubusercontent.com/mackron/miniaudio/0.11.25/miniaudio.c -OutFile .deps/miniaudio/miniaudio.c
 
-      - name: Compile native Windows helpers
+      - name: Compile native Windows C++ helpers
         shell: pwsh
         run: |
           $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
@@ -55,8 +54,8 @@ jobs:
           $commands = @(
             "call `"$vcvars`"",
             "if not exist resources\bin mkdir resources\bin",
-            "cl /nologo /O2 native\windows-fast-paste.c /Fe:resources\bin\windows-fast-paste.exe user32.lib",
-            "cl /nologo /O2 /I .deps\miniaudio native\record-audio.c .deps\miniaudio\miniaudio.c /Fe:resources\bin\universal-dictate-recorder.exe"
+            "cl /nologo /O2 /std:c++20 /EHsc native\windows-fast-paste.cpp /Fe:resources\bin\windows-fast-paste.exe user32.lib",
+            "cl /nologo /O2 /std:c++20 /EHsc /I .deps\miniaudio native\record-audio.cpp native\miniaudio-impl.cpp /Fe:resources\bin\universal-dictate-recorder.exe"
           ) -join ' && '
 
           cmd.exe /D /S /C $commands
