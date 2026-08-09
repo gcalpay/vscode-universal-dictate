@@ -12,6 +12,7 @@ import { getWhisperCliPath, transcribe } from './whisper';
 
 class DictationController implements vscode.Disposable {
   private readonly statusBar: vscode.StatusBarItem;
+  private readonly levelHistory = Array<number>(9).fill(0);
   private session: RecorderSession | undefined;
   private busy = false;
 
@@ -72,6 +73,7 @@ class DictationController implements vscode.Disposable {
 
   private async startRecording(): Promise<void> {
     this.busy = true;
+    this.levelHistory.fill(0);
     this.statusBar.command = undefined;
     this.statusBar.text = '$(loading~spin) Universal Dictate: preparing local model';
     this.statusBar.tooltip = 'The first run downloads the local Whisper model. Audio is not uploaded.';
@@ -154,12 +156,25 @@ class DictationController implements vscode.Disposable {
   }
 
   private updateRecordingLevel(level: number): void {
-    const bars = '▁▂▃▄▅▆▇█';
-    const index = Math.max(0, Math.min(bars.length - 1, Math.floor(Math.sqrt(level) * bars.length)));
+    const glyphs = '▁▂▃▄▅▆▇█';
+    const clamped = Math.max(0, Math.min(1, level));
+    this.levelHistory.shift();
+    this.levelHistory.push(clamped);
+
+    const signal = this.levelHistory
+      .map((sample) => {
+        const index = Math.max(
+          0,
+          Math.min(glyphs.length - 1, Math.round(Math.sqrt(sample) * (glyphs.length - 1)))
+        );
+        return glyphs[index];
+      })
+      .join('');
+
     this.statusBar.command = undefined;
-    this.statusBar.text = `$(record) Universal Dictate: ${bars[index]}  Ctrl+Alt+D to stop`;
+    this.statusBar.text = `$(record) ${signal}  Ctrl+Alt+D to stop`;
     this.statusBar.tooltip =
-      'Recording locally. Use the non-activating ✓/× overlay, Ctrl+Alt+D to confirm, or Esc to cancel.';
+      'Recording locally. The trace is a rolling microphone-energy history. Use the non-activating ✓/× overlay, Ctrl+Alt+D to confirm, or Esc to cancel.';
     this.statusBar.show();
   }
 
