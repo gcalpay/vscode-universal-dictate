@@ -51,7 +51,8 @@ VS Code (Windows)
 |   `-- UI integration
 |
 +-- native Windows helper
-|   +-- microphone capture (WASAPI)
+|   +-- microphone capture (miniaudio -> WASAPI)
+|   +-- WAV/PCM recording
 |   +-- audio-level reporting
 |   +-- non-activating dictation overlay, if required
 |   `-- focused-control text injection (Win32 SendInput)
@@ -93,17 +94,19 @@ Acceptance criteria:
 - No Enter/submit action occurs.
 - Existing clipboard content is restored.
 
-The M1 implementation may use PowerShell `System.Windows.Forms.SendKeys`. It is explicitly disposable prototype code.
+The packaged M1 build uses the native OpenWhispr-derived Win32 `SendInput` helper. PowerShell `SendKeys` remains a development-only fallback when the helper has not been built yet.
 
-### M2: Native Windows boundary
+### M2: Native Windows recording boundary
 
-Replace PowerShell input simulation with a small native helper using supported Windows APIs. Establish WASAPI microphone capture and a narrow IPC protocol between the helper and extension.
+Use miniaudio, statically compiled into a small Windows helper, for capture through WASAPI. Define a narrow line-oriented IPC protocol between the helper and extension for recording lifecycle and audio-level events.
 
 Acceptance criteria:
 
-- No shell/PowerShell dependency for input injection.
-- No FFmpeg/SoX/Python dependency.
+- No shell/PowerShell dependency in packaged builds.
+- No FFmpeg/SoX/Python/SDL dependency.
 - Microphone capture runs on Windows while workspace remains in WSL.
+- Recording can be stopped or cancelled deterministically.
+- Helper emits usable input-level data for the recording UI.
 - Helper failures are isolated and surfaced cleanly.
 
 ### M3: Local ASR
@@ -140,6 +143,8 @@ The UI must not cause the target control to lose insertion context. A non-activa
 ## Dependency policy
 
 Runtime dependencies should be minimal, pinned and reviewable. End users should not need to install Python, Conda, FFmpeg, SoX, CMake or packages inside WSL.
+
+See `docs/DEPENDENCIES.md` for the current dependency choices and provenance rules.
 
 Third-party binaries and model files must have their license, source, version and checksum documented before release.
 
