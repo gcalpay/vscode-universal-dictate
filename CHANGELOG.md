@@ -17,4 +17,4 @@ First public release candidate.
 
 ### Third-party components
 
-Universal Dictate explicitly credits and retains the relevant license notices for OpenAI Whisper, whisper.cpp and miniaudio. See `THIRD_PARTY_NOTICES.md`, `docs/DEPENDENCIES.md` and `third_party/`.
+Universal Dictate explicitly credits and retains the relevant license notices for OpenAI Whisper, whisper.cpp, miniaudio and the OpenWhispr source lineage of the focused-input Windows paste helper. See `THIRD_PARTY_NOTICES.md`, `docs/DEPENDENCIES.md` and `third_party/`.
