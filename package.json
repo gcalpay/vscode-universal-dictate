@@ -1,8 +1,8 @@
 {
   "name": "vscode-universal-dictate",
   "displayName": "Universal Dictate",
-  "description": "Open-source VS Code extension for local, offline speech-to-text in any VS Code text input on Windows, including Remote - WSL.",
-  "version": "0.0.2",
+  "description": "Open-source VS Code extension for local, offline, multilingual speech-to-text in any VS Code text input on Windows, including Remote - WSL.",
+  "version": "0.0.3",
   "private": true,
   "license": "MIT",
   "publisher": "gcalpay",
@@ -22,6 +22,7 @@
     "voice",
     "whisper",
     "offline",
+    "multilingual",
     "wsl"
   ],
   "extensionKind": [
@@ -31,6 +32,7 @@
   "activationEvents": [
     "onCommand:universalDictate.toggle",
     "onCommand:universalDictate.cancel",
+    "onCommand:universalDictate.selectLanguage",
     "onCommand:universalDictate.showDiagnostics"
   ],
   "contributes": {
@@ -42,6 +44,10 @@
       {
         "command": "universalDictate.cancel",
         "title": "Universal Dictate: Cancel Dictation"
+      },
+      {
+        "command": "universalDictate.selectLanguage",
+        "title": "Universal Dictate: Select Language"
       },
       {
         "command": "universalDictate.showDiagnostics",
@@ -65,18 +71,8 @@
       "properties": {
         "universalDictate.language": {
           "type": "string",
-          "enum": [
-            "auto",
-            "en",
-            "de"
-          ],
-          "enumDescriptions": [
-            "Automatically detect the spoken language.",
-            "English.",
-            "German."
-          ],
           "default": "auto",
-          "description": "Language used by local Whisper transcription."
+          "description": "Whisper language code used for local transcription. Default: auto. Use 'Universal Dictate: Select Language' to choose from all 99 languages supported by the bundled multilingual base model."
         }
       }
     }
