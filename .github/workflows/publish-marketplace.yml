@@ -1,0 +1,102 @@
+name: Publish Marketplace
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          package-manager-cache: false
+
+      - name: Install extension dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Type-check
+        run: npm run check
+
+      - name: Fetch pinned miniaudio header
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force .deps/miniaudio | Out-Null
+          Invoke-WebRequest https://raw.githubusercontent.com/mackron/miniaudio/0.11.25/miniaudio.h -OutFile .deps/miniaudio/miniaudio.h
+
+      - name: Compile native Windows C++ helpers
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          if (-not (Test-Path $vswhere)) {
+            throw "vswhere.exe not found at $vswhere"
+          }
+
+          $vsInstall = (& $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath | Select-Object -First 1)
+          if (-not $vsInstall) {
+            throw "No Visual Studio installation with the C++ toolchain was found"
+          }
+
+          $vcvars = Join-Path $vsInstall 'VC\Auxiliary\Build\vcvars64.bat'
+          if (-not (Test-Path $vcvars)) {
+            throw "vcvars64.bat not found at $vcvars"
+          }
+
+          $commands = @(
+            "call `"$vcvars`"",
+            "if not exist resources\bin mkdir resources\bin",
+            "cl /nologo /O2 /std:c++20 /EHsc native\windows-fast-paste.cpp /Fe:resources\bin\windows-fast-paste.exe user32.lib",
+            "cl /nologo /O2 /std:c++20 /EHsc /I .deps\miniaudio native\record-audio.cpp native\miniaudio-impl.cpp /Fe:resources\bin\universal-dictate-recorder.exe user32.lib gdi32.lib"
+          ) -join ' && '
+
+          cmd.exe /D /S /C $commands
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
+
+      - name: Fetch pinned whisper.cpp Windows runtime
+        shell: pwsh
+        run: |
+          $version = '1.9.1'
+          $expectedSha256 = '7d8be46ecd31828e1eb7a2ecdd0d6b314feafd82163038ab6092594b0a063539'
+          $zip = '.deps/whisper-bin-x64.zip'
+          $extract = '.deps/whisper-runtime'
+          $url = "https://github.com/ggml-org/whisper.cpp/releases/download/v$version/whisper-bin-x64.zip"
+
+          Invoke-WebRequest $url -OutFile $zip
+          $actualSha256 = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actualSha256 -ne $expectedSha256) {
+            throw "whisper.cpp runtime checksum mismatch: $actualSha256"
+          }
+
+          Expand-Archive -Path $zip -DestinationPath $extract -Force
+          New-Item -ItemType Directory -Force resources/whisper | Out-Null
+          Copy-Item "$extract/Release/*" resources/whisper/ -Recurse -Force
+
+          if (-not (Test-Path resources/whisper/whisper-cli.exe)) {
+            throw 'whisper-cli.exe was not found in the pinned runtime archive'
+          }
+
+      - name: Package win32-x64 VSIX
+        run: npm run package:vsix
+
+      - name: Upload release artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: universal-dictate-win32-x64
+          path: universal-dictate-win32-x64.vsix
+          if-no-files-found: error
+
+      - name: Publish to Visual Studio Marketplace with OIDC
+        run: npx vsce publish --packagePath universal-dictate-win32-x64.vsix --oidc
