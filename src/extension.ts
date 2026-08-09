@@ -20,6 +20,7 @@ import {
 
 class DictationController implements vscode.Disposable {
   private readonly statusBar: vscode.StatusBarItem;
+  private readonly settingsStatusBar: vscode.StatusBarItem;
   private readonly levelHistory = Array<number>(9).fill(0);
   private readonly engine: DictationEngine;
 
@@ -29,6 +30,19 @@ class DictationController implements vscode.Disposable {
     // extreme right. Higher priority values render farther left in VS Code.
     this.statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 1000);
     this.statusBar.name = 'Universal Dictate';
+
+    // A slightly lower priority places this separate, content-sized gear
+    // immediately to the right of the existing Dictate item.
+    this.settingsStatusBar = vscode.window.createStatusBarItem(
+      vscode.StatusBarAlignment.Right,
+      999
+    );
+    this.settingsStatusBar.name = 'Universal Dictate Settings';
+    this.settingsStatusBar.text = '$(gear)';
+    this.settingsStatusBar.tooltip = 'Universal Dictate Settings';
+    this.settingsStatusBar.command = 'universalDictate.openSettings';
+    this.settingsStatusBar.show();
+
     this.engine = new DictationEngine({
       prepare: async () => {
         await ensureModel(this.context);
@@ -48,7 +62,7 @@ class DictationController implements vscode.Disposable {
       onError: (error) => this.showError(error)
     });
 
-    this.context.subscriptions.push(this.statusBar);
+    this.context.subscriptions.push(this.statusBar, this.settingsStatusBar);
     this.showIdleStatus();
   }
 
@@ -70,6 +84,7 @@ class DictationController implements vscode.Disposable {
   dispose(): void {
     this.engine.dispose();
     this.statusBar.dispose();
+    this.settingsStatusBar.dispose();
   }
 
   private renderState(state: DictationState): void {
@@ -144,6 +159,68 @@ class DictationController implements vscode.Disposable {
 
 type LanguageQuickPickItem = vscode.QuickPickItem & { code: string };
 
+async function selectLanguage(): Promise<void> {
+  const configuration = vscode.workspace.getConfiguration('universalDictate');
+  const current = normalizeWhisperLanguage(configuration.get<string>('language', 'auto'));
+
+  const items: LanguageQuickPickItem[] = [
+    {
+      label: '$(globe) Auto-detect',
+      description: current === 'auto' ? 'Current' : undefined,
+      detail: 'Let Whisper identify the spoken language automatically.',
+      code: 'auto'
+    },
+    ...[...WHISPER_LANGUAGES]
+      .sort((left, right) => left.name.localeCompare(right.name))
+      .map(({ code, name }) => ({
+        label: name,
+        description: `${code}${current === code ? ' · Current' : ''}`,
+        code
+      }))
+  ];
+
+  const selected = await vscode.window.showQuickPick(items, {
+    placeHolder: 'Select one of the 99 languages supported by the multilingual Whisper base model',
+    matchOnDescription: true,
+    matchOnDetail: true
+  });
+
+  if (!selected) {
+    return;
+  }
+
+  await configuration.update('language', selected.code, vscode.ConfigurationTarget.Global);
+  void vscode.window.showInformationMessage(
+    `Universal Dictate language: ${getWhisperLanguageName(selected.code)}`
+  );
+}
+
+async function openSettings(): Promise<void> {
+  const configuration = vscode.workspace.getConfiguration('universalDictate');
+  const currentLanguage = normalizeWhisperLanguage(
+    configuration.get<string>('language', 'auto')
+  );
+
+  const selected = await vscode.window.showQuickPick(
+    [
+      {
+        label: '$(globe) Language',
+        description: getWhisperLanguageName(currentLanguage),
+        detail: 'Choose the language used for local Whisper transcription.'
+      }
+    ],
+    {
+      placeHolder: 'Universal Dictate Settings'
+    }
+  );
+
+  if (!selected) {
+    return;
+  }
+
+  await vscode.commands.executeCommand('universalDictate.selectLanguage');
+}
+
 export function activate(context: vscode.ExtensionContext): void {
   const controller = new DictationController(context);
 
@@ -155,43 +232,14 @@ export function activate(context: vscode.ExtensionContext): void {
     await controller.cancel();
   });
 
-  const selectLanguage = vscode.commands.registerCommand(
+  const selectLanguageCommand = vscode.commands.registerCommand(
     'universalDictate.selectLanguage',
-    async () => {
-      const configuration = vscode.workspace.getConfiguration('universalDictate');
-      const current = normalizeWhisperLanguage(configuration.get<string>('language', 'auto'));
+    selectLanguage
+  );
 
-      const items: LanguageQuickPickItem[] = [
-        {
-          label: '$(globe) Auto-detect',
-          description: current === 'auto' ? 'Current' : undefined,
-          detail: 'Let Whisper identify the spoken language automatically.',
-          code: 'auto'
-        },
-        ...[...WHISPER_LANGUAGES]
-          .sort((left, right) => left.name.localeCompare(right.name))
-          .map(({ code, name }) => ({
-            label: name,
-            description: `${code}${current === code ? ' · Current' : ''}`,
-            code
-          }))
-      ];
-
-      const selected = await vscode.window.showQuickPick(items, {
-        placeHolder: 'Select one of the 99 languages supported by the multilingual Whisper base model',
-        matchOnDescription: true,
-        matchOnDetail: true
-      });
-
-      if (!selected) {
-        return;
-      }
-
-      await configuration.update('language', selected.code, vscode.ConfigurationTarget.Global);
-      void vscode.window.showInformationMessage(
-        `Universal Dictate language: ${getWhisperLanguageName(selected.code)}`
-      );
-    }
+  const openSettingsCommand = vscode.commands.registerCommand(
+    'universalDictate.openSettings',
+    openSettings
   );
 
   const showDiagnostics = vscode.commands.registerCommand(
@@ -231,7 +279,8 @@ export function activate(context: vscode.ExtensionContext): void {
     controller,
     toggle,
     cancel,
-    selectLanguage,
+    selectLanguageCommand,
+    openSettingsCommand,
     showDiagnostics,
     whisperDisposable
   );
