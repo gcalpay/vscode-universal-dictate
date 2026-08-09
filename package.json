@@ -1,7 +1,7 @@
 {
   "name": "vscode-universal-dictate",
   "displayName": "Universal Dictate",
-  "description": "Open-source, fully local speech-to-text for any VS Code text input on Windows, including Remote - WSL.",
+  "description": "Open-source VS Code extension for local, offline speech-to-text in any VS Code text input on Windows, including Remote - WSL.",
   "version": "0.0.2",
   "private": true,
   "license": "MIT",
