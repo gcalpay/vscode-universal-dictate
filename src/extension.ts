@@ -24,10 +24,10 @@ class DictationController implements vscode.Disposable {
   private busy = false;
 
   constructor(private readonly context: vscode.ExtensionContext) {
-    // Keep dictation out of the workspace/source-control cluster on the left.
-    // Right alignment with a low priority places it with secondary utility
-    // controls and toward the right edge of the status bar.
-    this.statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 0);
+    // Keep dictation in the secondary/right status-bar group, but with enough
+    // priority to sit toward the left edge of that group rather than at the
+    // extreme right. Higher priority values render farther left in VS Code.
+    this.statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 1000);
     this.statusBar.name = 'Universal Dictate';
     this.context.subscriptions.push(this.statusBar);
     this.showIdleStatus();
