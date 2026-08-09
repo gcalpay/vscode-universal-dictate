@@ -4,8 +4,8 @@
  * Uses miniaudio for capture and WAV encoding. miniaudio is fetched and
  * compiled at build time; it is not a runtime dependency.
  *
- * The recorder also owns a small non-activating Win32 overlay. The overlay
- * displays a live rolling signal field and exposes confirm/cancel controls
+ * The recorder also owns a non-activating Win32 overlay. The overlay renders
+ * a large adaptive rolling signal field and exposes confirm/cancel controls
  * without taking keyboard focus away from the VS Code input being dictated
  * into.
  *
@@ -52,10 +52,11 @@ namespace {
 constexpr ma_uint32 kSampleRate = 16000;
 constexpr ma_uint32 kChannels = 1;
 constexpr auto kLevelInterval = std::chrono::milliseconds(50);
-constexpr int kOverlayWidth = 390;
-constexpr int kOverlayHeight = 92;
+constexpr int kOverlayWidth = 540;
+constexpr int kOverlayHeight = 150;
 constexpr int kOverlayMargin = 18;
-constexpr int kSignalPoints = 28;
+constexpr int kSignalPoints = 64;
+constexpr int kNoiseFloorMilli = 6;
 constexpr wchar_t kOverlayClassName[] = L"UniversalDictateRecordingOverlay";
 
 enum class RecorderCommand : int {
@@ -189,11 +190,11 @@ struct OverlayState {
 OverlayState g_overlay;
 
 RECT confirmRect(const RECT& client) {
-    return RECT{client.right - 92, 18, client.right - 52, client.bottom - 18};
+    return RECT{client.right - 92, 30, client.right - 52, client.bottom - 30};
 }
 
 RECT cancelRect(const RECT& client) {
-    return RECT{client.right - 46, 18, client.right - 6, client.bottom - 18};
+    return RECT{client.right - 46, 30, client.right - 6, client.bottom - 30};
 }
 
 void emitOverlayAction(const char* action) {
@@ -207,69 +208,139 @@ void emitOverlayAction(const char* action) {
     }
 }
 
+int smoothedHistoryLevel(int index) {
+    static constexpr std::array<int, 5> weights{1, 2, 3, 2, 1};
+    int weighted = 0;
+    int weightTotal = 0;
+
+    for (int offset = -2; offset <= 2; ++offset) {
+        const int source = std::clamp(index + offset, 0, kSignalPoints - 1);
+        const int weight = weights[static_cast<std::size_t>(offset + 2)];
+        weighted += g_overlay.levelHistory[static_cast<std::size_t>(source)] * weight;
+        weightTotal += weight;
+    }
+
+    return weightTotal == 0 ? 0 : weighted / weightTotal;
+}
+
 void drawSignalField(HDC dc, const RECT& client) {
-    const int left = 108;
-    const int right = client.right - 108;
-    const int top = 20;
-    const int bottom = client.bottom - 16;
+    const int left = 104;
+    const int right = client.right - 106;
+    const int top = 14;
+    const int bottom = client.bottom - 14;
     const int centerY = (top + bottom) / 2;
     const int width = std::max(1, right - left);
-    const int maxAmplitude = std::max(6, (bottom - top) / 2 - 2);
+    const int maxAmplitude = std::max(12, (bottom - top) / 2 - 3);
 
-    HPEN axisPen = CreatePen(PS_SOLID, 1, RGB(55, 67, 74));
-    HGDIOBJ previousPen = SelectObject(dc, axisPen);
+    int rollingPeak = 0;
+    for (int value : g_overlay.levelHistory) {
+        rollingPeak = std::max(rollingPeak, value);
+    }
+    const int displayReference = std::max(30, rollingPeak);
+
+    std::array<int, kSignalPoints> amplitudes{};
+    std::array<POINT, kSignalPoints> upperOuter{};
+    std::array<POINT, kSignalPoints> lowerOuter{};
+
+    for (int index = 0; index < kSignalPoints; ++index) {
+        const int level = smoothedHistoryLevel(index);
+        const double numerator = static_cast<double>(std::max(0, level - kNoiseFloorMilli));
+        const double denominator = static_cast<double>(std::max(1, displayReference - kNoiseFloorMilli));
+        const double normalized = std::clamp(numerator / denominator, 0.0, 1.0);
+        const double shaped = normalized <= 0.0 ? 0.0 : std::pow(normalized, 0.46);
+        const int amplitude = normalized <= 0.0
+            ? 0
+            : std::max(3, static_cast<int>(std::lround(shaped * maxAmplitude)));
+        const int x = left + (index * width) / (kSignalPoints - 1);
+
+        amplitudes[static_cast<std::size_t>(index)] = amplitude;
+        upperOuter[static_cast<std::size_t>(index)] = POINT{x, centerY - amplitude};
+        lowerOuter[static_cast<std::size_t>(index)] = POINT{x, centerY + amplitude};
+    }
+
+    // A restrained filled body gives the wave visual mass. The many contour
+    // lines below provide the Schlieren/interference-like structure.
+    std::array<POINT, kSignalPoints * 2> ribbon{};
+    for (int index = 0; index < kSignalPoints; ++index) {
+        ribbon[static_cast<std::size_t>(index)] = upperOuter[static_cast<std::size_t>(index)];
+        ribbon[static_cast<std::size_t>(kSignalPoints + index)] =
+            lowerOuter[static_cast<std::size_t>(kSignalPoints - 1 - index)];
+    }
+
+    HGDIOBJ previousPen = SelectObject(dc, GetStockObject(NULL_PEN));
+    HBRUSH ribbonBrush = CreateSolidBrush(RGB(18, 47, 55));
+    HGDIOBJ previousBrush = SelectObject(dc, ribbonBrush);
+    Polygon(dc, ribbon.data(), static_cast<int>(ribbon.size()));
+    SelectObject(dc, previousBrush);
+    DeleteObject(ribbonBrush);
+    SelectObject(dc, previousPen);
+
+    // Fine vertical filaments give the field the line-stack character of a
+    // Schlieren/spectral visualization without pretending to be an FFT.
+    HPEN filamentPen = CreatePen(PS_SOLID, 1, RGB(42, 78, 84));
+    previousPen = SelectObject(dc, filamentPen);
+    for (int index = 0; index < kSignalPoints; ++index) {
+        const int amplitude = amplitudes[static_cast<std::size_t>(index)];
+        if (amplitude <= 0) {
+            continue;
+        }
+        const int x = left + (index * width) / (kSignalPoints - 1);
+        MoveToEx(dc, x, centerY - amplitude, nullptr);
+        LineTo(dc, x, centerY + amplitude);
+    }
+    SelectObject(dc, previousPen);
+    DeleteObject(filamentPen);
+
+    static constexpr std::array<double, 10> scales{
+        1.00, 0.90, 0.80, 0.70, 0.60, 0.50, 0.41, 0.33, 0.26, 0.19};
+    static constexpr std::array<COLORREF, 10> colors{
+        RGB(166, 235, 238),
+        RGB(132, 211, 218),
+        RGB(103, 185, 196),
+        RGB(82, 159, 173),
+        RGB(66, 136, 151),
+        RGB(56, 116, 132),
+        RGB(49, 99, 114),
+        RGB(43, 84, 98),
+        RGB(38, 72, 84),
+        RGB(34, 61, 72)};
+
+    std::array<POINT, kSignalPoints> upper{};
+    std::array<POINT, kSignalPoints> lower{};
+
+    for (std::size_t layer = 0; layer < scales.size(); ++layer) {
+        for (int index = 0; index < kSignalPoints; ++index) {
+            const int x = left + (index * width) / (kSignalPoints - 1);
+            const int amplitude = static_cast<int>(std::lround(
+                amplitudes[static_cast<std::size_t>(index)] * scales[layer]));
+            upper[static_cast<std::size_t>(index)] = POINT{x, centerY - amplitude};
+            lower[static_cast<std::size_t>(index)] = POINT{x, centerY + amplitude};
+        }
+
+        HPEN contourPen = CreatePen(
+            PS_SOLID,
+            layer == 0 ? 2 : 1,
+            colors[layer]);
+        previousPen = SelectObject(dc, contourPen);
+        Polyline(dc, upper.data(), static_cast<int>(upper.size()));
+        Polyline(dc, lower.data(), static_cast<int>(lower.size()));
+        SelectObject(dc, previousPen);
+        DeleteObject(contourPen);
+    }
+
+    HPEN axisPen = CreatePen(PS_SOLID, 1, RGB(48, 58, 61));
+    previousPen = SelectObject(dc, axisPen);
     MoveToEx(dc, left, centerY, nullptr);
     LineTo(dc, right, centerY);
     SelectObject(dc, previousPen);
     DeleteObject(axisPen);
-
-    std::array<POINT, kSignalPoints> upperOuter{};
-    std::array<POINT, kSignalPoints> lowerOuter{};
-    std::array<POINT, kSignalPoints> upperInner{};
-    std::array<POINT, kSignalPoints> lowerInner{};
-
-    HPEN filamentPen = CreatePen(PS_SOLID, 1, RGB(42, 88, 112));
-    previousPen = SelectObject(dc, filamentPen);
-
-    for (int index = 0; index < kSignalPoints; ++index) {
-        const int x = left + (index * width) / (kSignalPoints - 1);
-        const double normalized = std::sqrt(
-            std::clamp(g_overlay.levelHistory[index], 0, 1000) / 1000.0);
-        const int amplitude = 1 + static_cast<int>(normalized * maxAmplitude);
-        const int innerAmplitude = std::max(1, static_cast<int>(amplitude * 0.55));
-
-        MoveToEx(dc, x, centerY - amplitude, nullptr);
-        LineTo(dc, x, centerY + amplitude);
-
-        upperOuter[index] = POINT{x, centerY - amplitude};
-        lowerOuter[index] = POINT{x, centerY + amplitude};
-        upperInner[index] = POINT{x, centerY - innerAmplitude};
-        lowerInner[index] = POINT{x, centerY + innerAmplitude};
-    }
-
-    SelectObject(dc, previousPen);
-    DeleteObject(filamentPen);
-
-    HPEN innerPen = CreatePen(PS_SOLID, 1, RGB(74, 142, 176));
-    previousPen = SelectObject(dc, innerPen);
-    Polyline(dc, upperInner.data(), static_cast<int>(upperInner.size()));
-    Polyline(dc, lowerInner.data(), static_cast<int>(lowerInner.size()));
-    SelectObject(dc, previousPen);
-    DeleteObject(innerPen);
-
-    HPEN outerPen = CreatePen(PS_SOLID, 2, RGB(0, 153, 255));
-    previousPen = SelectObject(dc, outerPen);
-    Polyline(dc, upperOuter.data(), static_cast<int>(upperOuter.size()));
-    Polyline(dc, lowerOuter.data(), static_cast<int>(lowerOuter.size()));
-    SelectObject(dc, previousPen);
-    DeleteObject(outerPen);
 }
 
 void drawOverlay(HWND window, HDC dc) {
     RECT client{};
     GetClientRect(window, &client);
 
-    HBRUSH background = CreateSolidBrush(RGB(24, 27, 30));
+    HBRUSH background = CreateSolidBrush(RGB(21, 24, 26));
     FillRect(dc, &client, background);
     DeleteObject(background);
 
@@ -277,11 +348,11 @@ void drawOverlay(HWND window, HDC dc) {
     SetTextColor(dc, RGB(245, 245, 245));
 
     HFONT previousFont = reinterpret_cast<HFONT>(SelectObject(dc, g_overlay.textFont));
-    RECT title{14, 10, 104, 31};
+    RECT title{14, 34, 98, 56};
     DrawTextW(dc, L"Universal", -1, &title, DT_LEFT | DT_SINGLELINE | DT_VCENTER);
 
-    RECT subtitle{14, 34, 104, 61};
-    SetTextColor(dc, RGB(179, 188, 194));
+    RECT subtitle{14, 58, 98, 84};
+    SetTextColor(dc, RGB(183, 191, 194));
     DrawTextW(dc, L"Recording", -1, &subtitle, DT_LEFT | DT_SINGLELINE | DT_VCENTER);
 
     drawSignalField(dc, client);
