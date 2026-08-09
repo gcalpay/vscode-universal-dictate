@@ -14,7 +14,7 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Reject obsolete prototype references
         shell: pwsh
@@ -35,9 +35,10 @@ jobs:
           exit 0
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 24
+          package-manager-cache: false
 
       - name: Install extension dependencies
         run: npm install --no-audit --no-fund
@@ -108,7 +109,7 @@ jobs:
         run: npm run package:vsix
 
       - name: Upload VSIX
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: universal-dictate-windows-dev
           path: universal-dictate-dev.vsix
