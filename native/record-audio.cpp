@@ -24,6 +24,9 @@
  * SPDX-License-Identifier: MIT
  */
 
+#define UNICODE
+#define _UNICODE
+#define NOMINMAX
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <windowsx.h>
@@ -212,7 +215,7 @@ void drawOverlay(HWND window, HDC dc) {
     SetBkMode(dc, TRANSPARENT);
     SetTextColor(dc, RGB(245, 245, 245));
 
-    HFONT previousFont = static_cast<HFONT>(SelectObject(dc, g_overlay.textFont));
+    HFONT previousFont = reinterpret_cast<HFONT>(SelectObject(dc, g_overlay.textFont));
     RECT title{14, 8, client.right - 104, 30};
     DrawTextW(dc, L"Universal Dictate", -1, &title, DT_LEFT | DT_SINGLELINE | DT_VCENTER);
 
