@@ -20,18 +20,26 @@ jobs:
         with:
           node-version: 22
 
-      - name: Install dependencies
+      - name: Install extension dependencies
         run: npm install --no-audit --no-fund
 
       - name: Type-check
         run: npm run check
 
-      - name: Compile native Windows paste helper
+      - name: Fetch pinned miniaudio source
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force .deps/miniaudio | Out-Null
+          Invoke-WebRequest https://raw.githubusercontent.com/mackron/miniaudio/0.11.25/miniaudio.h -OutFile .deps/miniaudio/miniaudio.h
+          Invoke-WebRequest https://raw.githubusercontent.com/mackron/miniaudio/0.11.25/miniaudio.c -OutFile .deps/miniaudio/miniaudio.c
+
+      - name: Compile native Windows helpers
         shell: cmd
         run: |
           if not exist resources\bin mkdir resources\bin
           call "%ProgramFiles%\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
           cl /nologo /O2 native\windows-fast-paste.c /Fe:resources\bin\windows-fast-paste.exe user32.lib
+          cl /nologo /O2 /I .deps\miniaudio native\record-audio.c .deps\miniaudio\miniaudio.c /Fe:resources\bin\universal-dictate-recorder.exe
 
       - name: Package VSIX
         run: npm run package:vsix
