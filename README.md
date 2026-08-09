@@ -71,8 +71,9 @@ The relevant upstream license notices are retained in `third_party/`.
 - miniaudio: permissively licensed microphone/audio backend.
 - OpenAI Whisper: MIT-licensed speech-recognition model and weights.
 - whisper.cpp: MIT-licensed local Whisper inference runtime.
+- OpenWhispr: MIT-licensed historical source lineage for the Windows focused-input paste helper. The current helper has been substantially rewritten in C++20 and reduced to Universal Dictate's Ctrl+V-only use case; the upstream MIT notice is retained.
 
-Universal Dictate's native Windows helpers are implemented in this repository; they do not depend on source code from another dictation application.
+The recorder, overlay and VS Code integration are maintained as Universal Dictate code. Provenance for the focused-input paste helper is documented explicitly in [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) and [`docs/DEPENDENCIES.md`](docs/DEPENDENCIES.md).
 
 ## Privacy
 
@@ -82,13 +83,14 @@ The only network operation required for normal setup is the initial Whisper mode
 
 ## Third-party components
 
-Universal Dictate itself is MIT licensed and uses permissively licensed infrastructure:
+Universal Dictate itself is MIT licensed and uses permissively licensed infrastructure and source lineage:
 
 - OpenAI Whisper: speech-recognition model and model weights (MIT)
 - whisper.cpp: local Whisper inference runtime (MIT)
 - miniaudio: Windows microphone capture (MIT-0/public-domain dual license)
+- OpenWhispr: historical source lineage for the Win32 focused-input paste helper (MIT)
 
-See [`docs/DEPENDENCIES.md`](docs/DEPENDENCIES.md) and `third_party/` for pinned versions, provenance and license notices.
+See [`docs/DEPENDENCIES.md`](docs/DEPENDENCIES.md), [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) and `third_party/` for pinned versions, provenance and license notices.
 
 ## License
 
