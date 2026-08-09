@@ -4,7 +4,7 @@
 
 Universal Dictate is an open-source VS Code extension for speech-to-text without API keys or cloud transcription. It runs the multilingual OpenAI Whisper `base` model locally through `whisper.cpp`, automatically detects the spoken language by default and can be fixed to any of the model's 99 supported languages.
 
-> **Status:** early working MVP. Focused-input insertion has been validated against the OpenAI Codex composer under Remote - WSL. The current build includes Windows microphone capture, a non-activating recording overlay and local Whisper transcription.
+> **Status:** early working MVP. Focused-input insertion has been validated against the OpenAI Codex composer under Remote - WSL. The current build includes Windows microphone capture, a clickable VS Code status-bar microphone button, a non-activating recording overlay and local Whisper transcription.
 
 ## Product goals
 
@@ -20,10 +20,13 @@ Universal Dictate is an open-source VS Code extension for speech-to-text without
 
 ## Current controls
 
+Universal Dictate shows an always-visible **$(mic) Dictate** action in the VS Code status bar while idle. Click it to start recording, or use the keyboard shortcut:
+
 ```text
-Ctrl+Alt+D   Start recording
-Ctrl+Alt+D   Stop, transcribe locally and insert
-Esc          Cancel the current recording
+Status bar: $(mic) Dictate   Start recording
+Ctrl+Alt+D                   Start recording
+Ctrl+Alt+D                   Stop, transcribe locally and insert
+Esc                          Cancel the current recording
 ```
 
 While recording, Universal Dictate also shows a small native Windows overlay with a live input-level meter:
@@ -33,7 +36,7 @@ While recording, Universal Dictate also shows a small native Windows overlay wit
 ×   cancel and discard
 ```
 
-The overlay uses the Win32 `WS_EX_NOACTIVATE` behavior so clicking it does not intentionally move keyboard focus away from the VS Code editor/composer where the transcript will be inserted.
+The status-bar item becomes a non-clickable level/progress indicator during recording and transcription. The native overlay uses the Win32 `WS_EX_NOACTIVATE` behavior so clicking ✓ or × does not intentionally move keyboard focus away from the VS Code editor/composer where the transcript will be inserted.
 
 ## Languages
 
