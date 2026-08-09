@@ -19,7 +19,6 @@
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
-#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -35,19 +34,20 @@ static volatile LONG g_peak_milli = 0;
 
 static void data_callback(ma_device* device, void* output, const void* input, ma_uint32 frame_count) {
     ma_encoder* encoder = (ma_encoder*)device->pUserData;
-    const float* samples = (const float*)input;
-    float peak = 0.0f;
+    const ma_int16* samples = (const ma_int16*)input;
+    int peak = 0;
 
     if (input != NULL && frame_count > 0) {
         ma_encoder_write_pcm_frames(encoder, input, frame_count, NULL);
 
         for (ma_uint32 i = 0; i < frame_count * CHANNELS; ++i) {
-            float value = fabsf(samples[i]);
+            int value = samples[i];
+            if (value < 0) value = -value;
             if (value > peak) peak = value;
         }
 
-        if (peak > 1.0f) peak = 1.0f;
-        InterlockedExchange(&g_peak_milli, (LONG)(peak * 1000.0f));
+        if (peak > 32767) peak = 32767;
+        InterlockedExchange(&g_peak_milli, (LONG)((peak * 1000L) / 32767L));
     }
 
     (void)output;
@@ -94,9 +94,10 @@ int main(int argc, char** argv) {
         return 2;
     }
 
+    /* whisper-cli accepts 16-bit PCM WAV directly. */
     encoder_config = ma_encoder_config_init(
         ma_encoding_format_wav,
-        ma_format_f32,
+        ma_format_s16,
         CHANNELS,
         SAMPLE_RATE
     );
@@ -165,7 +166,6 @@ int main(int argc, char** argv) {
     }
     fflush(stdout);
 
-    /* The stdin thread has already returned after STOP/CANCEL in normal use. */
     WaitForSingleObject(command_handle, 1000);
     CloseHandle(command_handle);
 
