@@ -8,7 +8,14 @@ import {
 import { getModelPath, ensureModel } from './model';
 import { getNativePasteHelperPath, pasteIntoFocusedControl } from './paste';
 import { getRecorderPath, RecorderAction, RecorderSession } from './recorder';
-import { getWhisperCliPath, transcribe } from './whisper';
+import {
+  disposeWhisper,
+  getWhisperCliPath,
+  getWhisperServerPath,
+  isWhisperWarm,
+  transcribe,
+  warmWhisper
+} from './whisper';
 
 class DictationController implements vscode.Disposable {
   private readonly statusBar: vscode.StatusBarItem;
@@ -84,6 +91,12 @@ class DictationController implements vscode.Disposable {
 
     try {
       await ensureModel(this.context);
+
+      // Start the persistent whisper.cpp worker without waiting for model load.
+      // Recording begins immediately, so initialization normally finishes while
+      // the user is speaking instead of after they press the confirm button.
+      void warmWhisper(this.context).catch(() => undefined);
+
       this.statusBar.text = '$(loading~spin) Universal Dictate: opening microphone';
 
       const session = await RecorderSession.start(this.context, (level) => {
@@ -268,7 +281,9 @@ export function activate(context: vscode.ExtensionContext): void {
           `language=${configuredLanguage}`,
           `nativePaste=${fs.existsSync(getNativePasteHelperPath(context)) ? 'available' : 'missing'}`,
           `recorder=${fs.existsSync(getRecorderPath(context)) ? 'available' : 'missing'}`,
-          `whisper=${fs.existsSync(getWhisperCliPath(context)) ? 'available' : 'missing'}`,
+          `whisperCli=${fs.existsSync(getWhisperCliPath(context)) ? 'available' : 'missing'}`,
+          `whisperServer=${fs.existsSync(getWhisperServerPath(context)) ? 'available' : 'missing'}`,
+          `worker=${isWhisperWarm() ? 'warm' : 'cold'}`,
           `model=${fs.existsSync(getModelPath(context)) ? 'installed' : 'not-installed'}`
         ].join(' | '),
         { modal: true }
@@ -276,7 +291,15 @@ export function activate(context: vscode.ExtensionContext): void {
     }
   );
 
-  context.subscriptions.push(controller, toggle, cancel, selectLanguage, showDiagnostics);
+  const whisperDisposable: vscode.Disposable = { dispose: disposeWhisper };
+  context.subscriptions.push(
+    controller,
+    toggle,
+    cancel,
+    selectLanguage,
+    showDiagnostics,
+    whisperDisposable
+  );
 }
 
 export function deactivate(): void {

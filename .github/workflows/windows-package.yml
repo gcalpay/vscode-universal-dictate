@@ -86,6 +86,9 @@ jobs:
           if (-not (Test-Path resources/whisper/whisper-cli.exe)) {
             throw 'whisper-cli.exe was not found in the pinned runtime archive'
           }
+          if (-not (Test-Path resources/whisper/whisper-server.exe)) {
+            throw 'whisper-server.exe was not found in the pinned runtime archive'
+          }
 
       - name: Package win32-x64 VSIX
         run: npm run package:vsix

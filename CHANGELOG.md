@@ -2,10 +2,15 @@
 
 ## 0.1.1
 
-Small UI and Marketplace asset fixes.
+Performance, UI and Marketplace polish.
 
+- Keep a local `whisper-server` worker alive after first use so the Whisper model is loaded once and reused across dictations.
+- Start warming the worker as soon as recording begins, overlapping model initialization with the time the user is speaking.
+- Fall back automatically to the proven one-shot `whisper-cli` path if the warm worker cannot start or exits unexpectedly.
+- Keep the worker bound only to `127.0.0.1` behind a per-session randomized request path; no audio or transcript leaves the machine.
 - Move the clickable `Dictate` status-bar action from the left workspace/source-control cluster to the right-aligned utility area.
-- Replace the malformed Marketplace extension icon with a valid 256×256 microphone/waveform PNG.
+- Replace the malformed Marketplace extension icon with the final orange/red 256×256 microphone/waveform PNG.
+- Make the public GitHub source, issue tracker and manual VSIX release path explicit in the README.
 
 ## 0.1.0
 
