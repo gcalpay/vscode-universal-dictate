@@ -32,7 +32,10 @@ export function activate(context: vscode.ExtensionContext): void {
       const extension = vscode.extensions.getExtension(
         'gcalpay.vscode-universal-dictate'
       );
-      const extensionKind = extension?.extensionKind ?? 'unknown';
+      const declaredKinds = extension?.packageJSON?.extensionKind;
+      const extensionKind = Array.isArray(declaredKinds)
+        ? declaredKinds.join(',')
+        : String(declaredKinds ?? 'unspecified');
       const remoteName = vscode.env.remoteName ?? 'none';
       const nativeHelper = getNativePasteHelperPath(context);
 
@@ -41,7 +44,7 @@ export function activate(context: vscode.ExtensionContext): void {
           `platform=${process.platform}`,
           `arch=${process.arch}`,
           `remote=${remoteName}`,
-          `extensionKind=${String(extensionKind)}`,
+          `extensionKind=${extensionKind}`,
           `nativePaste=${fs.existsSync(nativeHelper) ? 'available' : 'fallback'}`
         ].join(' | '),
         { modal: true }
