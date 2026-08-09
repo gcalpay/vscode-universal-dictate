@@ -33,6 +33,9 @@ export class RecorderSession {
       this.completionResolve = resolve;
       this.completionReject = reject;
     });
+    // A recorder can fail while the user is still speaking. Attach a handler
+    // immediately so Node does not report an unhandled rejection before stop().
+    void this.completion.catch(() => undefined);
 
     child.stderr.setEncoding('utf8');
     child.stderr.on('data', (chunk: string) => {
@@ -105,8 +108,14 @@ export class RecorderSession {
     });
 
     const session = new RecorderSession(child, outputPath, onLevel);
-    await session.waitUntilReady();
-    return session;
+    try {
+      await session.waitUntilReady();
+      return session;
+    } catch (error) {
+      child.kill();
+      await fs.promises.rm(outputPath, { force: true }).catch(() => undefined);
+      throw error;
+    }
   }
 
   async stop(): Promise<string> {
@@ -121,7 +130,9 @@ export class RecorderSession {
   async cancel(): Promise<void> {
     if (!this.stopped) {
       this.stopped = true;
-      this.child.stdin.write('CANCEL\n');
+      if (!this.child.stdin.destroyed) {
+        this.child.stdin.write('CANCEL\n');
+      }
     }
     await this.completion.catch(() => undefined);
     await fs.promises.rm(this.outputPath, { force: true }).catch(() => undefined);
