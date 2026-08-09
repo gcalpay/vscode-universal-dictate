@@ -1,5 +1,6 @@
 import * as fs from 'node:fs';
 import * as vscode from 'vscode';
+import { DictationEngine, DictationState } from './core/dictation';
 import {
   getWhisperLanguageName,
   normalizeWhisperLanguage,
@@ -7,7 +8,7 @@ import {
 } from './languages';
 import { getModelPath, ensureModel } from './model';
 import { getNativePasteHelperPath, pasteIntoFocusedControl } from './paste';
-import { getRecorderPath, RecorderAction, RecorderSession } from './recorder';
+import { getRecorderPath, RecorderSession } from './recorder';
 import {
   disposeWhisper,
   getWhisperCliPath,
@@ -20,8 +21,7 @@ import {
 class DictationController implements vscode.Disposable {
   private readonly statusBar: vscode.StatusBarItem;
   private readonly levelHistory = Array<number>(9).fill(0);
-  private session: RecorderSession | undefined;
-  private busy = false;
+  private readonly engine: DictationEngine;
 
   constructor(private readonly context: vscode.ExtensionContext) {
     // Keep dictation in the secondary/right status-bar group, but with enough
@@ -29,6 +29,25 @@ class DictationController implements vscode.Disposable {
     // extreme right. Higher priority values render farther left in VS Code.
     this.statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 1000);
     this.statusBar.name = 'Universal Dictate';
+    this.engine = new DictationEngine({
+      prepare: async () => {
+        await ensureModel(this.context);
+      },
+      warm: () => warmWhisper(this.context),
+      startRecorder: (onLevel) => RecorderSession.start(this.context, onLevel),
+      transcribe: (audioPath) => transcribe(this.context, audioPath),
+      insert: (transcript) => pasteIntoFocusedControl(this.context, transcript),
+      onStateChanged: (state) => this.renderState(state),
+      onLevel: (level) => this.updateRecordingLevel(level),
+      onRecordingChanged: async (recording) => {
+        await vscode.commands.executeCommand('setContext', 'universalDictate.recording', recording);
+      },
+      onNoSpeech: () => {
+        void vscode.window.showInformationMessage('Universal Dictate: no speech detected.');
+      },
+      onError: (error) => this.showError(error)
+    });
+
     this.context.subscriptions.push(this.statusBar);
     this.showIdleStatus();
   }
@@ -41,133 +60,49 @@ class DictationController implements vscode.Disposable {
       return;
     }
 
-    if (this.session) {
-      await this.stopAndTranscribe();
-      return;
-    }
-
-    if (this.busy) {
-      return;
-    }
-
-    await this.startRecording();
+    await this.engine.toggle();
   }
 
   async cancel(): Promise<void> {
-    const session = this.session;
-    if (!session || this.busy) {
-      return;
-    }
-
-    this.busy = true;
-    this.session = undefined;
-    await vscode.commands.executeCommand('setContext', 'universalDictate.recording', false);
-    this.statusBar.command = undefined;
-    this.statusBar.text = '$(circle-slash) Universal Dictate: cancelling';
-
-    try {
-      await session.cancel();
-    } finally {
-      this.busy = false;
-      this.showIdleStatus();
-    }
+    await this.engine.cancel();
   }
 
   dispose(): void {
-    if (this.session) {
-      void this.session.cancel();
-      this.session = undefined;
-    }
+    this.engine.dispose();
     this.statusBar.dispose();
   }
 
-  private async startRecording(): Promise<void> {
-    this.busy = true;
-    this.levelHistory.fill(0);
-    this.statusBar.command = undefined;
-    this.statusBar.text = '$(loading~spin) Universal Dictate: preparing local model';
-    this.statusBar.tooltip = 'The first run downloads the local Whisper model. Audio is not uploaded.';
-    this.statusBar.show();
-
-    try {
-      await ensureModel(this.context);
-
-      // Start the persistent whisper.cpp worker without waiting for model load.
-      // Recording begins immediately, so initialization normally finishes while
-      // the user is speaking instead of after they press the confirm button.
-      void warmWhisper(this.context).catch(() => undefined);
-
-      this.statusBar.text = '$(loading~spin) Universal Dictate: opening microphone';
-
-      const session = await RecorderSession.start(this.context, (level) => {
-        this.updateRecordingLevel(level);
-      });
-      this.session = session;
-      session.onAction((action) => this.handleRecorderAction(session, action));
-
-      await vscode.commands.executeCommand('setContext', 'universalDictate.recording', true);
-      this.updateRecordingLevel(0);
-    } catch (error) {
-      this.session = undefined;
-      await vscode.commands.executeCommand('setContext', 'universalDictate.recording', false);
-      this.showError(error);
-      this.showIdleStatus();
-    } finally {
-      this.busy = false;
-    }
-  }
-
-  private handleRecorderAction(session: RecorderSession, action: RecorderAction): void {
-    if (this.session !== session) {
-      return;
-    }
-
-    // READY can be followed by an extremely fast overlay click while the
-    // controller is still completing startup. Preserve that action rather than
-    // acknowledging it and silently dropping it.
-    if (this.busy) {
-      setTimeout(() => this.handleRecorderAction(session, action), 25);
-      return;
-    }
-
-    if (action === 'stop') {
-      void this.stopAndTranscribe();
-    } else {
-      void this.cancel();
-    }
-  }
-
-  private async stopAndTranscribe(): Promise<void> {
-    const session = this.session;
-    if (!session || this.busy) {
-      return;
-    }
-
-    this.busy = true;
-    this.session = undefined;
-    await vscode.commands.executeCommand('setContext', 'universalDictate.recording', false);
-    this.statusBar.command = undefined;
-    this.statusBar.text = '$(loading~spin) Universal Dictate: transcribing locally';
-    this.statusBar.tooltip = 'Speech recognition is running locally with whisper.cpp.';
-
-    let audioPath = session.outputPath;
-    try {
-      audioPath = await session.stop();
-      const transcript = await transcribe(this.context, audioPath);
-
-      if (!transcript) {
-        void vscode.window.showInformationMessage('Universal Dictate: no speech detected.');
+  private renderState(state: DictationState): void {
+    switch (state) {
+      case 'idle':
+        this.showIdleStatus();
         return;
-      }
-
-      this.statusBar.text = '$(check) Universal Dictate: inserting';
-      await pasteIntoFocusedControl(this.context, transcript);
-    } catch (error) {
-      this.showError(error);
-    } finally {
-      await fs.promises.rm(audioPath, { force: true }).catch(() => undefined);
-      this.busy = false;
-      this.showIdleStatus();
+      case 'preparing':
+        this.levelHistory.fill(0);
+        this.statusBar.command = undefined;
+        this.statusBar.text = '$(loading~spin) Universal Dictate: preparing local model';
+        this.statusBar.tooltip =
+          'The first run downloads the local Whisper model. Audio is not uploaded.';
+        this.statusBar.show();
+        return;
+      case 'opening-microphone':
+        this.statusBar.text = '$(loading~spin) Universal Dictate: opening microphone';
+        return;
+      case 'recording':
+        this.updateRecordingLevel(0);
+        return;
+      case 'cancelling':
+        this.statusBar.command = undefined;
+        this.statusBar.text = '$(circle-slash) Universal Dictate: cancelling';
+        return;
+      case 'transcribing':
+        this.statusBar.command = undefined;
+        this.statusBar.text = '$(loading~spin) Universal Dictate: transcribing locally';
+        this.statusBar.tooltip = 'Speech recognition is running locally with whisper.cpp.';
+        return;
+      case 'inserting':
+        this.statusBar.text = '$(check) Universal Dictate: inserting';
+        return;
     }
   }
 
