@@ -1,5 +1,10 @@
 import * as fs from 'node:fs';
 import * as vscode from 'vscode';
+import {
+  getWhisperLanguageName,
+  normalizeWhisperLanguage,
+  WHISPER_LANGUAGES
+} from './languages';
 import { getModelPath, ensureModel } from './model';
 import { getNativePasteHelperPath, pasteIntoFocusedControl } from './paste';
 import { getRecorderPath, RecorderSession } from './recorder';
@@ -133,6 +138,8 @@ class DictationController implements vscode.Disposable {
   }
 }
 
+type LanguageQuickPickItem = vscode.QuickPickItem & { code: string };
+
 export function activate(context: vscode.ExtensionContext): void {
   const controller = new DictationController(context);
 
@@ -144,6 +151,45 @@ export function activate(context: vscode.ExtensionContext): void {
     await controller.cancel();
   });
 
+  const selectLanguage = vscode.commands.registerCommand(
+    'universalDictate.selectLanguage',
+    async () => {
+      const configuration = vscode.workspace.getConfiguration('universalDictate');
+      const current = normalizeWhisperLanguage(configuration.get<string>('language', 'auto'));
+
+      const items: LanguageQuickPickItem[] = [
+        {
+          label: '$(globe) Auto-detect',
+          description: current === 'auto' ? 'Current' : undefined,
+          detail: 'Let Whisper identify the spoken language automatically.',
+          code: 'auto'
+        },
+        ...[...WHISPER_LANGUAGES]
+          .sort((left, right) => left.name.localeCompare(right.name))
+          .map(({ code, name }) => ({
+            label: name,
+            description: `${code}${current === code ? ' · Current' : ''}`,
+            code
+          }))
+      ];
+
+      const selected = await vscode.window.showQuickPick(items, {
+        placeHolder: 'Select one of the 99 languages supported by the multilingual Whisper base model',
+        matchOnDescription: true,
+        matchOnDetail: true
+      });
+
+      if (!selected) {
+        return;
+      }
+
+      await configuration.update('language', selected.code, vscode.ConfigurationTarget.Global);
+      void vscode.window.showInformationMessage(
+        `Universal Dictate language: ${getWhisperLanguageName(selected.code)}`
+      );
+    }
+  );
+
   const showDiagnostics = vscode.commands.registerCommand(
     'universalDictate.showDiagnostics',
     async () => {
@@ -153,6 +199,9 @@ export function activate(context: vscode.ExtensionContext): void {
         ? declaredKinds.join(',')
         : String(declaredKinds ?? 'unspecified');
       const remoteName = vscode.env.remoteName ?? 'none';
+      const configuredLanguage = normalizeWhisperLanguage(
+        vscode.workspace.getConfiguration('universalDictate').get<string>('language', 'auto')
+      );
 
       await vscode.window.showInformationMessage(
         [
@@ -160,6 +209,7 @@ export function activate(context: vscode.ExtensionContext): void {
           `arch=${process.arch}`,
           `remote=${remoteName}`,
           `extensionKind=${extensionKind}`,
+          `language=${configuredLanguage}`,
           `nativePaste=${fs.existsSync(getNativePasteHelperPath(context)) ? 'available' : 'missing'}`,
           `recorder=${fs.existsSync(getRecorderPath(context)) ? 'available' : 'missing'}`,
           `whisper=${fs.existsSync(getWhisperCliPath(context)) ? 'available' : 'missing'}`,
@@ -170,7 +220,7 @@ export function activate(context: vscode.ExtensionContext): void {
     }
   );
 
-  context.subscriptions.push(controller, toggle, cancel, showDiagnostics);
+  context.subscriptions.push(controller, toggle, cancel, selectLanguage, showDiagnostics);
 }
 
 export function deactivate(): void {

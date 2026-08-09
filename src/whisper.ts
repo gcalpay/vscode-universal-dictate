@@ -3,6 +3,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as util from 'node:util';
 import * as vscode from 'vscode';
+import { normalizeWhisperLanguage } from './languages';
 import { ensureModel } from './model';
 
 const execFile = util.promisify(childProcess.execFile);
@@ -29,7 +30,7 @@ export async function transcribe(
 
   const modelPath = await ensureModel(context);
   const configuration = vscode.workspace.getConfiguration('universalDictate');
-  const language = configuration.get<string>('language', 'auto');
+  const language = normalizeWhisperLanguage(configuration.get<string>('language', 'auto'));
   const threadCount = Math.max(1, Math.min(8, os.cpus().length - 2));
 
   const { stdout } = await execFile(

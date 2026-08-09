@@ -25,7 +25,30 @@ The helper never sends Enter and does not depend on any other dictation applicat
 
 Universal Dictate compiles the pinned miniaudio header through the C++ translation unit `native/miniaudio-impl.cpp`. End users do not install miniaudio or any audio package separately.
 
-## Speech recognition runtime
+## Speech-recognition model
+
+**Dependency:** OpenAI Whisper
+
+- Upstream: `openai/whisper`
+- Model: multilingual Whisper `base`
+- Original model weights and reference implementation: OpenAI
+- License: MIT
+- Retained upstream license: `third_party/OpenAI-Whisper-LICENSE.txt`
+- Role: speech-recognition model used by Universal Dictate.
+
+OpenAI states that Whisper's code and model weights are released under the MIT License. The `base` model is multilingual and uses the original 99-language Whisper vocabulary.
+
+Universal Dictate downloads a converted ggml representation of those model weights:
+
+- Filename: `ggml-base.bin`
+- Distribution source: `ggerganov/whisper.cpp` model repository on Hugging Face
+- Origin: OpenAI Whisper multilingual `base` weights converted to ggml format for whisper.cpp
+- SHA-256: `60ed5bc3dd14eea856493d334349b405782ddcaf0028d4b5df4088345fba2efe`
+- Approximate download size: 148 MB
+
+The model is downloaded once on first use into VS Code's local extension storage and checksum-verified before it is activated. Once installed, normal dictation works with networking disabled.
+
+## Speech-recognition runtime
 
 **Dependency:** whisper.cpp
 
@@ -35,20 +58,15 @@ Universal Dictate compiles the pinned miniaudio header through the C++ translati
 - Runtime SHA-256: `7d8be46ecd31828e1eb7a2ecdd0d6b314feafd82163038ab6092594b0a063539`
 - License: MIT
 - Retained upstream license: `third_party/whisper.cpp-LICENSE.txt`
-- Role: fully local Whisper inference on Windows.
+- Role: fully local C/C++ inference of OpenAI's Whisper model on Windows.
 
-The official x64 runtime is downloaded and checksum-verified in GitHub Actions, then bundled inside the Windows VSIX. End users do not need Python, PyTorch, Conda, FFmpeg, CMake or WSL-side packages.
+whisper.cpp is a separate implementation of Whisper, not the OpenAI Python reference package. The official x64 whisper.cpp runtime is downloaded and checksum-verified in GitHub Actions, then bundled inside the Windows VSIX. End users do not need Python, PyTorch, Conda, FFmpeg, CMake or WSL-side packages.
 
-## Speech model
+## Supported languages
 
-The initial MVP uses the multilingual Whisper `base` model so English and German both work from one model.
+Universal Dictate defaults to Whisper language auto-detection and exposes the 99 language tokens supported by the bundled multilingual `base` model through `Universal Dictate: Select Language`.
 
-- Filename: `ggml-base.bin`
-- Source: `ggerganov/whisper.cpp` on Hugging Face
-- SHA-256: `60ed5bc3dd14eea856493d334349b405782ddcaf0028d4b5df4088345fba2efe`
-- Approximate download size: 148 MB
-
-The model is downloaded once on first use into VS Code's local extension storage and checksum-verified before it is activated. Once installed, normal dictation works with networking disabled.
+The authoritative list used in the extension is maintained in `src/languages.ts` and follows the original 99-language Whisper vocabulary. Recognition accuracy is not uniform across languages.
 
 ## Universal Dictate code
 
@@ -61,6 +79,7 @@ The project owns the code that defines the product:
 - target/focus preservation
 - terminal safety policy
 - recording UI and input-level visualization
+- language-selection UX
 - model management UX
 - transcription orchestration
 - clipboard preservation and insertion behavior
@@ -68,4 +87,4 @@ The project owns the code that defines the product:
 
 ## Policy
 
-Do not copy application source code from other projects into this repository. Prefer documented platform APIs for small native functionality and pinned upstream dependencies for substantial external libraries/runtimes. For every redistributed third-party binary or library, record its source, version/revision and license before release.
+Do not copy application source code from other projects into this repository. Prefer documented platform APIs for small native functionality and pinned upstream dependencies for substantial external libraries/runtimes. For every redistributed third-party binary, model or library, record its source, version/revision and license before release.
