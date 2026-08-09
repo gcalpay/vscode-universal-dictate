@@ -4,7 +4,28 @@
 
 Universal Dictate is an open-source VS Code extension for speech-to-text without API keys or cloud transcription. It runs the multilingual OpenAI Whisper `base` model locally through `whisper.cpp`, automatically detects the spoken language by default and can be fixed to any of the model's 99 supported languages. Because text is inserted through the focused Windows input control rather than a private extension API, it can also be used with extension-owned agent/chat composers such as OpenAI Codex where normal VS Code text insertion APIs are not available.
 
-> **Status:** 0.1.0 public-release candidate. End-to-end dictation and focused-input insertion have been validated against the OpenAI Codex composer under Remote - WSL on Windows. The extension includes Windows microphone capture, an always-available VS Code status-bar microphone button, a non-activating recording overlay and local Whisper transcription.
+> **Version:** 0.1.0 for Windows x64. End-to-end dictation and focused-input insertion have been validated against the OpenAI Codex composer under Remote - WSL on Windows. The extension includes Windows microphone capture, an always-available VS Code status-bar microphone button, a non-activating recording overlay and local Whisper transcription.
+
+## Installation
+
+### VS Code Marketplace
+
+Public releases are distributed as a Windows x64 VS Code extension. In VS Code, open **Extensions** (`Ctrl+Shift+X`), search for **Universal Dictate** and choose **Install**.
+
+### VSIX
+
+A packaged release can also be installed directly:
+
+```text
+Ctrl+Shift+P
+Extensions: Install from VSIX...
+```
+
+Select the `universal-dictate-win32-x64.vsix` file and reload VS Code if prompted.
+
+Do not install a separate copy inside WSL. Universal Dictate declares `extensionKind: ["ui"]` so it runs in the local Windows extension host while a workspace may remain connected through Remote - WSL.
+
+On first dictation, Universal Dictate downloads the multilingual Whisper `base` model (about 148 MB), verifies its SHA-256 checksum and stores it in VS Code's local extension storage. After that, normal dictation can run offline.
 
 ## Product goals
 
@@ -50,8 +71,6 @@ Universal Dictate: Select Language
 
 You can leave language detection automatic or force any one of the 99 supported languages.
 
-On first use Universal Dictate downloads the multilingual Whisper `base` model (about 148 MB), verifies its SHA-256 checksum and stores it in VS Code's local extension storage. After that, dictation works offline.
-
 The extension uses the Windows default microphone, records 16 kHz mono PCM16 WAV through miniaudio and transcribes it locally with a bundled, pinned `whisper.cpp` runtime.
 
 ## Recognition stack and attribution
@@ -80,6 +99,10 @@ The recorder, overlay and VS Code integration are maintained as Universal Dictat
 Normal dictation is local. Microphone audio is written to a temporary local WAV file, transcribed locally and deleted after transcription. Audio and transcripts are not sent to a transcription service.
 
 The only network operation required for normal setup is the initial Whisper model download.
+
+## Support
+
+Use GitHub Issues for bugs, compatibility problems and feature requests. See [`SUPPORT.md`](SUPPORT.md) for the diagnostic information that is useful in a report.
 
 ## Third-party components
 
