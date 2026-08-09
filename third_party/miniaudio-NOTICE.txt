@@ -1,0 +1,13 @@
+miniaudio
+=========
+
+Upstream: https://github.com/mackron/miniaudio
+Target version: 0.11.25
+Copyright: David Reid / miniaudio contributors
+License choice used by Universal Dictate: MIT No Attribution (MIT-0)
+
+miniaudio is fetched at build time and statically compiled into the Windows
+recording helper. Universal Dictate does not require users to install it.
+
+Upstream offers miniaudio under a choice of public domain or MIT No Attribution.
+See the upstream repository for the authoritative license text and source.
