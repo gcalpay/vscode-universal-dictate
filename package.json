@@ -5,6 +5,11 @@
   "version": "0.1.0",
   "license": "MIT",
   "publisher": "gcalpay",
+  "icon": "media/icon.png",
+  "galleryBanner": {
+    "color": "#121418",
+    "theme": "dark"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/gcalpay/vscode-universal-dictate.git"
