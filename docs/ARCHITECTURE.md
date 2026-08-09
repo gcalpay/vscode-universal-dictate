@@ -37,7 +37,7 @@ The extension declares:
 
 The TypeScript extension therefore belongs in the local extension host on the Windows client. WSL remains the workspace environment and should require no microphone, model or transcription dependencies.
 
-## Planned components
+## Components
 
 ```text
 VS Code (Windows)
@@ -50,7 +50,7 @@ VS Code (Windows)
 |   +-- clipboard coordination
 |   `-- UI integration
 |
-+-- native Windows helper
++-- Universal Dictate native C++20 helpers
 |   +-- microphone capture (miniaudio -> WASAPI)
 |   +-- WAV/PCM recording
 |   +-- audio-level reporting
@@ -94,11 +94,11 @@ Acceptance criteria:
 - No Enter/submit action occurs.
 - Existing clipboard content is restored.
 
-The packaged M1 build uses the native OpenWhispr-derived Win32 `SendInput` helper. PowerShell `SendKeys` remains a development-only fallback when the helper has not been built yet.
+The packaged build uses Universal Dictate's own C++20 Win32 `SendInput` helper. PowerShell `SendKeys` remains a development-only fallback when the helper has not been built yet.
 
 ### M2: Native Windows recording boundary
 
-Use miniaudio, statically compiled into a small Windows helper, for capture through WASAPI. Define a narrow line-oriented IPC protocol between the helper and extension for recording lifecycle and audio-level events.
+Use miniaudio, compiled through the C++ native layer, for capture through WASAPI. Define a narrow line-oriented IPC protocol between the helper and extension for recording lifecycle and audio-level events.
 
 Acceptance criteria:
 

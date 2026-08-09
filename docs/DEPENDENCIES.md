@@ -1,17 +1,17 @@
 # Dependency strategy
 
-Universal Dictate reuses mature permissively licensed infrastructure while keeping product-specific behavior in this repository.
+Universal Dictate keeps product-specific behavior in this repository and uses mature permissively licensed libraries/runtimes only where they provide substantial value.
 
 ## Windows text injection
 
-**Source:** OpenWhispr `resources/windows-fast-paste.c`
+The focused-input paste helper is an original Universal Dictate C++ implementation in `native/windows-fast-paste.cpp`.
 
-- License: MIT
-- Upstream revision used for the initial adaptation: `1866ecf6641b9fa4851f19c7838cb18f3662def7`
-- Local adaptation: `native/windows-fast-paste.c`
-- Retained license: `third_party/OpenWhispr-LICENSE.txt`
+- Language: C++20
+- External source dependency: none
+- Windows API: documented Win32 `SendInput` / keyboard state APIs
+- Role: temporarily release shortcut modifiers, synthesize Ctrl+V, then restore modifier state
 
-We reuse only the low-level Win32 `SendInput` strategy, not the OpenWhispr application architecture.
+The helper never sends Enter and does not depend on any other dictation application.
 
 ## Microphone capture
 
@@ -23,7 +23,7 @@ We reuse only the low-level Win32 `SendInput` strategy, not the OpenWhispr appli
 - Retained upstream license text: `third_party/miniaudio-LICENSE.txt`
 - Role: capture the Windows default microphone through WASAPI and write 16 kHz mono PCM16 WAV while exposing input levels.
 
-miniaudio is compiled statically into Universal Dictate's Windows recorder helper. End users do not install miniaudio or any audio package separately.
+Universal Dictate compiles the pinned miniaudio header through the C++ translation unit `native/miniaudio-impl.cpp`. End users do not install miniaudio or any audio package separately.
 
 ## Speech recognition runtime
 
@@ -50,12 +50,14 @@ The initial MVP uses the multilingual Whisper `base` model so English and German
 
 The model is downloaded once on first use into VS Code's local extension storage and checksum-verified before it is activated. Once installed, normal dictation works with networking disabled.
 
-## What remains ours
+## Universal Dictate code
 
-Universal Dictate owns the parts that define the product:
+The project owns the code that defines the product:
 
 - VS Code extension lifecycle and Remote - WSL behavior
 - dictation state machine
+- Windows focused-input paste helper
+- Windows recorder process and native IPC protocol
 - target/focus preservation
 - terminal safety policy
 - recording UI and input-level visualization
@@ -66,4 +68,4 @@ Universal Dictate owns the parts that define the product:
 
 ## Policy
 
-Do not copy whole third-party repositories into this repository. Prefer a pinned build dependency or a narrowly adapted source file. For every redistributed third-party source or binary, record its source, version/revision and license before release.
+Do not copy application source code from other projects into this repository. Prefer documented platform APIs for small native functionality and pinned upstream dependencies for substantial external libraries/runtimes. For every redistributed third-party binary or library, record its source, version/revision and license before release.

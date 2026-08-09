@@ -27,6 +27,15 @@ On first use Universal Dictate downloads the multilingual Whisper `base` model (
 
 The MVP uses the Windows default microphone, records 16 kHz mono PCM16 WAV through miniaudio and transcribes it locally with a bundled, pinned whisper.cpp runtime.
 
+## Implementation
+
+- TypeScript: VS Code integration, commands, state, UI, model management and transcription orchestration.
+- C++20: Universal Dictate's native Windows microphone process and focused-input paste helper.
+- miniaudio: permissively licensed microphone/audio backend.
+- whisper.cpp: MIT-licensed local speech-recognition runtime.
+
+Universal Dictate's native Windows helpers are implemented in this repository; they do not depend on source code from another dictation application.
+
 ## Privacy
 
 Normal dictation is local. Microphone audio is written to a temporary local WAV file, transcribed locally and deleted after transcription. Audio and transcripts are not sent to a transcription service.
@@ -35,9 +44,8 @@ The only network operation required for normal setup is the initial Whisper mode
 
 ## Third-party components
 
-Universal Dictate is MIT licensed and selectively reuses permissively licensed infrastructure:
+Universal Dictate is MIT licensed and uses permissively licensed infrastructure:
 
-- OpenWhispr: adapted Win32 `SendInput` paste helper (MIT)
 - miniaudio: Windows microphone capture (MIT-0/public-domain dual license)
 - whisper.cpp: local speech recognition runtime (MIT)
 
