@@ -26,15 +26,23 @@
   ],
   "keywords": [
     "dictation",
+    "universal dictation",
     "speech-to-text",
+    "local speech-to-text",
+    "speech recognition",
+    "transcription",
     "voice",
+    "voice typing",
+    "voice input",
     "whisper",
+    "whisper.cpp",
     "offline",
     "multilingual",
     "codex",
     "agent",
     "chat",
-    "wsl"
+    "wsl",
+    "remote wsl"
   ],
   "extensionKind": [
     "ui"
