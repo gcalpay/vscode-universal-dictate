@@ -7,7 +7,7 @@ import {
 } from './languages';
 import { getModelPath, ensureModel } from './model';
 import { getNativePasteHelperPath, pasteIntoFocusedControl } from './paste';
-import { getRecorderPath, RecorderSession } from './recorder';
+import { getRecorderPath, RecorderAction, RecorderSession } from './recorder';
 import { getWhisperCliPath, transcribe } from './whisper';
 
 class DictationController implements vscode.Disposable {
@@ -82,16 +82,7 @@ class DictationController implements vscode.Disposable {
         this.updateRecordingLevel(level);
       });
       this.session = session;
-      session.onAction((action) => {
-        if (this.session !== session || this.busy) {
-          return;
-        }
-        if (action === 'stop') {
-          void this.stopAndTranscribe();
-        } else {
-          void this.cancel();
-        }
-      });
+      session.onAction((action) => this.handleRecorderAction(session, action));
 
       await vscode.commands.executeCommand('setContext', 'universalDictate.recording', true);
       this.updateRecordingLevel(0);
@@ -102,6 +93,26 @@ class DictationController implements vscode.Disposable {
       this.showError(error);
     } finally {
       this.busy = false;
+    }
+  }
+
+  private handleRecorderAction(session: RecorderSession, action: RecorderAction): void {
+    if (this.session !== session) {
+      return;
+    }
+
+    // READY can be followed by an extremely fast overlay click while the
+    // controller is still completing startup. Preserve that action rather than
+    // acknowledging it and silently dropping it.
+    if (this.busy) {
+      setTimeout(() => this.handleRecorderAction(session, action), 25);
+      return;
+    }
+
+    if (action === 'stop') {
+      void this.stopAndTranscribe();
+    } else {
+      void this.cancel();
     }
   }
 
