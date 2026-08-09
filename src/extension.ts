@@ -18,11 +18,45 @@ import {
   warmWhisper
 } from './whisper';
 
+type VisualizationMode = 'both' | 'overlay' | 'statusBar' | 'off';
+
+const VISUALIZATION_LABELS: Record<VisualizationMode, string> = {
+  both: 'Both',
+  overlay: 'Large overlay only',
+  statusBar: 'Status bar only',
+  off: 'Off'
+};
+
+function getConfiguredVisualization(): VisualizationMode {
+  const value = vscode.workspace
+    .getConfiguration('universalDictate')
+    .get<string>('visualization', 'both');
+
+  switch (value) {
+    case 'overlay':
+    case 'statusBar':
+    case 'off':
+      return value;
+    case 'both':
+    default:
+      return 'both';
+  }
+}
+
+function showsOverlay(mode: VisualizationMode): boolean {
+  return mode === 'both' || mode === 'overlay';
+}
+
+function showsStatusBarWaveform(mode: VisualizationMode): boolean {
+  return mode === 'both' || mode === 'statusBar';
+}
+
 class DictationController implements vscode.Disposable {
   private readonly statusBar: vscode.StatusBarItem;
   private readonly settingsStatusBar: vscode.StatusBarItem;
   private readonly levelHistory = Array<number>(9).fill(0);
   private readonly engine: DictationEngine;
+  private activeVisualization: VisualizationMode = 'both';
 
   constructor(private readonly context: vscode.ExtensionContext) {
     // Keep dictation in the secondary/right status-bar group, but with enough
@@ -48,11 +82,22 @@ class DictationController implements vscode.Disposable {
         await ensureModel(this.context);
       },
       warm: () => warmWhisper(this.context),
-      startRecorder: (onLevel) => RecorderSession.start(this.context, onLevel),
+      startRecorder: (onLevel) => {
+        this.activeVisualization = getConfiguredVisualization();
+        return RecorderSession.start(
+          this.context,
+          onLevel,
+          showsOverlay(this.activeVisualization)
+        );
+      },
       transcribe: (audioPath) => transcribe(this.context, audioPath),
       insert: (transcript) => pasteIntoFocusedControl(this.context, transcript),
       onStateChanged: (state) => this.renderState(state),
-      onLevel: (level) => this.updateRecordingLevel(level),
+      onLevel: (level) => {
+        if (showsStatusBarWaveform(this.activeVisualization)) {
+          this.updateRecordingLevel(level);
+        }
+      },
       onRecordingChanged: async (recording) => {
         await vscode.commands.executeCommand('setContext', 'universalDictate.recording', recording);
       },
@@ -104,7 +149,11 @@ class DictationController implements vscode.Disposable {
         this.statusBar.text = '$(loading~spin) Universal Dictate: opening microphone';
         return;
       case 'recording':
-        this.updateRecordingLevel(0);
+        if (showsStatusBarWaveform(this.activeVisualization)) {
+          this.updateRecordingLevel(0);
+        } else {
+          this.showStaticRecordingStatus();
+        }
         return;
       case 'cancelling':
         this.statusBar.command = undefined;
@@ -139,8 +188,18 @@ class DictationController implements vscode.Disposable {
 
     this.statusBar.command = undefined;
     this.statusBar.text = `$(record) ${signal}  Ctrl+Alt+D to stop`;
-    this.statusBar.tooltip =
-      'Recording locally. The trace is a rolling microphone-energy history. Use the non-activating ✓/× overlay, Ctrl+Alt+D to confirm, or Esc to cancel.';
+    this.statusBar.tooltip = showsOverlay(this.activeVisualization)
+      ? 'Recording locally. The trace is a rolling microphone-energy history. Use the non-activating ✓/× overlay, Ctrl+Alt+D to confirm, or Esc to cancel.'
+      : 'Recording locally. The trace is a rolling microphone-energy history. Use Ctrl+Alt+D to confirm or Esc to cancel.';
+    this.statusBar.show();
+  }
+
+  private showStaticRecordingStatus(): void {
+    this.statusBar.command = undefined;
+    this.statusBar.text = '$(record) Recording  Ctrl+Alt+D to stop';
+    this.statusBar.tooltip = showsOverlay(this.activeVisualization)
+      ? 'Recording locally. Use the non-activating ✓/× overlay, Ctrl+Alt+D to confirm, or Esc to cancel.'
+      : 'Recording locally. Use Ctrl+Alt+D to confirm or Esc to cancel.';
     this.statusBar.show();
   }
 
@@ -158,6 +217,10 @@ class DictationController implements vscode.Disposable {
 }
 
 type LanguageQuickPickItem = vscode.QuickPickItem & { code: string };
+type SettingsQuickPickItem = vscode.QuickPickItem & {
+  action: 'language' | 'visualization';
+};
+type VisualizationQuickPickItem = vscode.QuickPickItem & { mode: VisualizationMode };
 
 async function selectLanguage(): Promise<void> {
   const configuration = vscode.workspace.getConfiguration('universalDictate');
@@ -195,30 +258,92 @@ async function selectLanguage(): Promise<void> {
   );
 }
 
-async function openSettings(): Promise<void> {
+async function selectVisualization(): Promise<void> {
   const configuration = vscode.workspace.getConfiguration('universalDictate');
-  const currentLanguage = normalizeWhisperLanguage(
-    configuration.get<string>('language', 'auto')
-  );
-
-  const selected = await vscode.window.showQuickPick(
-    [
-      {
-        label: '$(globe) Language',
-        description: getWhisperLanguageName(currentLanguage),
-        detail: 'Choose the language used for local Whisper transcription.'
-      }
-    ],
+  const current = getConfiguredVisualization();
+  const modes: Array<{
+    mode: VisualizationMode;
+    detail: string;
+  }> = [
     {
-      placeHolder: 'Universal Dictate Settings'
+      mode: 'both',
+      detail: 'Show the native recording overlay and the animated status-bar waveform.'
+    },
+    {
+      mode: 'overlay',
+      detail: 'Show the native recording overlay with static recording feedback in the status bar.'
+    },
+    {
+      mode: 'statusBar',
+      detail: 'Show the animated status-bar waveform without the native recording overlay.'
+    },
+    {
+      mode: 'off',
+      detail: 'Disable both waveform visualizations; keep static recording feedback in the status bar.'
     }
-  );
+  ];
+
+  const items: VisualizationQuickPickItem[] = modes.map(({ mode, detail }) => ({
+    label: VISUALIZATION_LABELS[mode],
+    description: current === mode ? 'Current' : undefined,
+    detail,
+    mode
+  }));
+
+  const selected = await vscode.window.showQuickPick(items, {
+    placeHolder: 'Audio visualization · changes apply from the next dictation session',
+    matchOnDescription: true,
+    matchOnDetail: true
+  });
 
   if (!selected) {
     return;
   }
 
-  await vscode.commands.executeCommand('universalDictate.selectLanguage');
+  await configuration.update('visualization', selected.mode, vscode.ConfigurationTarget.Global);
+  void vscode.window.showInformationMessage(
+    `Universal Dictate audio visualization: ${VISUALIZATION_LABELS[selected.mode]}. Applies from the next dictation session.`
+  );
+}
+
+async function openSettings(): Promise<void> {
+  const configuration = vscode.workspace.getConfiguration('universalDictate');
+  const currentLanguage = normalizeWhisperLanguage(
+    configuration.get<string>('language', 'auto')
+  );
+  const currentVisualization = getConfiguredVisualization();
+
+  const items: SettingsQuickPickItem[] = [
+    {
+      label: '$(globe) Language',
+      description: getWhisperLanguageName(currentLanguage),
+      detail: 'Choose the language used for local Whisper transcription.',
+      action: 'language'
+    },
+    {
+      label: '$(pulse) Audio visualization',
+      description: VISUALIZATION_LABELS[currentVisualization],
+      detail: 'Choose which recording visualizations are shown.',
+      action: 'visualization'
+    }
+  ];
+
+  const selected = await vscode.window.showQuickPick(items, {
+    placeHolder: 'Universal Dictate Settings',
+    matchOnDescription: true,
+    matchOnDetail: true
+  });
+
+  if (!selected) {
+    return;
+  }
+
+  if (selected.action === 'language') {
+    await vscode.commands.executeCommand('universalDictate.selectLanguage');
+    return;
+  }
+
+  await selectVisualization();
 }
 
 export function activate(context: vscode.ExtensionContext): void {

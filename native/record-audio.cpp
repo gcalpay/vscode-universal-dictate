@@ -5,7 +5,7 @@
  * compiled at build time; it is not a runtime dependency.
  *
  * The recorder also owns a non-activating Win32 overlay. The overlay renders
- * a large adaptive rolling signal field and exposes confirm/cancel controls
+ * a compact adaptive rolling signal field and exposes confirm/cancel controls
  * without taking keyboard focus away from the VS Code input being dictated
  * into.
  *
@@ -52,8 +52,8 @@ namespace {
 constexpr ma_uint32 kSampleRate = 16000;
 constexpr ma_uint32 kChannels = 1;
 constexpr auto kLevelInterval = std::chrono::milliseconds(50);
-constexpr int kOverlayWidth = 540;
-constexpr int kOverlayHeight = 150;
+constexpr int kOverlayWidth = 400;
+constexpr int kOverlayHeight = 110;
 constexpr int kOverlayMargin = 18;
 constexpr int kSignalPoints = 64;
 constexpr int kNoiseFloorMilli = 6;
@@ -571,6 +571,16 @@ std::string parseOutputPath(int argc, char** argv) {
     return {};
 }
 
+bool hasFlag(int argc, char** argv, std::string_view flag) {
+    for (int i = 1; i < argc; ++i) {
+        if (std::string_view(argv[i]) == flag) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -580,9 +590,11 @@ int main(int argc, char** argv) {
         return 2;
     }
 
+    const bool overlayEnabled = !hasFlag(argc, argv, "--no-overlay");
+
     // Capture the active target monitor immediately, before microphone setup can
     // introduce enough delay for the foreground window to change.
-    const HMONITOR overlayMonitor = captureOverlayMonitor();
+    const HMONITOR overlayMonitor = overlayEnabled ? captureOverlayMonitor() : nullptr;
 
     Encoder encoder;
     const ma_result encoderResult = encoder.open(outputPath);
@@ -636,19 +648,26 @@ int main(int argc, char** argv) {
             std::memory_order_relaxed);
     });
 
-    const bool overlayAvailable = createOverlay(overlayMonitor);
-    if (!overlayAvailable) {
-        std::cerr << "WARNING recording overlay could not be created; keyboard controls remain available\n";
+    bool overlayAvailable = false;
+    if (overlayEnabled) {
+        overlayAvailable = createOverlay(overlayMonitor);
+        if (!overlayAvailable) {
+            std::cerr << "WARNING recording overlay could not be created; keyboard controls remain available\n";
+        }
     }
 
     std::cout << "READY\n" << std::flush;
 
     int previousLevel = -1;
     while (command.load(std::memory_order_acquire) == RecorderCommand::Record) {
-        pumpOverlayMessages();
+        if (overlayAvailable) {
+            pumpOverlayMessages();
+        }
 
         const int level = captureState.peakMilli.exchange(0, std::memory_order_relaxed);
-        updateOverlayLevel(level);
+        if (overlayAvailable) {
+            updateOverlayLevel(level);
+        }
         if (level != previousLevel) {
             std::printf("LEVEL %.3f\n", static_cast<double>(level) / 1000.0);
             std::fflush(stdout);
@@ -657,7 +676,9 @@ int main(int argc, char** argv) {
         std::this_thread::sleep_for(kLevelInterval);
     }
 
-    destroyOverlay();
+    if (overlayEnabled) {
+        destroyOverlay();
+    }
     device.close();
     encoder.close();
 

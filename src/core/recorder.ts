@@ -9,6 +9,7 @@ export type RecorderAction = 'stop' | 'cancel';
 export interface RecorderStartOptions {
   readonly recorderPath: string;
   readonly outputPath: string;
+  readonly showOverlay?: boolean;
 }
 
 /**
@@ -121,7 +122,12 @@ export class CoreRecorderSession {
       throw new Error(`Native microphone recorder is missing: ${options.recorderPath}`);
     }
 
-    const child = childProcess.spawn(options.recorderPath, ['--output', options.outputPath], {
+    const args = ['--output', options.outputPath];
+    if (options.showOverlay === false) {
+      args.push('--no-overlay');
+    }
+
+    const child = childProcess.spawn(options.recorderPath, args, {
       windowsHide: true,
       stdio: ['pipe', 'pipe', 'pipe']
     });

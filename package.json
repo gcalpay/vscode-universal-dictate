@@ -98,6 +98,23 @@
           "type": "string",
           "default": "auto",
           "description": "Whisper language code used for local transcription. Default: auto. Use 'Universal Dictate: Select Language' to choose from all 99 languages supported by the bundled multilingual base model."
+        },
+        "universalDictate.visualization": {
+          "type": "string",
+          "enum": [
+            "both",
+            "overlay",
+            "statusBar",
+            "off"
+          ],
+          "enumDescriptions": [
+            "Show the native recording overlay and the animated status-bar waveform.",
+            "Show only the native recording overlay; keep static recording feedback in the status bar.",
+            "Show only the animated status-bar waveform; do not create the native overlay.",
+            "Disable both waveform visualizations; keep static recording feedback in the status bar."
+          ],
+          "default": "both",
+          "description": "Controls recording visualizations. Changes apply from the next dictation session."
         }
       }
     }
