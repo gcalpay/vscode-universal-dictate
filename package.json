@@ -6,6 +6,10 @@
   "private": true,
   "license": "MIT",
   "publisher": "gcalpay",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/gcalpay/vscode-universal-dictate.git"
+  },
   "engines": {
     "vscode": "^1.96.0"
   },
