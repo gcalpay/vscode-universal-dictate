@@ -1,12 +1,15 @@
 # VS Code Universal Dictate
 
-Open-source VS Code extension for local, offline, multilingual speech-to-text in any VS Code text input on Windows, including Remote - WSL.
+**Local, offline, multilingual dictation for VS Code on Windows. Supports 99 Whisper languages, including Remote - WSL and extension-owned text inputs such as the OpenAI Codex composer.**
+
+Universal Dictate is an open-source VS Code extension for speech-to-text without API keys or cloud transcription. It runs the multilingual OpenAI Whisper `base` model locally through `whisper.cpp`, automatically detects the spoken language by default and can be fixed to any of the model's 99 supported languages.
 
 > **Status:** early working MVP. Focused-input insertion has been validated against the OpenAI Codex composer under Remote - WSL. The current build includes Windows microphone capture, a non-activating recording overlay and local Whisper transcription.
 
 ## Product goals
 
 - Local speech-to-text with no API key or cloud transcription.
+- Multilingual dictation with automatic language detection and explicit selection from 99 Whisper languages.
 - Windows 10/11 as the supported desktop platform.
 - Works from a Windows VS Code client while the workspace is connected through Remote - WSL.
 - Inserts dictated text into the text control that had focus, including extension-owned composers where practical.
@@ -32,13 +35,17 @@ While recording, Universal Dictate also shows a small native Windows overlay wit
 
 The overlay uses the Win32 `WS_EX_NOACTIVATE` behavior so clicking it does not intentionally move keyboard focus away from the VS Code editor/composer where the transcript will be inserted.
 
+## Languages
+
+The default is **Auto-detect**. The bundled multilingual Whisper `base` model supports the original **99 Whisper languages**. Recognition quality varies by language and audio conditions.
+
 Language selection is available from the Command Palette:
 
 ```text
 Universal Dictate: Select Language
 ```
 
-The default is **Auto-detect**. The bundled multilingual Whisper `base` model supports the original **99 Whisper languages**. You can force any one of those languages when automatic detection is not desirable. Recognition quality varies by language and audio conditions.
+You can leave language detection automatic or force any one of the 99 supported languages.
 
 On first use Universal Dictate downloads the multilingual Whisper `base` model (about 148 MB), verifies its SHA-256 checksum and stores it in VS Code's local extension storage. After that, dictation works offline.
 
