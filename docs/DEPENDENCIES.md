@@ -1,6 +1,6 @@
 # Dependency strategy
 
-Universal Dictate should reuse mature permissively licensed infrastructure while keeping product-specific behavior in this repository.
+Universal Dictate reuses mature permissively licensed infrastructure while keeping product-specific behavior in this repository.
 
 ## Windows text injection
 
@@ -15,26 +15,40 @@ We reuse only the low-level Win32 `SendInput` strategy, not the OpenWhispr appli
 
 ## Microphone capture
 
-**Planned dependency:** miniaudio
+**Dependency:** miniaudio
 
 - Upstream: `mackron/miniaudio`
-- Initial target version: `0.11.25`
+- Pinned version: `0.11.25`
 - License choice: MIT No Attribution (MIT-0)
-- Role: capture the Windows default microphone through WASAPI, resample to the format expected by the ASR pipeline, write WAV/PCM data and expose input levels.
+- Retained upstream license text: `third_party/miniaudio-LICENSE.txt`
+- Role: capture the Windows default microphone through WASAPI and write 16 kHz mono PCM16 WAV while exposing input levels.
 
-miniaudio is intended to be compiled statically into Universal Dictate's Windows helper. End users should not install miniaudio or any audio package separately.
+miniaudio is compiled statically into Universal Dictate's Windows recorder helper. End users do not install miniaudio or any audio package separately.
 
-## Speech recognition
+## Speech recognition runtime
 
-**Planned dependency:** whisper.cpp
+**Dependency:** whisper.cpp
 
 - Upstream: `ggml-org/whisper.cpp`
+- Pinned release: `v1.9.1`
+- Runtime asset: `whisper-bin-x64.zip`
+- Runtime SHA-256: `7d8be46ecd31828e1eb7a2ecdd0d6b314feafd82163038ab6092594b0a063539`
 - License: MIT
+- Retained upstream license: `third_party/whisper.cpp-LICENSE.txt`
 - Role: fully local Whisper inference on Windows.
 
-The runtime will be pinned to a reviewed upstream release or commit. Release builds should contain the required Windows runtime binaries; users should not need Python, PyTorch, Conda, FFmpeg, CMake or WSL-side packages.
+The official x64 runtime is downloaded and checksum-verified in GitHub Actions, then bundled inside the Windows VSIX. End users do not need Python, PyTorch, Conda, FFmpeg, CMake or WSL-side packages.
 
-Whisper model files are downloaded separately on first use and stored in VS Code's local extension storage. Downloads must be checksum-verified. Once a model is installed, normal dictation must work with networking disabled.
+## Speech model
+
+The initial MVP uses the multilingual Whisper `base` model so English and German both work from one model.
+
+- Filename: `ggml-base.bin`
+- Source: `ggerganov/whisper.cpp` on Hugging Face
+- SHA-256: `60ed5bc3dd14eea856493d334349b405782ddcaf0028d4b5df4088345fba2efe`
+- Approximate download size: 148 MB
+
+The model is downloaded once on first use into VS Code's local extension storage and checksum-verified before it is activated. Once installed, normal dictation works with networking disabled.
 
 ## What remains ours
 

@@ -2,7 +2,7 @@
 
 Open-source, fully local speech-to-text for VS Code on Windows, including Remote - WSL.
 
-> **Status:** early prototype. The first milestone is validating reliable text insertion into extension-owned inputs such as the OpenAI Codex composer while VS Code is connected to WSL.
+> **Status:** early working MVP. Focused-input insertion has already been validated against the OpenAI Codex composer under Remote - WSL. The current development branch adds microphone capture and local whisper.cpp transcription.
 
 ## Product goals
 
@@ -15,33 +15,33 @@ Open-source, fully local speech-to-text for VS Code on Windows, including Remote
 - No Python, Conda, FFmpeg or WSL-side runtime dependency for end users.
 - A simple microphone UI with visible input level, confirm and cancel actions.
 
-## Development order
-
-1. **M1 - Focused-input injection:** prove that a Windows-local VS Code extension can insert probe text into the Codex composer under Remote - WSL.
-2. **M2 - Native Windows helper:** replace the temporary injection probe with native Win32 input handling and establish microphone capture.
-3. **M3 - Local ASR:** integrate `whisper.cpp` and model management.
-4. **M4 - Dictation UX:** microphone control, input-level visualization, confirm/cancel and safe focus restoration.
-5. **M5 - Hardening:** terminal safeguards, automated tests, packaging and Marketplace preparation.
-
-## M1 test
-
-The current prototype contributes **Universal Dictate: Insert Probe Text** with the default shortcut:
+## Current MVP controls
 
 ```text
-Ctrl+Alt+D
+Ctrl+Alt+D   Start recording
+Ctrl+Alt+D   Stop, transcribe locally and insert
+Esc          Cancel the current recording
 ```
 
-Place the caret in the Codex composer and press the shortcut. A successful M1 test inserts:
+On first use Universal Dictate downloads the multilingual Whisper `base` model (about 148 MB), verifies its SHA-256 checksum and stores it in VS Code's local extension storage. After that, dictation works offline.
 
-```text
-[Universal Dictate probe]
-```
+The MVP uses the Windows default microphone, records 16 kHz mono PCM16 WAV through miniaudio and transcribes it locally with a bundled, pinned whisper.cpp runtime.
 
-without submitting the prompt.
+## Privacy
 
-## Privacy direction
+Normal dictation is local. Microphone audio is written to a temporary local WAV file, transcribed locally and deleted after transcription. Audio and transcripts are not sent to a transcription service.
 
-The intended released extension performs transcription locally. Microphone audio must not be uploaded to a transcription service.
+The only network operation required for normal setup is the initial Whisper model download.
+
+## Third-party components
+
+Universal Dictate is MIT licensed and selectively reuses permissively licensed infrastructure:
+
+- OpenWhispr: adapted Win32 `SendInput` paste helper (MIT)
+- miniaudio: Windows microphone capture (MIT-0/public-domain dual license)
+- whisper.cpp: local speech recognition runtime (MIT)
+
+See [`docs/DEPENDENCIES.md`](docs/DEPENDENCIES.md) and `third_party/` for pinned versions and license notices.
 
 ## License
 

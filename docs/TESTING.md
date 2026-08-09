@@ -1,34 +1,32 @@
-# M1 test procedure
+# MVP test procedure
 
-M1 exists to answer one question before speech recognition work begins:
+The focused-input insertion milestone has already passed against the OpenAI Codex composer in a Windows VS Code window connected through Remote - WSL. The current test validates the complete local dictation path.
 
-> Can a Windows-local VS Code extension insert text into the OpenAI Codex composer while the active workspace is connected through Remote - WSL?
+## Environment
 
-## Build
+- Windows 10/11 desktop VS Code
+- Universal Dictate installed from the Windows VSIX
+- Optional Remote - WSL workspace
+- OpenAI Codex composer or another VS Code text input focused
 
-From a checkout of this repository:
+## First-run dictation test
 
-```bash
-npm install
-npm run check
-npm run package:vsix
-```
+1. Focus the target text input.
+2. Press `Ctrl+Alt+D`.
+3. Allow the initial multilingual Whisper base model download to complete.
+4. Wait until the status bar shows recording activity.
+5. Speak normally.
+6. Press `Ctrl+Alt+D` again.
+7. Wait for local transcription.
+8. Confirm that the spoken text is inserted at the target caret and that no Enter key is synthesized.
 
-This creates:
+The first model download is approximately 148 MB. Subsequent dictation should not require networking.
 
-```text
-universal-dictate-dev.vsix
-```
+## Cancellation
 
-## Install into a WSL-connected VS Code window
+While recording, press `Esc`. The temporary recording should be discarded and no text inserted.
 
-1. Open the normal Windows VS Code desktop application.
-2. Connect the window to WSL and open any WSL workspace.
-3. Open Extensions (`Ctrl+Shift+X`).
-4. From the Extensions view `...` menu choose **Install from VSIX...**.
-5. Select `universal-dictate-dev.vsix` and reload if requested.
-
-## Verify execution location
+## Diagnostics
 
 Run:
 
@@ -36,66 +34,42 @@ Run:
 Universal Dictate: Show Diagnostics
 ```
 
-Expected values include:
+A packaged Windows build should report values equivalent to:
 
 ```text
 platform=win32
 remote=wsl
+nativePaste=available
+recorder=available
+whisper=available
 ```
 
-The exact remote string may identify the WSL remote more specifically. The critical result is `platform=win32` while the VS Code window is connected to WSL.
-
-You can also run **Developer: Show Running Extensions** and verify that Universal Dictate is running locally rather than in the WSL extension host.
-
-If `platform=linux`, stop. Do not proceed to microphone or ASR work until extension placement is corrected.
-
-## Codex insertion test
-
-1. Open the OpenAI Codex extension panel.
-2. Click its composer so the caret is visibly blinking there.
-3. Do not open the Command Palette because that intentionally changes focus.
-4. Press:
+After first-run model setup it should also report:
 
 ```text
-Ctrl+Alt+D
+model=installed
 ```
 
-Expected result:
+The critical placement result remains `platform=win32` even while the VS Code workspace is connected to WSL.
 
-```text
-[Universal Dictate probe]
-```
+## Clipboard preservation
 
-appears at the Codex composer caret and is **not submitted**.
-
-## Clipboard test
-
-Before pressing the shortcut, copy a recognizable value such as:
-
-```text
-clipboard-sentinel
-```
-
-After probe insertion, paste somewhere else manually. The clipboard should still contain `clipboard-sentinel`.
+Copy a recognizable value before dictation. After the transcript is inserted, paste manually somewhere else and confirm that the previous clipboard text was restored.
 
 ## Failure classifications
 
-### Probe appears in Codex
+### Recorder fails to open
 
-M1 passes. Proceed to native Windows input handling.
+Check Windows microphone privacy settings, especially permission for desktop applications to access the microphone.
 
-### Probe appears somewhere else
+### Recording works but transcription fails
 
-Focus is being lost between shortcut handling and synthetic paste. Investigate focus timing/input injection before proceeding.
+Run diagnostics and verify `whisper=available` and `model=installed`. Preserve the exact error notification for debugging.
 
-### Nothing is inserted, but diagnostics show `platform=win32`
+### Transcript is correct but appears in the wrong control
 
-The extension is placed correctly. Investigate the temporary `SendKeys` mechanism or Codex control behavior.
+Focus was lost during the recording/transcription lifecycle. This is a target-preservation problem, not an ASR problem.
 
-### Diagnostics show `platform=linux`
+### Transcript appears in Codex and is not submitted
 
-The development/installation path put the extension in WSL. Correct extension placement first.
-
-## Scope of this probe
-
-The PowerShell `System.Windows.Forms.SendKeys` mechanism is disposable prototype code. Passing M1 does not make it the production insertion implementation. Production code should use a small native Windows helper and Win32 `SendInput` or an equivalent reviewed mechanism.
+The end-to-end MVP passes.

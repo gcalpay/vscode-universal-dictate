@@ -2,7 +2,7 @@
   "name": "vscode-universal-dictate",
   "displayName": "Universal Dictate",
   "description": "Open-source, fully local speech-to-text for any VS Code text input on Windows, including Remote - WSL.",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "private": true,
   "license": "MIT",
   "publisher": "gcalpay",
@@ -29,14 +29,19 @@
   ],
   "main": "./dist/extension.js",
   "activationEvents": [
-    "onCommand:universalDictate.insertProbe",
+    "onCommand:universalDictate.toggle",
+    "onCommand:universalDictate.cancel",
     "onCommand:universalDictate.showDiagnostics"
   ],
   "contributes": {
     "commands": [
       {
-        "command": "universalDictate.insertProbe",
-        "title": "Universal Dictate: Insert Probe Text"
+        "command": "universalDictate.toggle",
+        "title": "Universal Dictate: Start/Stop Dictation"
+      },
+      {
+        "command": "universalDictate.cancel",
+        "title": "Universal Dictate: Cancel Dictation"
       },
       {
         "command": "universalDictate.showDiagnostics",
@@ -45,11 +50,36 @@
     ],
     "keybindings": [
       {
-        "command": "universalDictate.insertProbe",
+        "command": "universalDictate.toggle",
         "key": "ctrl+alt+d",
         "when": "!terminalFocus"
+      },
+      {
+        "command": "universalDictate.cancel",
+        "key": "escape",
+        "when": "universalDictate.recording && !terminalFocus"
       }
-    ]
+    ],
+    "configuration": {
+      "title": "Universal Dictate",
+      "properties": {
+        "universalDictate.language": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "en",
+            "de"
+          ],
+          "enumDescriptions": [
+            "Automatically detect the spoken language.",
+            "English.",
+            "German."
+          ],
+          "default": "auto",
+          "description": "Language used by local Whisper transcription."
+        }
+      }
+    }
   },
   "scripts": {
     "compile": "tsc -p ./",
