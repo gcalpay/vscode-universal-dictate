@@ -108,6 +108,9 @@ class DictationController implements vscode.Disposable {
     });
 
     this.context.subscriptions.push(this.statusBar, this.settingsStatusBar);
+  }
+
+  initialize(): void {
     this.showIdleStatus();
   }
 
@@ -186,20 +189,20 @@ class DictationController implements vscode.Disposable {
       })
       .join('');
 
-    this.statusBar.command = undefined;
-    this.statusBar.text = `$(record) ${signal}  Ctrl+Alt+D to stop`;
+    this.statusBar.command = 'universalDictate.toggle';
+    this.statusBar.text = `$(record) ${signal}  Stop (Ctrl+Alt+D)`;
     this.statusBar.tooltip = showsOverlay(this.activeVisualization)
-      ? 'Recording locally. The trace is a rolling microphone-energy history. Use the non-activating ✓/× overlay, Ctrl+Alt+D to confirm, or Esc to cancel.'
-      : 'Recording locally. The trace is a rolling microphone-energy history. Use Ctrl+Alt+D to confirm or Esc to cancel.';
+      ? 'Recording locally. Click this status item, use the non-activating ✓ overlay, or press Ctrl+Alt+D to stop and transcribe. Press Esc or × to cancel.'
+      : 'Recording locally. Click this status item or press Ctrl+Alt+D to stop and transcribe. Press Esc to cancel.';
     this.statusBar.show();
   }
 
   private showStaticRecordingStatus(): void {
-    this.statusBar.command = undefined;
-    this.statusBar.text = '$(record) Recording  Ctrl+Alt+D to stop';
+    this.statusBar.command = 'universalDictate.toggle';
+    this.statusBar.text = '$(record) Recording · Stop (Ctrl+Alt+D)';
     this.statusBar.tooltip = showsOverlay(this.activeVisualization)
-      ? 'Recording locally. Use the non-activating ✓/× overlay, Ctrl+Alt+D to confirm, or Esc to cancel.'
-      : 'Recording locally. Use Ctrl+Alt+D to confirm or Esc to cancel.';
+      ? 'Recording locally. Click this status item, use the non-activating ✓ overlay, or press Ctrl+Alt+D to stop and transcribe. Press Esc or × to cancel.'
+      : 'Recording locally. Click this status item or press Ctrl+Alt+D to stop and transcribe. Press Esc to cancel.';
     this.statusBar.show();
   }
 
@@ -409,6 +412,10 @@ export function activate(context: vscode.ExtensionContext): void {
     showDiagnostics,
     whisperDisposable
   );
+
+  // Render the idle control only after its commands are registered. This avoids
+  // the startup state where the settings gear can appear before the Dictate item.
+  controller.initialize();
 }
 
 export function deactivate(): void {
