@@ -1,8 +1,8 @@
 # VS Code Universal Dictate
 
-Open-source, fully local speech-to-text for VS Code on Windows, including Remote - WSL.
+Open-source VS Code extension for local, offline speech-to-text in any VS Code text input on Windows, including Remote - WSL.
 
-> **Status:** early working MVP. Focused-input insertion has already been validated against the OpenAI Codex composer under Remote - WSL. The current development branch adds microphone capture and local whisper.cpp transcription.
+> **Status:** early working MVP. Focused-input insertion has been validated against the OpenAI Codex composer under Remote - WSL. The current build includes Windows microphone capture and local whisper.cpp transcription.
 
 ## Product goals
 
