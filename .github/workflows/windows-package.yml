@@ -55,7 +55,7 @@ jobs:
             "call `"$vcvars`"",
             "if not exist resources\bin mkdir resources\bin",
             "cl /nologo /O2 /std:c++20 /EHsc native\windows-fast-paste.cpp /Fe:resources\bin\windows-fast-paste.exe user32.lib",
-            "cl /nologo /O2 /std:c++20 /EHsc /I .deps\miniaudio native\record-audio.cpp native\miniaudio-impl.cpp /Fe:resources\bin\universal-dictate-recorder.exe"
+            "cl /nologo /O2 /std:c++20 /EHsc /I .deps\miniaudio native\record-audio.cpp native\miniaudio-impl.cpp /Fe:resources\bin\universal-dictate-recorder.exe user32.lib gdi32.lib"
           ) -join ' && '
 
           cmd.exe /D /S /C $commands
