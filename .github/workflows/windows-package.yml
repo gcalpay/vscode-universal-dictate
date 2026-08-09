@@ -64,6 +64,29 @@ jobs:
             exit $LASTEXITCODE
           }
 
+      - name: Fetch pinned whisper.cpp Windows runtime
+        shell: pwsh
+        run: |
+          $version = '1.9.1'
+          $expectedSha256 = '7d8be46ecd31828e1eb7a2ecdd0d6b314feafd82163038ab6092594b0a063539'
+          $zip = '.deps/whisper-bin-x64.zip'
+          $extract = '.deps/whisper-runtime'
+          $url = "https://github.com/ggml-org/whisper.cpp/releases/download/v$version/whisper-bin-x64.zip"
+
+          Invoke-WebRequest $url -OutFile $zip
+          $actualSha256 = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actualSha256 -ne $expectedSha256) {
+            throw "whisper.cpp runtime checksum mismatch: $actualSha256"
+          }
+
+          Expand-Archive -Path $zip -DestinationPath $extract -Force
+          New-Item -ItemType Directory -Force resources/whisper | Out-Null
+          Copy-Item "$extract/Release/*" resources/whisper/ -Recurse -Force
+
+          if (-not (Test-Path resources/whisper/whisper-cli.exe)) {
+            throw 'whisper-cli.exe was not found in the pinned runtime archive'
+          }
+
       - name: Package VSIX
         run: npm run package:vsix
 
