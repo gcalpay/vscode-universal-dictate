@@ -420,7 +420,47 @@ LRESULT CALLBACK overlayWindowProc(HWND window, UINT message, WPARAM wParam, LPA
     }
 }
 
-bool createOverlay() {
+HMONITOR captureOverlayMonitor() {
+    const HWND foregroundWindow = GetForegroundWindow();
+    if (foregroundWindow != nullptr) {
+        const HMONITOR foregroundMonitor =
+            MonitorFromWindow(foregroundWindow, MONITOR_DEFAULTTONEAREST);
+        if (foregroundMonitor != nullptr) {
+            return foregroundMonitor;
+        }
+    }
+
+    // GetForegroundWindow can transiently return null while activation changes.
+    // The cursor is a useful fallback for mouse-started dictation on multi-monitor setups.
+    POINT cursor{};
+    if (GetCursorPos(&cursor)) {
+        const HMONITOR cursorMonitor = MonitorFromPoint(cursor, MONITOR_DEFAULTTONEAREST);
+        if (cursorMonitor != nullptr) {
+            return cursorMonitor;
+        }
+    }
+
+    return MonitorFromPoint(POINT{0, 0}, MONITOR_DEFAULTTOPRIMARY);
+}
+
+RECT overlayWorkArea(HMONITOR monitor) {
+    if (monitor != nullptr) {
+        MONITORINFO monitorInfo{};
+        monitorInfo.cbSize = sizeof(monitorInfo);
+        if (GetMonitorInfoW(monitor, &monitorInfo)) {
+            return monitorInfo.rcWork;
+        }
+    }
+
+    RECT workArea{};
+    if (SystemParametersInfoW(SPI_GETWORKAREA, 0, &workArea, 0)) {
+        return workArea;
+    }
+
+    return RECT{0, 0, GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN)};
+}
+
+bool createOverlay(HMONITOR targetMonitor) {
     HINSTANCE instance = GetModuleHandleW(nullptr);
 
     WNDCLASSEXW windowClass{};
@@ -435,11 +475,7 @@ bool createOverlay() {
         return false;
     }
 
-    RECT workArea{};
-    if (!SystemParametersInfoW(SPI_GETWORKAREA, 0, &workArea, 0)) {
-        workArea = RECT{0, 0, GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN)};
-    }
-
+    const RECT workArea = overlayWorkArea(targetMonitor);
     const int x = std::max(workArea.left, workArea.right - kOverlayWidth - kOverlayMargin);
     const int y = std::max(workArea.top, workArea.bottom - kOverlayHeight - kOverlayMargin);
 
@@ -544,6 +580,10 @@ int main(int argc, char** argv) {
         return 2;
     }
 
+    // Capture the active target monitor immediately, before microphone setup can
+    // introduce enough delay for the foreground window to change.
+    const HMONITOR overlayMonitor = captureOverlayMonitor();
+
     Encoder encoder;
     const ma_result encoderResult = encoder.open(outputPath);
     if (encoderResult != MA_SUCCESS) {
@@ -596,7 +636,7 @@ int main(int argc, char** argv) {
             std::memory_order_relaxed);
     });
 
-    const bool overlayAvailable = createOverlay();
+    const bool overlayAvailable = createOverlay(overlayMonitor);
     if (!overlayAvailable) {
         std::cerr << "WARNING recording overlay could not be created; keyboard controls remain available\n";
     }
