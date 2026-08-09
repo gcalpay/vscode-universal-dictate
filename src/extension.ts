@@ -1,9 +1,8 @@
-import * as childProcess from 'node:child_process';
 import * as fs from 'node:fs';
 import * as vscode from 'vscode';
+import { getNativePasteHelperPath, pasteIntoFocusedControl } from './paste';
 
 const PROBE_TEXT = '[Universal Dictate probe]';
-const NATIVE_PASTE_RELATIVE_PATH = ['resources', 'bin', 'windows-fast-paste.exe'];
 
 export function activate(context: vscode.ExtensionContext): void {
   const insertProbe = vscode.commands.registerCommand(
@@ -55,62 +54,4 @@ export function activate(context: vscode.ExtensionContext): void {
 
 export function deactivate(): void {
   // Nothing to clean up yet.
-}
-
-async function pasteIntoFocusedControl(
-  context: vscode.ExtensionContext,
-  text: string
-): Promise<void> {
-  const previousClipboard = await vscode.env.clipboard.readText();
-  await vscode.env.clipboard.writeText(text);
-
-  try {
-    await sendPasteKeystroke(context);
-  } finally {
-    // Let the target consume clipboard contents before restoring the user's text.
-    await delay(150);
-    await vscode.env.clipboard.writeText(previousClipboard);
-  }
-}
-
-async function sendPasteKeystroke(context: vscode.ExtensionContext): Promise<void> {
-  const nativeHelper = getNativePasteHelperPath(context);
-
-  if (fs.existsSync(nativeHelper)) {
-    await execFile(nativeHelper, []);
-    return;
-  }
-
-  // Development fallback only. Release packages should contain the native helper.
-  const script = [
-    'Add-Type -AssemblyName System.Windows.Forms',
-    '[System.Windows.Forms.SendKeys]::SendWait("^v")'
-  ].join('; ');
-
-  await execFile('powershell.exe', [
-    '-NoProfile',
-    '-NonInteractive',
-    '-Command',
-    script
-  ]);
-}
-
-function getNativePasteHelperPath(context: vscode.ExtensionContext): string {
-  return vscode.Uri.joinPath(context.extensionUri, ...NATIVE_PASTE_RELATIVE_PATH).fsPath;
-}
-
-function execFile(file: string, args: string[]): Promise<void> {
-  return new Promise((resolve, reject) => {
-    childProcess.execFile(file, args, { windowsHide: true }, (error) => {
-      if (error) {
-        reject(error);
-        return;
-      }
-      resolve();
-    });
-  });
-}
-
-function delay(milliseconds: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
