@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.1
+
+Small UI and Marketplace asset fixes.
+
+- Move the clickable `Dictate` status-bar action from the left workspace/source-control cluster to the right-aligned utility area.
+- Replace the malformed Marketplace extension icon with a valid 256×256 microphone/waveform PNG.
+
 ## 0.1.0
 
 First public release candidate.
