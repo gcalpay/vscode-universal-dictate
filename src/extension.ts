@@ -171,7 +171,7 @@ class DictationController implements vscode.Disposable {
   }
 
   private updateRecordingLevel(level: number): void {
-    const glyphs = '▁▂▃▄▅▆▇█';
+    const glyphs = '⠀⡀⣀⣄⣤⣦⣶⣷⣿';
     const clamped = Math.max(0, Math.min(1, level));
     this.levelHistory.shift();
     this.levelHistory.push(clamped);
