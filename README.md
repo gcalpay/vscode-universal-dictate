@@ -6,6 +6,8 @@ Universal Dictate is an open-source VS Code extension for speech-to-text without
 
 > **Version:** 0.1.1 for Windows x64. End-to-end dictation and focused-input insertion have been validated against the OpenAI Codex composer under Remote - WSL on Windows. The extension includes Windows microphone capture, an always-available VS Code status-bar microphone button, a non-activating recording overlay and local Whisper transcription.
 
+![Universal Dictate overview and installation guide](media/universal-dictate-overview.webp)
+
 ## Installation
 
 ### VS Code Marketplace
