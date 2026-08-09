@@ -43,10 +43,11 @@ class DictationController implements vscode.Disposable {
 
   async cancel(): Promise<void> {
     const session = this.session;
-    if (!session) {
+    if (!session || this.busy) {
       return;
     }
 
+    this.busy = true;
     this.session = undefined;
     await vscode.commands.executeCommand('setContext', 'universalDictate.recording', false);
     this.statusBar.text = '$(circle-slash) Universal Dictate: cancelling';
@@ -55,6 +56,7 @@ class DictationController implements vscode.Disposable {
       await session.cancel();
     } finally {
       this.statusBar.hide();
+      this.busy = false;
     }
   }
 
@@ -76,9 +78,21 @@ class DictationController implements vscode.Disposable {
       await ensureModel(this.context);
       this.statusBar.text = '$(loading~spin) Universal Dictate: opening microphone';
 
-      this.session = await RecorderSession.start(this.context, (level) => {
+      const session = await RecorderSession.start(this.context, (level) => {
         this.updateRecordingLevel(level);
       });
+      this.session = session;
+      session.onAction((action) => {
+        if (this.session !== session || this.busy) {
+          return;
+        }
+        if (action === 'stop') {
+          void this.stopAndTranscribe();
+        } else {
+          void this.cancel();
+        }
+      });
+
       await vscode.commands.executeCommand('setContext', 'universalDictate.recording', true);
       this.updateRecordingLevel(0);
     } catch (error) {
@@ -128,7 +142,8 @@ class DictationController implements vscode.Disposable {
     const bars = '▁▂▃▄▅▆▇█';
     const index = Math.max(0, Math.min(bars.length - 1, Math.floor(Math.sqrt(level) * bars.length)));
     this.statusBar.text = `$(record) Universal Dictate: ${bars[index]}  Ctrl+Alt+D to stop`;
-    this.statusBar.tooltip = 'Recording locally. Press Ctrl+Alt+D to stop and insert, or Esc to cancel.';
+    this.statusBar.tooltip =
+      'Recording locally. Use the non-activating ✓/× overlay, Ctrl+Alt+D to confirm, or Esc to cancel.';
     this.statusBar.show();
   }
 
