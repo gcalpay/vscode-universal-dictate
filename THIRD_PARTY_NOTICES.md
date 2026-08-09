@@ -1,6 +1,6 @@
 # Third-party notices
 
-Universal Dictate itself is MIT licensed. The extension uses the following permissively licensed components and model assets.
+Universal Dictate itself is MIT licensed. The extension uses the following permissively licensed components, model assets and source lineage.
 
 ## OpenAI Whisper
 
@@ -39,10 +39,23 @@ Universal Dictate uses miniaudio for Windows microphone capture and WAV encoding
 
 The miniaudio header is fetched at build time and compiled into Universal Dictate's native C++ recorder.
 
+## OpenWhispr
+
+The focused-input Windows paste helper has historical source lineage from OpenWhispr's MIT-licensed `resources/windows-fast-paste.c`.
+
+- Project: `OpenWhispr/openwhispr`
+- Upstream revision used by the early Universal Dictate adaptation: `1866ecf6641b9fa4851f19c7838cb18f3662def7`
+- Historical role: Win32 `SendInput` fast-paste logic, including temporary modifier release/restore around the paste shortcut
+- Current implementation: `native/windows-fast-paste.cpp`, substantially rewritten in C++20 and reduced to Universal Dictate's Ctrl+V-only focused-input use case
+- License: MIT
+- License notice retained at: `third_party/OpenWhispr-LICENSE.txt`
+
+OpenWhispr is not a runtime dependency and its application source is not bundled with Universal Dictate. The license notice is retained conservatively because the current helper evolved from the earlier attributed implementation.
+
 ## Universal Dictate native code
 
-The Windows focused-input paste helper, microphone process integration and non-activating recording overlay are Universal Dictate implementations maintained in this repository. They are not redistributed source code from another dictation application.
+Universal Dictate's microphone process integration and non-activating recording overlay are maintained in this repository. The focused-input paste helper is also maintained here, with the OpenWhispr lineage described above.
 
 ## Dependency policy
 
-Every redistributed third-party binary, library or model asset must have its source, version or revision, license and integrity information documented before release. Application source from unrelated dictation products is not vendored into Universal Dictate.
+Every redistributed third-party binary, library, model asset or retained source lineage must have its source, version or revision and license documented before release.
