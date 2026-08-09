@@ -26,7 +26,8 @@ export class RecorderSession {
 
   static async start(
     context: vscode.ExtensionContext,
-    onLevel: (level: number) => void
+    onLevel: (level: number) => void,
+    showOverlay = true
   ): Promise<RecorderSession> {
     const recorderPath = getRecorderPath(context);
     if (!fs.existsSync(recorderPath)) {
@@ -37,7 +38,10 @@ export class RecorderSession {
     await fs.promises.mkdir(recordingsDir, { recursive: true });
     const outputPath = path.join(recordingsDir, `dictation-${Date.now()}.wav`);
 
-    const core = await CoreRecorderSession.start({ recorderPath, outputPath }, onLevel);
+    const core = await CoreRecorderSession.start(
+      { recorderPath, outputPath, showOverlay },
+      onLevel
+    );
     return new RecorderSession(core);
   }
 
