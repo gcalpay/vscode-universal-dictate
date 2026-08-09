@@ -2,7 +2,7 @@
 
 Open-source VS Code extension for local, offline, multilingual speech-to-text in any VS Code text input on Windows, including Remote - WSL.
 
-> **Status:** early working MVP. Focused-input insertion has been validated against the OpenAI Codex composer under Remote - WSL. The current build includes Windows microphone capture and local Whisper transcription.
+> **Status:** early working MVP. Focused-input insertion has been validated against the OpenAI Codex composer under Remote - WSL. The current build includes Windows microphone capture, a non-activating recording overlay and local Whisper transcription.
 
 ## Product goals
 
@@ -13,15 +13,24 @@ Open-source VS Code extension for local, offline, multilingual speech-to-text in
 - Never submits dictated text automatically.
 - Terminal dictation disabled by default.
 - No Python, Conda, FFmpeg or WSL-side runtime dependency for end users.
-- A simple microphone UI with visible input level, confirm and cancel actions.
+- Visible microphone input level with confirm and cancel controls that do not activate another window or steal the target caret.
 
-## Current MVP controls
+## Current controls
 
 ```text
 Ctrl+Alt+D   Start recording
 Ctrl+Alt+D   Stop, transcribe locally and insert
 Esc          Cancel the current recording
 ```
+
+While recording, Universal Dictate also shows a small native Windows overlay with a live input-level meter:
+
+```text
+✓   confirm, transcribe and insert
+×   cancel and discard
+```
+
+The overlay uses the Win32 `WS_EX_NOACTIVATE` behavior so clicking it does not intentionally move keyboard focus away from the VS Code editor/composer where the transcript will be inserted.
 
 Language selection is available from the Command Palette:
 
@@ -33,7 +42,7 @@ The default is **Auto-detect**. The bundled multilingual Whisper `base` model su
 
 On first use Universal Dictate downloads the multilingual Whisper `base` model (about 148 MB), verifies its SHA-256 checksum and stores it in VS Code's local extension storage. After that, dictation works offline.
 
-The MVP uses the Windows default microphone, records 16 kHz mono PCM16 WAV through miniaudio and transcribes it locally with a bundled, pinned `whisper.cpp` runtime.
+The extension uses the Windows default microphone, records 16 kHz mono PCM16 WAV through miniaudio and transcribes it locally with a bundled, pinned `whisper.cpp` runtime.
 
 ## Recognition stack and attribution
 
@@ -48,7 +57,7 @@ The relevant upstream license notices are retained in `third_party/`.
 ## Implementation
 
 - TypeScript: VS Code integration, commands, state, UI, language selection, model management and transcription orchestration.
-- C++20: Universal Dictate's native Windows microphone process and focused-input paste helper.
+- C++20: Universal Dictate's native Windows microphone process, non-activating recording overlay and focused-input paste helper.
 - miniaudio: permissively licensed microphone/audio backend.
 - OpenAI Whisper: MIT-licensed speech-recognition model and weights.
 - whisper.cpp: MIT-licensed local Whisper inference runtime.
