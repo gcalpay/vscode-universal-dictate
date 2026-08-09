@@ -16,6 +16,23 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Reject obsolete prototype references
+        shell: pwsh
+        run: |
+          $forbidden = @()
+          $forbidden += ('Open' + 'Whispr')
+          $forbidden += ('Open' + 'Whisper')
+          foreach ($term in $forbidden) {
+            $matches = git grep -n -i -- $term -- .
+            if ($LASTEXITCODE -eq 0) {
+              $matches | Write-Host
+              throw "Forbidden prototype reference found in the release tree: $term"
+            }
+            if ($LASTEXITCODE -ne 1) {
+              exit $LASTEXITCODE
+            }
+          }
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
