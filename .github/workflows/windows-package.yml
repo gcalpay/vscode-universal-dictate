@@ -105,12 +105,12 @@ jobs:
             throw 'whisper-cli.exe was not found in the pinned runtime archive'
           }
 
-      - name: Package VSIX
+      - name: Package win32-x64 VSIX
         run: npm run package:vsix
 
-      - name: Upload VSIX
+      - name: Upload win32-x64 VSIX
         uses: actions/upload-artifact@v7
         with:
-          name: universal-dictate-windows-dev
-          path: universal-dictate-dev.vsix
+          name: universal-dictate-win32-x64
+          path: universal-dictate-win32-x64.vsix
           if-no-files-found: error
