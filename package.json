@@ -2,13 +2,16 @@
   "name": "vscode-universal-dictate",
   "displayName": "Universal Dictate",
   "description": "Local, offline, multilingual speech-to-text for VS Code on Windows, with 99 Whisper languages and support for agent/chat extensions such as OpenAI Codex, including Remote - WSL.",
-  "version": "0.0.8",
-  "private": true,
+  "version": "0.1.0",
   "license": "MIT",
   "publisher": "gcalpay",
   "repository": {
     "type": "git",
     "url": "https://github.com/gcalpay/vscode-universal-dictate.git"
+  },
+  "homepage": "https://github.com/gcalpay/vscode-universal-dictate#readme",
+  "bugs": {
+    "url": "https://github.com/gcalpay/vscode-universal-dictate/issues"
   },
   "engines": {
     "vscode": "^1.96.0"
@@ -25,6 +28,7 @@
     "multilingual",
     "codex",
     "agent",
+    "chat",
     "wsl"
   ],
   "extensionKind": [
@@ -32,6 +36,7 @@
   ],
   "main": "./dist/extension.js",
   "activationEvents": [
+    "onStartupFinished",
     "onCommand:universalDictate.toggle",
     "onCommand:universalDictate.cancel",
     "onCommand:universalDictate.selectLanguage",
@@ -83,7 +88,7 @@
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "check": "tsc --noEmit -p ./",
-    "package:vsix": "npm run compile && vsce package --out universal-dictate-dev.vsix"
+    "package:vsix": "npm run compile && vsce package --target win32-x64 --out universal-dictate-win32-x64.vsix"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

@@ -4,7 +4,7 @@
 
 Universal Dictate is an open-source VS Code extension for speech-to-text without API keys or cloud transcription. It runs the multilingual OpenAI Whisper `base` model locally through `whisper.cpp`, automatically detects the spoken language by default and can be fixed to any of the model's 99 supported languages. Because text is inserted through the focused Windows input control rather than a private extension API, it can also be used with extension-owned agent/chat composers such as OpenAI Codex where normal VS Code text insertion APIs are not available.
 
-> **Status:** early working MVP. Focused-input insertion has been validated against the OpenAI Codex composer under Remote - WSL. The current build includes Windows microphone capture, a clickable VS Code status-bar microphone button, a non-activating recording overlay and local Whisper transcription.
+> **Status:** 0.1.0 public-release candidate. End-to-end dictation and focused-input insertion have been validated against the OpenAI Codex composer under Remote - WSL on Windows. The extension includes Windows microphone capture, an always-available VS Code status-bar microphone button, a non-activating recording overlay and local Whisper transcription.
 
 ## Product goals
 
@@ -20,7 +20,7 @@ Universal Dictate is an open-source VS Code extension for speech-to-text without
 
 ## Current controls
 
-Universal Dictate shows an always-visible **$(mic) Dictate** action in the VS Code status bar while idle. Click it to start recording, or use the keyboard shortcut:
+Universal Dictate activates after VS Code starts and shows an always-visible **$(mic) Dictate** action in the status bar while idle. Click it to start recording, or use the keyboard shortcut:
 
 ```text
 Status bar: $(mic) Dictate   Start recording
