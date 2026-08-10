@@ -54,12 +54,12 @@ constexpr ma_uint32 kChannels = 1;
 constexpr auto kLevelInterval = std::chrono::milliseconds(50);
 constexpr int kOverlayWidth = 400;
 constexpr int kOverlayHeight = 110;
-constexpr int kEnhancedOverlayWidth = 820;
-constexpr int kEnhancedOverlayHeight = 150;
+constexpr int kEnhancedOverlayWidth = 740;
+constexpr int kEnhancedOverlayHeight = 128;
 constexpr int kOverlayMargin = 18;
 constexpr int kSignalPoints = 64;
 constexpr int kNoiseFloorMilli = 6;
-constexpr int kEnhancedReferenceMilli = 240;
+constexpr int kEnhancedReferenceMilli = 105;
 constexpr wchar_t kOverlayClassName[] = L"UniversalDictateRecordingOverlay";
 
 enum class RecorderCommand : int {
@@ -198,14 +198,14 @@ OverlayState g_overlay;
 
 RECT confirmRect(const RECT& client) {
     if (g_overlay.enhanced) {
-        return RECT{client.right - 210, 51, client.right - 112, 101};
+        return RECT{client.right - 148, 31, client.right - 84, 97};
     }
     return RECT{client.right - 92, 30, client.right - 52, client.bottom - 30};
 }
 
 RECT cancelRect(const RECT& client) {
     if (g_overlay.enhanced) {
-        return RECT{client.right - 104, 51, client.right - 6, 101};
+        return RECT{client.right - 76, 31, client.right - 12, 97};
     }
     return RECT{client.right - 46, 30, client.right - 6, client.bottom - 30};
 }
@@ -251,19 +251,19 @@ COLORREF interpolateColor(COLORREF left, COLORREF right, double amount) {
 }
 
 COLORREF enhancedGradientColor(double position) {
-    const COLORREF cyan = RGB(38, 226, 239);
-    const COLORREF blue = RGB(47, 116, 255);
-    const COLORREF violet = RGB(139, 74, 255);
-    const COLORREF magenta = RGB(238, 57, 191);
+    const COLORREF green = RGB(48, 214, 112);
+    const COLORREF blue = RGB(50, 124, 255);
+    const COLORREF red = RGB(235, 65, 82);
+    const COLORREF orange = RGB(255, 155, 54);
     const double t = std::clamp(position, 0.0, 1.0);
 
     if (t < 1.0 / 3.0) {
-        return interpolateColor(cyan, blue, t * 3.0);
+        return interpolateColor(green, blue, t * 3.0);
     }
     if (t < 2.0 / 3.0) {
-        return interpolateColor(blue, violet, (t - 1.0 / 3.0) * 3.0);
+        return interpolateColor(blue, red, (t - 1.0 / 3.0) * 3.0);
     }
-    return interpolateColor(violet, magenta, (t - 2.0 / 3.0) * 3.0);
+    return interpolateColor(red, orange, (t - 2.0 / 3.0) * 3.0);
 }
 
 COLORREF fadeToBackground(COLORREF color, double strength) {
@@ -282,6 +282,37 @@ void drawRoundedBox(
     HGDIOBJ previousBrush = SelectObject(dc, brush);
     HGDIOBJ previousPen = SelectObject(dc, pen);
     RoundRect(dc, rect.left, rect.top, rect.right, rect.bottom, radius, radius);
+    SelectObject(dc, previousPen);
+    SelectObject(dc, previousBrush);
+    DeleteObject(pen);
+    DeleteObject(brush);
+}
+
+std::array<POINT, 6> hexagonPoints(const RECT& rect) {
+    const int width = std::max(1L, rect.right - rect.left);
+    const int inset = std::max(8, width / 4);
+    const int centerY = (rect.top + rect.bottom) / 2;
+    return std::array<POINT, 6>{
+        POINT{rect.left + inset, rect.top},
+        POINT{rect.right - inset, rect.top},
+        POINT{rect.right, centerY},
+        POINT{rect.right - inset, rect.bottom},
+        POINT{rect.left + inset, rect.bottom},
+        POINT{rect.left, centerY}};
+}
+
+void drawHexagonBox(
+    HDC dc,
+    const RECT& rect,
+    COLORREF fill,
+    COLORREF border,
+    int borderWidth = 2) {
+    const auto points = hexagonPoints(rect);
+    HBRUSH brush = CreateSolidBrush(fill);
+    HPEN pen = CreatePen(PS_SOLID, borderWidth, border);
+    HGDIOBJ previousBrush = SelectObject(dc, brush);
+    HGDIOBJ previousPen = SelectObject(dc, pen);
+    Polygon(dc, points.data(), static_cast<int>(points.size()));
     SelectObject(dc, previousPen);
     SelectObject(dc, previousBrush);
     DeleteObject(pen);
@@ -403,31 +434,67 @@ void drawSignalField(HDC dc, const RECT& client) {
 
 void drawEnhancedWaveform(HDC dc, const RECT& client) {
     constexpr int kGradientBands = 16;
-    static constexpr std::array<double, 4> scales{1.00, 0.78, 0.57, 0.38};
-    static constexpr std::array<double, 4> colorStrengths{1.00, 0.78, 0.58, 0.42};
+    static constexpr std::array<double, 4> scales{1.00, 0.76, 0.52, 0.30};
+    static constexpr std::array<double, 4> colorStrengths{1.00, 0.78, 0.58, 0.40};
 
-    const int left = 205;
-    const int right = client.right - 236;
-    const int top = 17;
-    const int bottom = client.bottom - 17;
+    const int left = 148;
+    const int right = client.right - 164;
+    const int top = 8;
+    const int bottom = client.bottom - 8;
     const int centerY = (top + bottom) / 2;
     const int width = std::max(1, right - left);
-    const int maxAmplitude = std::max(18, (bottom - top) / 2 - 7);
+    const int maxAmplitude = std::max(22, (bottom - top) / 2 - 4);
 
     std::array<int, kSignalPoints> amplitudes{};
+    std::array<POINT, kSignalPoints> outerUpper{};
+    std::array<POINT, kSignalPoints> outerLower{};
     for (int index = 0; index < kSignalPoints; ++index) {
-        const int level = smoothedHistoryLevel(index);
+        const int smoothed = smoothedHistoryLevel(index);
+        const int raw = g_overlay.levelHistory[static_cast<std::size_t>(index)];
+        const int level = (2 * smoothed + raw) / 3;
         const double numerator = static_cast<double>(std::max(0, level - kNoiseFloorMilli));
         const double denominator = static_cast<double>(kEnhancedReferenceMilli - kNoiseFloorMilli);
         const double normalized = std::clamp(numerator / denominator, 0.0, 1.0);
-        const double shaped = normalized <= 0.0 ? 0.0 : std::pow(normalized, 0.54);
-        amplitudes[static_cast<std::size_t>(index)] = normalized <= 0.0
+        const double shaped = normalized <= 0.0 ? 0.0 : std::pow(normalized, 0.48);
+        const int amplitude = normalized <= 0.0
             ? 0
-            : std::max(2, static_cast<int>(std::lround(shaped * maxAmplitude)));
+            : std::max(4, static_cast<int>(std::lround(shaped * maxAmplitude)));
+        const int x = left + (index * width) / (kSignalPoints - 1);
+        amplitudes[static_cast<std::size_t>(index)] = amplitude;
+        outerUpper[static_cast<std::size_t>(index)] = POINT{x, centerY - amplitude};
+        outerLower[static_cast<std::size_t>(index)] = POINT{x, centerY + amplitude};
     }
 
-    // Fine color-coded filaments add depth without extra audio analysis. Color
-    // is intentionally stylistic; microphone amplitude remains the actual data.
+    // A low-intensity segmented body makes the wave feel substantial while
+    // keeping the actual geometry tied to the bounded microphone-level history.
+    for (int band = 0; band < kGradientBands; ++band) {
+        const int start = (band * (kSignalPoints - 1)) / kGradientBands;
+        const int end = ((band + 1) * (kSignalPoints - 1)) / kGradientBands;
+        if (end <= start) {
+            continue;
+        }
+
+        std::array<POINT, 16> ribbon{};
+        int pointCount = 0;
+        for (int index = start; index <= end && pointCount < static_cast<int>(ribbon.size()); ++index) {
+            ribbon[static_cast<std::size_t>(pointCount++)] = outerUpper[static_cast<std::size_t>(index)];
+        }
+        for (int index = end; index >= start && pointCount < static_cast<int>(ribbon.size()); --index) {
+            ribbon[static_cast<std::size_t>(pointCount++)] = outerLower[static_cast<std::size_t>(index)];
+        }
+
+        const double position = (band + 0.5) / static_cast<double>(kGradientBands);
+        HBRUSH brush = CreateSolidBrush(fadeToBackground(enhancedGradientColor(position), 0.18));
+        HGDIOBJ previousBrush = SelectObject(dc, brush);
+        HGDIOBJ previousPen = SelectObject(dc, GetStockObject(NULL_PEN));
+        Polygon(dc, ribbon.data(), pointCount);
+        SelectObject(dc, previousPen);
+        SelectObject(dc, previousBrush);
+        DeleteObject(brush);
+    }
+
+    // Fine filaments preserve speech transients and add visual energy without
+    // performing spectral analysis or increasing the audio-path workload.
     for (int index = 1; index < kSignalPoints; index += 2) {
         const int amplitude = amplitudes[static_cast<std::size_t>(index)];
         if (amplitude <= 0) {
@@ -435,7 +502,7 @@ void drawEnhancedWaveform(HDC dc, const RECT& client) {
         }
         const int x = left + (index * width) / (kSignalPoints - 1);
         const double position = static_cast<double>(index) / (kSignalPoints - 1);
-        HPEN pen = CreatePen(PS_SOLID, 1, fadeToBackground(enhancedGradientColor(position), 0.30));
+        HPEN pen = CreatePen(PS_SOLID, 1, fadeToBackground(enhancedGradientColor(position), 0.42));
         HGDIOBJ previousPen = SelectObject(dc, pen);
         MoveToEx(dc, x, centerY - amplitude, nullptr);
         LineTo(dc, x, centerY + amplitude);
@@ -449,7 +516,7 @@ void drawEnhancedWaveform(HDC dc, const RECT& client) {
     for (std::size_t layer = 0; layer < scales.size(); ++layer) {
         for (int index = 0; index < kSignalPoints; ++index) {
             const int x = left + (index * width) / (kSignalPoints - 1);
-            const double organic = 0.92 + 0.08 * std::sin(index * 0.72 + layer * 1.37);
+            const double organic = 0.88 + 0.12 * std::sin(index * 0.72 + layer * 1.37);
             const int amplitude = static_cast<int>(std::lround(
                 amplitudes[static_cast<std::size_t>(index)] * scales[layer] * organic));
             upper[static_cast<std::size_t>(index)] = POINT{x, centerY - amplitude};
@@ -477,7 +544,6 @@ void drawEnhancedWaveform(HDC dc, const RECT& client) {
         }
     }
 
-    // Draw the centerline in the same stable horizontal gradient.
     for (int band = 0; band < kGradientBands; ++band) {
         const int x1 = left + (band * width) / kGradientBands;
         const int x2 = left + ((band + 1) * width) / kGradientBands;
@@ -485,7 +551,7 @@ void drawEnhancedWaveform(HDC dc, const RECT& client) {
         HPEN pen = CreatePen(
             PS_SOLID,
             1,
-            fadeToBackground(enhancedGradientColor(position), 0.70));
+            fadeToBackground(enhancedGradientColor(position), 0.74));
         HGDIOBJ previousPen = SelectObject(dc, pen);
         MoveToEx(dc, x1, centerY, nullptr);
         LineTo(dc, x2, centerY);
@@ -496,87 +562,79 @@ void drawEnhancedWaveform(HDC dc, const RECT& client) {
 
 void drawEnhancedOverlay(HDC dc, const RECT& client) {
     const RECT panel{0, 0, client.right - 1, client.bottom - 1};
-    drawRoundedBox(dc, panel, 28, RGB(14, 18, 27), RGB(61, 73, 97), 1);
+    drawRoundedBox(dc, panel, 24, RGB(14, 18, 27), RGB(59, 70, 91), 1);
 
-    // Listening indicator.
-    const int centerX = 42;
+    // Use filled geometry rather than several thin concentric outlines so the
+    // small listening indicator reads cleanly at native GDI resolution.
+    const int centerX = 28;
     const int centerY = client.bottom / 2;
-    HPEN outerPen = CreatePen(PS_SOLID, 2, RGB(32, 204, 224));
-    HGDIOBJ previousPen = SelectObject(dc, outerPen);
-    HGDIOBJ previousBrush = SelectObject(dc, GetStockObject(NULL_BRUSH));
-    Ellipse(dc, centerX - 26, centerY - 26, centerX + 26, centerY + 26);
-    SelectObject(dc, previousBrush);
-    SelectObject(dc, previousPen);
-    DeleteObject(outerPen);
-
-    HPEN innerPen = CreatePen(PS_SOLID, 1, RGB(29, 104, 139));
-    previousPen = SelectObject(dc, innerPen);
-    previousBrush = SelectObject(dc, GetStockObject(NULL_BRUSH));
+    HBRUSH ringBrush = CreateSolidBrush(RGB(48, 214, 112));
+    HGDIOBJ previousBrush = SelectObject(dc, ringBrush);
+    HGDIOBJ previousPen = SelectObject(dc, GetStockObject(NULL_PEN));
     Ellipse(dc, centerX - 19, centerY - 19, centerX + 19, centerY + 19);
-    SelectObject(dc, previousBrush);
     SelectObject(dc, previousPen);
-    DeleteObject(innerPen);
+    SelectObject(dc, previousBrush);
+    DeleteObject(ringBrush);
 
-    HBRUSH dotBrush = CreateSolidBrush(RGB(42, 225, 235));
+    HBRUSH innerBrush = CreateSolidBrush(RGB(14, 18, 27));
+    previousBrush = SelectObject(dc, innerBrush);
+    previousPen = SelectObject(dc, GetStockObject(NULL_PEN));
+    Ellipse(dc, centerX - 16, centerY - 16, centerX + 16, centerY + 16);
+    SelectObject(dc, previousPen);
+    SelectObject(dc, previousBrush);
+    DeleteObject(innerBrush);
+
+    HBRUSH dotBrush = CreateSolidBrush(RGB(50, 124, 255));
     previousBrush = SelectObject(dc, dotBrush);
     previousPen = SelectObject(dc, GetStockObject(NULL_PEN));
-    Ellipse(dc, centerX - 7, centerY - 7, centerX + 7, centerY + 7);
+    Ellipse(dc, centerX - 5, centerY - 5, centerX + 5, centerY + 5);
     SelectObject(dc, previousPen);
     SelectObject(dc, previousBrush);
     DeleteObject(dotBrush);
 
     SetBkMode(dc, TRANSPARENT);
-    SetTextColor(dc, RGB(246, 247, 250));
+    SetTextColor(dc, RGB(244, 246, 250));
     HFONT previousFont = reinterpret_cast<HFONT>(SelectObject(dc, g_overlay.enhancedTitleFont));
-    RECT title{76, 46, 196, 75};
+    RECT title{52, 39, 143, 63};
     DrawTextW(dc, L"Listening", -1, &title, DT_LEFT | DT_SINGLELINE | DT_VCENTER);
 
     SelectObject(dc, g_overlay.enhancedSubtitleFont);
-    SetTextColor(dc, RGB(158, 170, 190));
-    RECT subtitle{76, 76, 196, 101};
+    SetTextColor(dc, RGB(151, 164, 184));
+    RECT subtitle{52, 64, 143, 84};
     DrawTextW(dc, L"Universal Dictate", -1, &subtitle, DT_LEFT | DT_SINGLELINE | DT_VCENTER);
 
     drawEnhancedWaveform(dc, client);
 
-    const int dividerX = client.right - 224;
-    HPEN dividerPen = CreatePen(PS_SOLID, 1, RGB(48, 58, 76));
+    const int dividerX = client.right - 156;
+    HPEN dividerPen = CreatePen(PS_SOLID, 1, RGB(44, 53, 69));
     previousPen = SelectObject(dc, dividerPen);
-    MoveToEx(dc, dividerX, 34, nullptr);
-    LineTo(dc, dividerX, client.bottom - 34);
+    MoveToEx(dc, dividerX, 26, nullptr);
+    LineTo(dc, dividerX, client.bottom - 26);
     SelectObject(dc, previousPen);
     DeleteObject(dividerPen);
 
     const bool actionSent = g_overlay.actionSent.load(std::memory_order_acquire);
     const RECT okRect = confirmRect(client);
     const RECT xRect = cancelRect(client);
-    drawRoundedBox(
+    drawHexagonBox(
         dc,
         okRect,
-        16,
-        actionSent ? RGB(36, 40, 47) : RGB(17, 30, 40),
-        actionSent ? RGB(71, 75, 82) : RGB(35, 197, 219),
-        1);
-    drawRoundedBox(
+        actionSent ? RGB(35, 39, 46) : RGB(15, 29, 24),
+        actionSent ? RGB(71, 75, 82) : RGB(48, 214, 112),
+        2);
+    drawHexagonBox(
         dc,
         xRect,
-        16,
-        actionSent ? RGB(36, 40, 47) : RGB(31, 22, 37),
-        actionSent ? RGB(71, 75, 82) : RGB(221, 58, 168),
-        1);
-
-    SelectObject(dc, g_overlay.symbolFont);
-    SetTextColor(dc, actionSent ? RGB(145, 145, 145) : RGB(57, 222, 235));
-    RECT okIcon{okRect.left + 8, okRect.top, okRect.left + 34, okRect.bottom};
-    DrawTextW(dc, L"\x2713", -1, &okIcon, DT_CENTER | DT_SINGLELINE | DT_VCENTER);
-    SetTextColor(dc, actionSent ? RGB(145, 145, 145) : RGB(239, 76, 186));
-    RECT xIcon{xRect.left + 8, xRect.top, xRect.left + 34, xRect.bottom};
-    DrawTextW(dc, L"\x00D7", -1, &xIcon, DT_CENTER | DT_SINGLELINE | DT_VCENTER);
+        actionSent ? RGB(35, 39, 46) : RGB(31, 20, 23),
+        actionSent ? RGB(71, 75, 82) : RGB(235, 65, 82),
+        2);
 
     SelectObject(dc, g_overlay.enhancedButtonFont);
-    SetTextColor(dc, actionSent ? RGB(155, 155, 155) : RGB(241, 244, 249));
-    RECT okLabel{okRect.left + 34, okRect.top, okRect.right - 6, okRect.bottom};
-    RECT xLabel{xRect.left + 32, xRect.top, xRect.right - 4, xRect.bottom};
+    SetTextColor(dc, actionSent ? RGB(150, 150, 150) : RGB(238, 244, 240));
+    RECT okLabel = okRect;
     DrawTextW(dc, L"Insert", -1, &okLabel, DT_CENTER | DT_SINGLELINE | DT_VCENTER);
+    SetTextColor(dc, actionSent ? RGB(150, 150, 150) : RGB(248, 238, 239));
+    RECT xLabel = xRect;
     DrawTextW(dc, L"Discard", -1, &xLabel, DT_CENTER | DT_SINGLELINE | DT_VCENTER);
 
     SelectObject(dc, previousFont);
@@ -776,15 +834,15 @@ bool createOverlay(HMONITOR targetMonitor, bool enhanced) {
 
     if (enhanced) {
         g_overlay.enhancedTitleFont = CreateFontW(
-            -20, 0, 0, 0, FW_SEMIBOLD, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
+            -17, 0, 0, 0, FW_SEMIBOLD, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
             OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
             DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
         g_overlay.enhancedSubtitleFont = CreateFontW(
-            -13, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
+            -11, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
             OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
             DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
         g_overlay.enhancedButtonFont = CreateFontW(
-            -14, 0, 0, 0, FW_SEMIBOLD, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
+            -13, 0, 0, 0, FW_SEMIBOLD, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
             OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
             DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
     }
@@ -808,7 +866,7 @@ bool createOverlay(HMONITOR targetMonitor, bool enhanced) {
     }
 
     if (enhanced) {
-        HRGN region = CreateRoundRectRgn(0, 0, overlayWidth + 1, overlayHeight + 1, 30, 30);
+        HRGN region = CreateRoundRectRgn(0, 0, overlayWidth + 1, overlayHeight + 1, 26, 26);
         if (region != nullptr && SetWindowRgn(g_overlay.window, region, FALSE) == 0) {
             DeleteObject(region);
         }
