@@ -4,7 +4,7 @@
 
 Universal Dictate is an open-source VS Code extension for speech-to-text without API keys or cloud transcription. **Source code, issue tracking and release artifacts are public on [GitHub](https://github.com/gcalpay/vscode-universal-dictate).** It runs the multilingual OpenAI Whisper `base` model locally through `whisper.cpp`, automatically detects the spoken language by default and can be fixed to any of the model's 99 supported languages. Because text is inserted through the focused Windows input control rather than a private extension API, it can also be used with extension-owned agent/chat composers such as OpenAI Codex where normal VS Code text insertion APIs are not available.
 
-> **Version:** 0.1.1 for Windows x64. End-to-end dictation and focused-input insertion have been validated against the OpenAI Codex composer under Remote - WSL on Windows. The extension includes Windows microphone capture, an always-available VS Code status-bar microphone button, a non-activating recording overlay and local Whisper transcription.
+> **Version:** 0.1.2 for Windows x64. End-to-end dictation and focused-input insertion have been validated against the OpenAI Codex composer under Remote - WSL on Windows. The extension includes Windows microphone capture, an always-available VS Code status-bar microphone button, a non-activating enhanced recording overlay and local Whisper transcription.
 
 ![Universal Dictate overview and installation guide](media/universal-dictate-overview.webp)
 
@@ -29,7 +29,7 @@ Do not install a separate copy inside WSL. Universal Dictate declares `extension
 
 On first dictation, Universal Dictate downloads the multilingual Whisper `base` model (about 148 MB), verifies its SHA-256 checksum and stores it in VS Code's local extension storage. After that, normal dictation can run offline.
 
-For lower post-recording latency, Universal Dictate 0.1.1 starts a local `whisper-server` worker when recording begins and keeps the model loaded for later dictations. Model initialization therefore overlaps with the time you are speaking instead of starting only after you press confirm. The worker listens only on `127.0.0.1` behind a randomized per-session request path. If it cannot start or exits unexpectedly, Universal Dictate automatically falls back to the one-shot `whisper-cli` path. The current Windows build remains CPU-only.
+For lower post-recording latency, Universal Dictate starts a local `whisper-server` worker when recording begins and keeps the model loaded for later dictations. Model initialization therefore overlaps with the time you are speaking instead of starting only after you press Insert or stop recording. The worker listens only on `127.0.0.1` behind a randomized per-session request path. If it cannot start or exits unexpectedly, Universal Dictate automatically falls back to the one-shot `whisper-cli` path. The current Windows build remains CPU-only.
 
 ## Product goals
 
@@ -41,12 +41,12 @@ For lower post-recording latency, Universal Dictate 0.1.1 starts a local `whispe
 - Never submits dictated text automatically.
 - Terminal dictation disabled by default.
 - No Python, Conda, FFmpeg or WSL-side runtime dependency for end users.
-- Live microphone visualization with confirm and cancel controls that do not activate another window or steal the target caret.
+- Live microphone visualization with Insert and Discard controls that do not activate another window or steal the target caret.
 - Reuse a persistent local Whisper worker after first use to avoid reloading the model for every utterance.
 
 ## Current controls
 
-Universal Dictate activates after VS Code starts and shows an always-visible **$(mic) Dictate** action in the status bar while idle. Click it to start recording, or use the keyboard shortcut:
+Universal Dictate activates after VS Code starts and shows an always-visible **$(mic) Dictate** action and a settings gear in the right-side status-bar utility group. Click **Dictate** to start recording, or use the keyboard shortcut:
 
 ```text
 Status bar: $(mic) Dictate   Start recording
@@ -55,20 +55,29 @@ Ctrl+Alt+D                   Stop, transcribe locally and insert
 Esc                          Cancel the current recording
 ```
 
-While recording, Universal Dictate shows a native Windows overlay with a large, centered, mirrored rolling microphone-energy field. The visualization uses adaptive display normalization so ordinary speech produces substantial vertical motion, then renders a filled central ribbon, layered contour lines and fine vertical filaments rather than a conventional ascending volume meter.
+The default **Enhanced overlay** is a native Windows, non-activating recording panel with a sensitive signed PCM signal display. The visualization keeps a bounded downsampled history of the captured microphone waveform, uses a monochrome technical-green signal style and keeps previously captured samples visually stable as they move through the history.
 
 ```text
-✓   confirm, transcribe and insert
-×   cancel and discard
+Insert    stop, transcribe and insert
+Discard   cancel and discard
 ```
 
-The VS Code status-bar item also becomes a rolling signal history during recording. The native overlay uses the Win32 `WS_EX_NOACTIVATE` behavior so clicking ✓ or × does not intentionally move keyboard focus away from the VS Code editor/composer where the transcript will be inserted.
+The overlay uses Win32 `WS_EX_NOACTIVATE` behavior so clicking **Insert** or **Discard** does not intentionally move keyboard focus away from the VS Code editor/composer where the transcript will be inserted. Its monitor placement follows the active VS Code monitor and supports multi-monitor virtual-screen coordinates, including monitors positioned at negative coordinates.
+
+The settings gear provides the current audio-visualization choices:
+
+- **Enhanced overlay** — default; native PCM waveform overlay plus static recording feedback in the status bar.
+- **Both** — Enhanced overlay plus the animated status-bar signal history.
+- **Status bar only** — animated status-bar signal without the native overlay.
+- **Off** — no waveform visualization; static recording feedback remains available.
+
+Visualization changes apply from the next dictation session. The legacy large overlay is no longer selectable; existing persisted legacy `overlay` settings are treated as Enhanced overlay for compatibility.
 
 ## Languages
 
 The default is **Auto-detect**. The bundled multilingual Whisper `base` model supports the original **99 Whisper languages**. Recognition quality varies by language and audio conditions.
 
-Language selection is available from the Command Palette:
+Language selection is available from the settings gear or from the Command Palette:
 
 ```text
 Universal Dictate: Select Language
@@ -90,7 +99,7 @@ The relevant upstream license notices are retained in `third_party/`.
 
 ## Implementation
 
-- TypeScript: VS Code integration, commands, state, UI, language selection, model management and transcription orchestration.
+- TypeScript: VS Code integration, commands, state, UI, language selection, visualization selection, model management and transcription orchestration.
 - C++20: Universal Dictate's native Windows microphone process, non-activating recording overlay and focused-input paste helper.
 - miniaudio: permissively licensed microphone/audio backend.
 - OpenAI Whisper: MIT-licensed speech-recognition model and weights.
