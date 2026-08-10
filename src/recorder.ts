@@ -3,12 +3,13 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 import {
   CoreRecorderSession,
-  RecorderAction
+  RecorderAction,
+  RecorderOverlayStyle
 } from './core/recorder';
 
 const RECORDER_RELATIVE_PATH = ['resources', 'bin', 'universal-dictate-recorder.exe'];
 
-export { RecorderAction } from './core/recorder';
+export { RecorderAction, RecorderOverlayStyle } from './core/recorder';
 
 /**
  * VS Code adapter for the editor-independent recorder session.
@@ -27,7 +28,8 @@ export class RecorderSession {
   static async start(
     context: vscode.ExtensionContext,
     onLevel: (level: number) => void,
-    showOverlay = true
+    showOverlay = true,
+    overlayStyle: RecorderOverlayStyle = 'compact'
   ): Promise<RecorderSession> {
     const recorderPath = getRecorderPath(context);
     if (!fs.existsSync(recorderPath)) {
@@ -39,7 +41,7 @@ export class RecorderSession {
     const outputPath = path.join(recordingsDir, `dictation-${Date.now()}.wav`);
 
     const core = await CoreRecorderSession.start(
-      { recorderPath, outputPath, showOverlay },
+      { recorderPath, outputPath, showOverlay, overlayStyle },
       onLevel
     );
     return new RecorderSession(core);
