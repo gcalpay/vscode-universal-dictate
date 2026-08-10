@@ -60,11 +60,11 @@ class DictationController implements vscode.Disposable {
 
   constructor(private readonly context: vscode.ExtensionContext) {
     // Use distinct stable IDs so VS Code can track the Dictate and settings
-    // entries independently. Keep them at the low-priority end of the primary
-    // group so existing workspace items such as Git Graph can remain to their left.
+    // entries independently. Keep them at the low-priority end of the right
+    // group so their relative order stays stable without relying on neighbors.
     this.statusBar = vscode.window.createStatusBarItem(
       'universalDictate.dictate',
-      vscode.StatusBarAlignment.Left,
+      vscode.StatusBarAlignment.Right,
       0
     );
     this.statusBar.name = 'Universal Dictate';
@@ -73,7 +73,7 @@ class DictationController implements vscode.Disposable {
     // immediately to the right of the Dictate item.
     this.settingsStatusBar = vscode.window.createStatusBarItem(
       'universalDictate.settings',
-      vscode.StatusBarAlignment.Left,
+      vscode.StatusBarAlignment.Right,
       -1
     );
     this.settingsStatusBar.name = 'Universal Dictate Settings';
