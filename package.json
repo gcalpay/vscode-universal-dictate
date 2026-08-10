@@ -113,8 +113,8 @@
             "Show only the animated status-bar waveform; do not create the native overlay.",
             "Disable both waveform visualizations; keep static recording feedback in the status bar."
           ],
-          "default": "both",
-          "description": "Controls recording visualizations. Changes apply from the next dictation session."
+          "default": "overlay",
+          "description": "Controls recording visualizations. Default: large overlay only. Changes apply from the next dictation session."
         }
       }
     }
