@@ -30,6 +30,9 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <windowsx.h>
+#include <gdiplus.h>
+
+#pragma comment(lib, "gdiplus.lib")
 
 #include "miniaudio.h"
 
@@ -111,6 +114,7 @@ private:
 struct CaptureState {
     Encoder* encoder = nullptr;
     std::atomic<int> peakMilli{0};
+    std::atomic<int> signedPeakMilli{0};
 };
 
 void captureCallback(
@@ -129,15 +133,22 @@ void captureCallback(
 
     const auto* samples = static_cast<const ma_int16*>(input);
     int peak = 0;
+    int signedPeak = 0;
     const auto sampleCount = static_cast<std::size_t>(frameCount) * kChannels;
 
     for (std::size_t i = 0; i < sampleCount; ++i) {
-        const int magnitude = std::abs(static_cast<int>(samples[i]));
-        peak = std::max(peak, magnitude);
+        const int sample = static_cast<int>(samples[i]);
+        const int magnitude = std::abs(sample);
+        if (magnitude > peak) {
+            peak = magnitude;
+            signedPeak = sample;
+        }
     }
 
     peak = std::min(peak, 32767);
+    signedPeak = std::clamp(signedPeak, -32767, 32767);
     state->peakMilli.store((peak * 1000) / 32767, std::memory_order_relaxed);
+    state->signedPeakMilli.store((signedPeak * 1000) / 32767, std::memory_order_relaxed);
 }
 
 class CaptureDevice {
@@ -188,8 +199,11 @@ struct OverlayState {
     HFONT enhancedTitleFont = nullptr;
     HFONT enhancedSubtitleFont = nullptr;
     HFONT enhancedButtonFont = nullptr;
+    ULONG_PTR gdiplusToken = 0;
     int levelMilli = 0;
     std::array<int, kSignalPoints> levelHistory{};
+    std::array<int, kSignalPoints> enhancedEnvelopeHistory{};
+    std::array<int, kSignalPoints> enhancedWaveHistory{};
     bool enhanced = false;
     std::atomic<bool> actionSent{false};
 };
@@ -198,14 +212,14 @@ OverlayState g_overlay;
 
 RECT confirmRect(const RECT& client) {
     if (g_overlay.enhanced) {
-        return RECT{client.right - 148, 31, client.right - 84, 97};
+        return RECT{client.right - 166, 41, client.right - 88, 87};
     }
     return RECT{client.right - 92, 30, client.right - 52, client.bottom - 30};
 }
 
 RECT cancelRect(const RECT& client) {
     if (g_overlay.enhanced) {
-        return RECT{client.right - 76, 31, client.right - 12, 97};
+        return RECT{client.right - 82, 41, client.right - 4, 87};
     }
     return RECT{client.right - 46, 30, client.right - 6, client.bottom - 30};
 }
@@ -270,6 +284,10 @@ COLORREF fadeToBackground(COLORREF color, double strength) {
     return interpolateColor(RGB(14, 18, 27), color, strength);
 }
 
+Gdiplus::Color gdiplusColor(COLORREF color, BYTE alpha = 255) {
+    return Gdiplus::Color(alpha, GetRValue(color), GetGValue(color), GetBValue(color));
+}
+
 void drawRoundedBox(
     HDC dc,
     const RECT& rect,
@@ -288,35 +306,37 @@ void drawRoundedBox(
     DeleteObject(brush);
 }
 
-std::array<POINT, 6> hexagonPoints(const RECT& rect) {
-    const int width = std::max(1L, rect.right - rect.left);
-    const int inset = std::max(8, width / 4);
-    const int centerY = (rect.top + rect.bottom) / 2;
-    return std::array<POINT, 6>{
-        POINT{rect.left + inset, rect.top},
-        POINT{rect.right - inset, rect.top},
-        POINT{rect.right, centerY},
-        POINT{rect.right - inset, rect.bottom},
-        POINT{rect.left + inset, rect.bottom},
-        POINT{rect.left, centerY}};
+Gdiplus::GraphicsPath roundedRectPath(const RECT& rect, Gdiplus::REAL radius) {
+    const Gdiplus::REAL left = static_cast<Gdiplus::REAL>(rect.left);
+    const Gdiplus::REAL top = static_cast<Gdiplus::REAL>(rect.top);
+    const Gdiplus::REAL right = static_cast<Gdiplus::REAL>(rect.right);
+    const Gdiplus::REAL bottom = static_cast<Gdiplus::REAL>(rect.bottom);
+    const Gdiplus::REAL diameter = radius * 2.0f;
+
+    Gdiplus::GraphicsPath path;
+    path.AddArc(left, top, diameter, diameter, 180.0f, 90.0f);
+    path.AddArc(right - diameter, top, diameter, diameter, 270.0f, 90.0f);
+    path.AddArc(right - diameter, bottom - diameter, diameter, diameter, 0.0f, 90.0f);
+    path.AddArc(left, bottom - diameter, diameter, diameter, 90.0f, 90.0f);
+    path.CloseFigure();
+    return path;
 }
 
-void drawHexagonBox(
+void drawAntialiasedRoundedButton(
     HDC dc,
     const RECT& rect,
     COLORREF fill,
     COLORREF border,
-    int borderWidth = 2) {
-    const auto points = hexagonPoints(rect);
-    HBRUSH brush = CreateSolidBrush(fill);
-    HPEN pen = CreatePen(PS_SOLID, borderWidth, border);
-    HGDIOBJ previousBrush = SelectObject(dc, brush);
-    HGDIOBJ previousPen = SelectObject(dc, pen);
-    Polygon(dc, points.data(), static_cast<int>(points.size()));
-    SelectObject(dc, previousPen);
-    SelectObject(dc, previousBrush);
-    DeleteObject(pen);
-    DeleteObject(brush);
+    bool disabled) {
+    Gdiplus::Graphics graphics(dc);
+    graphics.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+    graphics.SetPixelOffsetMode(Gdiplus::PixelOffsetModeHighQuality);
+
+    auto path = roundedRectPath(rect, 12.0f);
+    Gdiplus::SolidBrush fillBrush(gdiplusColor(fill));
+    Gdiplus::Pen borderPen(gdiplusColor(border, disabled ? 150 : 235), 1.5f);
+    graphics.FillPath(&fillBrush, &path);
+    graphics.DrawPath(&borderPen, &path);
 }
 
 void drawSignalField(HDC dc, const RECT& client) {
@@ -432,95 +452,74 @@ void drawSignalField(HDC dc, const RECT& client) {
     DeleteObject(axisPen);
 }
 
+int enhancedVisualAmplitude(int levelMilli) {
+    const double numerator = static_cast<double>(std::max(0, levelMilli - kNoiseFloorMilli));
+    const double denominator = static_cast<double>(kEnhancedReferenceMilli - kNoiseFloorMilli);
+    const double normalized = std::clamp(numerator / denominator, 0.0, 1.0);
+    if (normalized <= 0.0) {
+        return 0;
+    }
+
+    const double shaped = std::pow(normalized, 0.48);
+    return std::clamp(static_cast<int>(std::lround(shaped * 1000.0)), 0, 1000);
+}
+
 void drawEnhancedWaveform(HDC dc, const RECT& client) {
     constexpr int kGradientBands = 16;
-    static constexpr std::array<double, 4> scales{1.00, 0.76, 0.52, 0.30};
-    static constexpr std::array<double, 4> colorStrengths{1.00, 0.78, 0.58, 0.40};
+    static constexpr std::array<double, 4> envelopeScales{1.00, 0.72, 0.46, 0.24};
+    static constexpr std::array<BYTE, 4> envelopeAlpha{235, 170, 120, 80};
 
     const int left = 148;
-    const int right = client.right - 164;
+    const int right = client.right - 182;
     const int top = 8;
     const int bottom = client.bottom - 8;
     const int centerY = (top + bottom) / 2;
     const int width = std::max(1, right - left);
     const int maxAmplitude = std::max(22, (bottom - top) / 2 - 4);
 
-    std::array<int, kSignalPoints> amplitudes{};
-    std::array<POINT, kSignalPoints> outerUpper{};
-    std::array<POINT, kSignalPoints> outerLower{};
-    for (int index = 0; index < kSignalPoints; ++index) {
-        const int smoothed = smoothedHistoryLevel(index);
-        const int raw = g_overlay.levelHistory[static_cast<std::size_t>(index)];
-        const int level = (2 * smoothed + raw) / 3;
-        const double numerator = static_cast<double>(std::max(0, level - kNoiseFloorMilli));
-        const double denominator = static_cast<double>(kEnhancedReferenceMilli - kNoiseFloorMilli);
-        const double normalized = std::clamp(numerator / denominator, 0.0, 1.0);
-        const double shaped = normalized <= 0.0 ? 0.0 : std::pow(normalized, 0.48);
-        const int amplitude = normalized <= 0.0
-            ? 0
-            : std::max(4, static_cast<int>(std::lround(shaped * maxAmplitude)));
-        const int x = left + (index * width) / (kSignalPoints - 1);
-        amplitudes[static_cast<std::size_t>(index)] = amplitude;
-        outerUpper[static_cast<std::size_t>(index)] = POINT{x, centerY - amplitude};
-        outerLower[static_cast<std::size_t>(index)] = POINT{x, centerY + amplitude};
-    }
+    Gdiplus::Graphics graphics(dc);
+    graphics.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+    graphics.SetPixelOffsetMode(Gdiplus::PixelOffsetModeHighQuality);
 
-    // A low-intensity segmented body makes the wave feel substantial while
-    // keeping the actual geometry tied to the bounded microphone-level history.
-    for (int band = 0; band < kGradientBands; ++band) {
-        const int start = (band * (kSignalPoints - 1)) / kGradientBands;
-        const int end = ((band + 1) * (kSignalPoints - 1)) / kGradientBands;
-        if (end <= start) {
+    // Stable, fixed-height vertical filaments make the display read like a
+    // scientific signal plot. Each filament is computed once when that audio
+    // slice arrives, then merely shifts left with the bounded history.
+    for (int index = 0; index < kSignalPoints; index += 2) {
+        const int envelope = g_overlay.enhancedEnvelopeHistory[static_cast<std::size_t>(index)];
+        if (envelope <= 0) {
             continue;
         }
-
-        std::array<POINT, 16> ribbon{};
-        int pointCount = 0;
-        for (int index = start; index <= end && pointCount < static_cast<int>(ribbon.size()); ++index) {
-            ribbon[static_cast<std::size_t>(pointCount++)] = outerUpper[static_cast<std::size_t>(index)];
-        }
-        for (int index = end; index >= start && pointCount < static_cast<int>(ribbon.size()); --index) {
-            ribbon[static_cast<std::size_t>(pointCount++)] = outerLower[static_cast<std::size_t>(index)];
-        }
-
-        const double position = (band + 0.5) / static_cast<double>(kGradientBands);
-        HBRUSH brush = CreateSolidBrush(fadeToBackground(enhancedGradientColor(position), 0.18));
-        HGDIOBJ previousBrush = SelectObject(dc, brush);
-        HGDIOBJ previousPen = SelectObject(dc, GetStockObject(NULL_PEN));
-        Polygon(dc, ribbon.data(), pointCount);
-        SelectObject(dc, previousPen);
-        SelectObject(dc, previousBrush);
-        DeleteObject(brush);
+        const Gdiplus::REAL x = static_cast<Gdiplus::REAL>(left) +
+            static_cast<Gdiplus::REAL>(index * width) / static_cast<Gdiplus::REAL>(kSignalPoints - 1);
+        const Gdiplus::REAL amplitude = static_cast<Gdiplus::REAL>(maxAmplitude * envelope) / 1000.0f;
+        const double position = static_cast<double>(index) / static_cast<double>(kSignalPoints - 1);
+        Gdiplus::Pen filament(
+            gdiplusColor(enhancedGradientColor(position), 58),
+            1.0f);
+        graphics.DrawLine(
+            &filament,
+            Gdiplus::PointF(x, static_cast<Gdiplus::REAL>(centerY) - amplitude),
+            Gdiplus::PointF(x, static_cast<Gdiplus::REAL>(centerY) + amplitude));
     }
 
-    // Fine filaments preserve speech transients and add visual energy without
-    // performing spectral analysis or increasing the audio-path workload.
-    for (int index = 1; index < kSignalPoints; index += 2) {
-        const int amplitude = amplitudes[static_cast<std::size_t>(index)];
-        if (amplitude <= 0) {
-            continue;
-        }
-        const int x = left + (index * width) / (kSignalPoints - 1);
-        const double position = static_cast<double>(index) / (kSignalPoints - 1);
-        HPEN pen = CreatePen(PS_SOLID, 1, fadeToBackground(enhancedGradientColor(position), 0.42));
-        HGDIOBJ previousPen = SelectObject(dc, pen);
-        MoveToEx(dc, x, centerY - amplitude, nullptr);
-        LineTo(dc, x, centerY + amplitude);
-        SelectObject(dc, previousPen);
-        DeleteObject(pen);
-    }
+    std::array<Gdiplus::PointF, kSignalPoints> upper{};
+    std::array<Gdiplus::PointF, kSignalPoints> lower{};
 
-    std::array<POINT, kSignalPoints> upper{};
-    std::array<POINT, kSignalPoints> lower{};
-
-    for (std::size_t layer = 0; layer < scales.size(); ++layer) {
+    // Multiple deterministic nested envelopes create the Fourier/signal-plot
+    // aesthetic without FFT work. There is intentionally no time-varying shape
+    // perturbation: generated history never wobbles or morphs in place.
+    for (std::size_t layer = 0; layer < envelopeScales.size(); ++layer) {
         for (int index = 0; index < kSignalPoints; ++index) {
-            const int x = left + (index * width) / (kSignalPoints - 1);
-            const double organic = 0.88 + 0.12 * std::sin(index * 0.72 + layer * 1.37);
-            const int amplitude = static_cast<int>(std::lround(
-                amplitudes[static_cast<std::size_t>(index)] * scales[layer] * organic));
-            upper[static_cast<std::size_t>(index)] = POINT{x, centerY - amplitude};
-            lower[static_cast<std::size_t>(index)] = POINT{x, centerY + amplitude};
+            const Gdiplus::REAL x = static_cast<Gdiplus::REAL>(left) +
+                static_cast<Gdiplus::REAL>(index * width) / static_cast<Gdiplus::REAL>(kSignalPoints - 1);
+            const Gdiplus::REAL amplitude =
+                static_cast<Gdiplus::REAL>(maxAmplitude) *
+                static_cast<Gdiplus::REAL>(g_overlay.enhancedEnvelopeHistory[static_cast<std::size_t>(index)]) /
+                1000.0f * static_cast<Gdiplus::REAL>(envelopeScales[layer]);
+            upper[static_cast<std::size_t>(index)] =
+                Gdiplus::PointF(x, static_cast<Gdiplus::REAL>(centerY) - amplitude);
+            lower[static_cast<std::size_t>(index)] =
+                Gdiplus::PointF(x, static_cast<Gdiplus::REAL>(centerY) + amplitude);
         }
 
         for (int band = 0; band < kGradientBands; ++band) {
@@ -529,34 +528,52 @@ void drawEnhancedWaveform(HDC dc, const RECT& client) {
             if (end <= start) {
                 continue;
             }
-
             const double position = (static_cast<double>(start + end) * 0.5) /
                 static_cast<double>(kSignalPoints - 1);
-            const COLORREF color = fadeToBackground(
-                enhancedGradientColor(position),
-                colorStrengths[layer]);
-            HPEN pen = CreatePen(PS_SOLID, layer == 0 ? 2 : 1, color);
-            HGDIOBJ previousPen = SelectObject(dc, pen);
-            Polyline(dc, upper.data() + start, end - start + 1);
-            Polyline(dc, lower.data() + start, end - start + 1);
-            SelectObject(dc, previousPen);
-            DeleteObject(pen);
+            Gdiplus::Pen pen(
+                gdiplusColor(enhancedGradientColor(position), envelopeAlpha[layer]),
+                layer == 0 ? 1.8f : 1.0f);
+            graphics.DrawLines(&pen, upper.data() + start, end - start + 1);
+            graphics.DrawLines(&pen, lower.data() + start, end - start + 1);
         }
     }
 
+    // The signed trace comes from the actual sign of the strongest PCM sample
+    // in each 50 ms slice. It gives the visualization a genuine waveform-like
+    // center trace while the symmetric envelopes continue to encode loudness.
+    std::array<Gdiplus::PointF, kSignalPoints> wave{};
+    for (int index = 0; index < kSignalPoints; ++index) {
+        const Gdiplus::REAL x = static_cast<Gdiplus::REAL>(left) +
+            static_cast<Gdiplus::REAL>(index * width) / static_cast<Gdiplus::REAL>(kSignalPoints - 1);
+        const Gdiplus::REAL signedAmplitude =
+            static_cast<Gdiplus::REAL>(maxAmplitude) * 0.82f *
+            static_cast<Gdiplus::REAL>(g_overlay.enhancedWaveHistory[static_cast<std::size_t>(index)]) /
+            1000.0f;
+        wave[static_cast<std::size_t>(index)] =
+            Gdiplus::PointF(x, static_cast<Gdiplus::REAL>(centerY) - signedAmplitude);
+    }
+
     for (int band = 0; band < kGradientBands; ++band) {
-        const int x1 = left + (band * width) / kGradientBands;
-        const int x2 = left + ((band + 1) * width) / kGradientBands;
+        const int start = (band * (kSignalPoints - 1)) / kGradientBands;
+        const int end = ((band + 1) * (kSignalPoints - 1)) / kGradientBands;
+        if (end <= start) {
+            continue;
+        }
+        const double position = (static_cast<double>(start + end) * 0.5) /
+            static_cast<double>(kSignalPoints - 1);
+        Gdiplus::Pen wavePen(gdiplusColor(enhancedGradientColor(position), 245), 1.6f);
+        graphics.DrawLines(&wavePen, wave.data() + start, end - start + 1);
+    }
+
+    for (int band = 0; band < kGradientBands; ++band) {
+        const Gdiplus::REAL x1 = static_cast<Gdiplus::REAL>(left + (band * width) / kGradientBands);
+        const Gdiplus::REAL x2 = static_cast<Gdiplus::REAL>(left + ((band + 1) * width) / kGradientBands);
         const double position = (band + 0.5) / static_cast<double>(kGradientBands);
-        HPEN pen = CreatePen(
-            PS_SOLID,
-            1,
-            fadeToBackground(enhancedGradientColor(position), 0.74));
-        HGDIOBJ previousPen = SelectObject(dc, pen);
-        MoveToEx(dc, x1, centerY, nullptr);
-        LineTo(dc, x2, centerY);
-        SelectObject(dc, previousPen);
-        DeleteObject(pen);
+        Gdiplus::Pen axis(gdiplusColor(enhancedGradientColor(position), 120), 0.8f);
+        graphics.DrawLine(
+            &axis,
+            Gdiplus::PointF(x1, static_cast<Gdiplus::REAL>(centerY)),
+            Gdiplus::PointF(x2, static_cast<Gdiplus::REAL>(centerY)));
     }
 }
 
@@ -564,33 +581,27 @@ void drawEnhancedOverlay(HDC dc, const RECT& client) {
     const RECT panel{0, 0, client.right - 1, client.bottom - 1};
     drawRoundedBox(dc, panel, 24, RGB(14, 18, 27), RGB(59, 70, 91), 1);
 
-    // Use filled geometry rather than several thin concentric outlines so the
-    // small listening indicator reads cleanly at native GDI resolution.
-    const int centerX = 28;
-    const int centerY = client.bottom / 2;
-    HBRUSH ringBrush = CreateSolidBrush(RGB(48, 214, 112));
-    HGDIOBJ previousBrush = SelectObject(dc, ringBrush);
-    HGDIOBJ previousPen = SelectObject(dc, GetStockObject(NULL_PEN));
-    Ellipse(dc, centerX - 19, centerY - 19, centerX + 19, centerY + 19);
-    SelectObject(dc, previousPen);
-    SelectObject(dc, previousBrush);
-    DeleteObject(ringBrush);
+    // GDI+ anti-aliasing removes the jagged small-circle appearance seen in the
+    // first physical acceptance passes without changing the Win32 overlay model.
+    {
+        Gdiplus::Graphics graphics(dc);
+        graphics.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+        graphics.SetPixelOffsetMode(Gdiplus::PixelOffsetModeHighQuality);
+        const Gdiplus::REAL centerX = 28.0f;
+        const Gdiplus::REAL centerY = static_cast<Gdiplus::REAL>(client.bottom) / 2.0f;
 
-    HBRUSH innerBrush = CreateSolidBrush(RGB(14, 18, 27));
-    previousBrush = SelectObject(dc, innerBrush);
-    previousPen = SelectObject(dc, GetStockObject(NULL_PEN));
-    Ellipse(dc, centerX - 16, centerY - 16, centerX + 16, centerY + 16);
-    SelectObject(dc, previousPen);
-    SelectObject(dc, previousBrush);
-    DeleteObject(innerBrush);
+        Gdiplus::SolidBrush outerBrush(gdiplusColor(RGB(48, 214, 112), 245));
+        graphics.FillEllipse(&outerBrush, centerX - 18.0f, centerY - 18.0f, 36.0f, 36.0f);
 
-    HBRUSH dotBrush = CreateSolidBrush(RGB(50, 124, 255));
-    previousBrush = SelectObject(dc, dotBrush);
-    previousPen = SelectObject(dc, GetStockObject(NULL_PEN));
-    Ellipse(dc, centerX - 5, centerY - 5, centerX + 5, centerY + 5);
-    SelectObject(dc, previousPen);
-    SelectObject(dc, previousBrush);
-    DeleteObject(dotBrush);
+        Gdiplus::SolidBrush innerBrush(gdiplusColor(RGB(14, 18, 27)));
+        graphics.FillEllipse(&innerBrush, centerX - 15.0f, centerY - 15.0f, 30.0f, 30.0f);
+
+        Gdiplus::Pen innerRing(gdiplusColor(RGB(50, 124, 255), 155), 1.0f);
+        graphics.DrawEllipse(&innerRing, centerX - 12.0f, centerY - 12.0f, 24.0f, 24.0f);
+
+        Gdiplus::SolidBrush dotBrush(gdiplusColor(RGB(50, 124, 255)));
+        graphics.FillEllipse(&dotBrush, centerX - 4.5f, centerY - 4.5f, 9.0f, 9.0f);
+    }
 
     SetBkMode(dc, TRANSPARENT);
     SetTextColor(dc, RGB(244, 246, 250));
@@ -605,9 +616,9 @@ void drawEnhancedOverlay(HDC dc, const RECT& client) {
 
     drawEnhancedWaveform(dc, client);
 
-    const int dividerX = client.right - 156;
+    const int dividerX = client.right - 174;
     HPEN dividerPen = CreatePen(PS_SOLID, 1, RGB(44, 53, 69));
-    previousPen = SelectObject(dc, dividerPen);
+    HGDIOBJ previousPen = SelectObject(dc, dividerPen);
     MoveToEx(dc, dividerX, 26, nullptr);
     LineTo(dc, dividerX, client.bottom - 26);
     SelectObject(dc, previousPen);
@@ -616,18 +627,18 @@ void drawEnhancedOverlay(HDC dc, const RECT& client) {
     const bool actionSent = g_overlay.actionSent.load(std::memory_order_acquire);
     const RECT okRect = confirmRect(client);
     const RECT xRect = cancelRect(client);
-    drawHexagonBox(
+    drawAntialiasedRoundedButton(
         dc,
         okRect,
         actionSent ? RGB(35, 39, 46) : RGB(15, 29, 24),
         actionSent ? RGB(71, 75, 82) : RGB(48, 214, 112),
-        2);
-    drawHexagonBox(
+        actionSent);
+    drawAntialiasedRoundedButton(
         dc,
         xRect,
         actionSent ? RGB(35, 39, 46) : RGB(31, 20, 23),
         actionSent ? RGB(71, 75, 82) : RGB(235, 65, 82),
-        2);
+        actionSent);
 
     SelectObject(dc, g_overlay.enhancedButtonFont);
     SetTextColor(dc, actionSent ? RGB(150, 150, 150) : RGB(238, 244, 240));
@@ -815,7 +826,17 @@ bool createOverlay(HMONITOR targetMonitor, bool enhanced) {
     g_overlay.enhanced = enhanced;
     g_overlay.levelMilli = 0;
     g_overlay.levelHistory.fill(0);
+    g_overlay.enhancedEnvelopeHistory.fill(0);
+    g_overlay.enhancedWaveHistory.fill(0);
     g_overlay.actionSent.store(false, std::memory_order_release);
+
+    if (enhanced) {
+        Gdiplus::GdiplusStartupInput startupInput;
+        if (Gdiplus::GdiplusStartup(&g_overlay.gdiplusToken, &startupInput, nullptr) != Gdiplus::Ok) {
+            g_overlay.gdiplusToken = 0;
+            return false;
+        }
+    }
 
     const int overlayWidth = enhanced ? kEnhancedOverlayWidth : kOverlayWidth;
     const int overlayHeight = enhanced ? kEnhancedOverlayHeight : kOverlayHeight;
@@ -910,6 +931,10 @@ void destroyOverlay() noexcept {
         DeleteObject(g_overlay.enhancedButtonFont);
         g_overlay.enhancedButtonFont = nullptr;
     }
+    if (g_overlay.gdiplusToken != 0) {
+        Gdiplus::GdiplusShutdown(g_overlay.gdiplusToken);
+        g_overlay.gdiplusToken = 0;
+    }
     g_overlay.enhanced = false;
     UnregisterClassW(kOverlayClassName, GetModuleHandleW(nullptr));
 }
@@ -922,13 +947,30 @@ void pumpOverlayMessages() {
     }
 }
 
-void updateOverlayLevel(int levelMilli) {
+void updateOverlayLevel(int levelMilli, int signedPeakMilli) {
     g_overlay.levelMilli = std::clamp(levelMilli, 0, 1000);
     std::move(
         g_overlay.levelHistory.begin() + 1,
         g_overlay.levelHistory.end(),
         g_overlay.levelHistory.begin());
     g_overlay.levelHistory.back() = g_overlay.levelMilli;
+
+    if (g_overlay.enhanced) {
+        const int visualAmplitude = enhancedVisualAmplitude(g_overlay.levelMilli);
+        const int sign = signedPeakMilli < 0 ? -1 : (signedPeakMilli > 0 ? 1 : 0);
+
+        std::move(
+            g_overlay.enhancedEnvelopeHistory.begin() + 1,
+            g_overlay.enhancedEnvelopeHistory.end(),
+            g_overlay.enhancedEnvelopeHistory.begin());
+        g_overlay.enhancedEnvelopeHistory.back() = visualAmplitude;
+
+        std::move(
+            g_overlay.enhancedWaveHistory.begin() + 1,
+            g_overlay.enhancedWaveHistory.end(),
+            g_overlay.enhancedWaveHistory.begin());
+        g_overlay.enhancedWaveHistory.back() = visualAmplitude * sign;
+    }
 
     if (g_overlay.window != nullptr) {
         InvalidateRect(g_overlay.window, nullptr, FALSE);
@@ -1045,8 +1087,9 @@ int main(int argc, char** argv) {
         }
 
         const int level = captureState.peakMilli.exchange(0, std::memory_order_relaxed);
+        const int signedPeak = captureState.signedPeakMilli.exchange(0, std::memory_order_relaxed);
         if (overlayAvailable) {
-            updateOverlayLevel(level);
+            updateOverlayLevel(level, signedPeak);
         }
         if (level != previousLevel) {
             std::printf("LEVEL %.3f\n", static_cast<double>(level) / 1000.0);
