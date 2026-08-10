@@ -104,12 +104,14 @@
           "enum": [
             "both",
             "overlay",
+            "enhancedOverlay",
             "statusBar",
             "off"
           ],
           "enumDescriptions": [
             "Show the native recording overlay and the animated status-bar waveform.",
             "Show only the native recording overlay; keep static recording feedback in the status bar.",
+            "Show the enhanced amplitude-driven native overlay; keep static recording feedback in the status bar.",
             "Show only the animated status-bar waveform; do not create the native overlay.",
             "Disable both waveform visualizations; keep static recording feedback in the status bar."
           ],
