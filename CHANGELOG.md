@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.1.4
+
+Presentation republish from the merged repository state.
+
+- Publish the approved blue/orange Universal Dictate icon and the updated tight Marketplace/README screenshots under a fresh extension version.
+- Keep the extension icon path at `media/icon.png`.
+- No runtime, recorder, transcription, insertion, Whisper, visualization or settings behavior changes.
+
+## 0.1.3
+
+Presentation asset refresh.
+
+- Replace the extension icon with the approved blue/orange microphone, waveform and transcript design.
+- Replace the status-bar, settings-menu and Enhanced-overlay screenshots with tighter privacy-safe crops.
+- No runtime behavior changes.
+
 ## 0.1.2
 
 Enhanced recording visualization, settings and status-bar polish.
