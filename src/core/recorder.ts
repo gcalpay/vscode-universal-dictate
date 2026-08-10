@@ -5,11 +5,13 @@ import * as readline from 'node:readline';
 const START_TIMEOUT_MS = 10000;
 
 export type RecorderAction = 'stop' | 'cancel';
+export type RecorderOverlayStyle = 'compact' | 'enhanced';
 
 export interface RecorderStartOptions {
   readonly recorderPath: string;
   readonly outputPath: string;
   readonly showOverlay?: boolean;
+  readonly overlayStyle?: RecorderOverlayStyle;
 }
 
 /**
@@ -125,6 +127,8 @@ export class CoreRecorderSession {
     const args = ['--output', options.outputPath];
     if (options.showOverlay === false) {
       args.push('--no-overlay');
+    } else if (options.overlayStyle === 'enhanced') {
+      args.push('--enhanced-overlay');
     }
 
     const child = childProcess.spawn(options.recorderPath, args, {
