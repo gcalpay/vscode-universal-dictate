@@ -18,11 +18,10 @@ import {
   warmWhisper
 } from './whisper';
 
-type VisualizationMode = 'both' | 'overlay' | 'enhancedOverlay' | 'statusBar' | 'off';
+type VisualizationMode = 'both' | 'enhancedOverlay' | 'statusBar' | 'off';
 
 const VISUALIZATION_LABELS: Record<VisualizationMode, string> = {
   both: 'Both',
-  overlay: 'Large overlay only',
   enhancedOverlay: 'Enhanced overlay',
   statusBar: 'Status bar only',
   off: 'Off'
@@ -34,8 +33,10 @@ function getConfiguredVisualization(): VisualizationMode {
     .get<string>('visualization', 'enhancedOverlay');
 
   switch (value) {
-    case 'both':
+    // Compatibility for users who saved the removed legacy overlay mode.
     case 'overlay':
+      return 'enhancedOverlay';
+    case 'both':
     case 'enhancedOverlay':
     case 'statusBar':
     case 'off':
@@ -46,7 +47,7 @@ function getConfiguredVisualization(): VisualizationMode {
 }
 
 function showsOverlay(mode: VisualizationMode): boolean {
-  return mode === 'both' || mode === 'overlay' || mode === 'enhancedOverlay';
+  return mode === 'both' || mode === 'enhancedOverlay';
 }
 
 function showsStatusBarWaveform(mode: VisualizationMode): boolean {
@@ -95,7 +96,7 @@ class DictationController implements vscode.Disposable {
           this.context,
           onLevel,
           showsOverlay(this.activeVisualization),
-          this.activeVisualization === 'enhancedOverlay' ? 'enhanced' : 'compact'
+          'enhanced'
         );
       },
       transcribe: (audioPath) => transcribe(this.context, audioPath),
@@ -200,7 +201,7 @@ class DictationController implements vscode.Disposable {
     this.statusBar.command = 'universalDictate.toggle';
     this.statusBar.text = `$(record) ${signal}  Stop (Ctrl+Alt+D)`;
     this.statusBar.tooltip = showsOverlay(this.activeVisualization)
-      ? 'Recording locally. Click this status item, use the non-activating ✓ overlay, or press Ctrl+Alt+D to stop and transcribe. Press Esc or × to cancel.'
+      ? 'Recording locally. Click this status item, use Insert in the non-activating overlay, or press Ctrl+Alt+D to stop and transcribe. Press Esc or Discard to cancel.'
       : 'Recording locally. Click this status item or press Ctrl+Alt+D to stop and transcribe. Press Esc to cancel.';
     this.statusBar.show();
   }
@@ -208,11 +209,9 @@ class DictationController implements vscode.Disposable {
   private showStaticRecordingStatus(): void {
     this.statusBar.command = 'universalDictate.toggle';
     this.statusBar.text = '$(record) Recording · Stop (Ctrl+Alt+D)';
-    this.statusBar.tooltip = this.activeVisualization === 'enhancedOverlay'
+    this.statusBar.tooltip = showsOverlay(this.activeVisualization)
       ? 'Recording locally. Click this status item, use Insert in the non-activating overlay, or press Ctrl+Alt+D to stop and transcribe. Press Esc or Discard to cancel.'
-      : showsOverlay(this.activeVisualization)
-        ? 'Recording locally. Click this status item, use the non-activating ✓ overlay, or press Ctrl+Alt+D to stop and transcribe. Press Esc or × to cancel.'
-        : 'Recording locally. Click this status item or press Ctrl+Alt+D to stop and transcribe. Press Esc to cancel.';
+      : 'Recording locally. Click this status item or press Ctrl+Alt+D to stop and transcribe. Press Esc to cancel.';
     this.statusBar.show();
   }
 
@@ -280,15 +279,11 @@ async function selectVisualization(): Promise<void> {
   }> = [
     {
       mode: 'both',
-      detail: 'Show the native recording overlay and the animated status-bar waveform.'
-    },
-    {
-      mode: 'overlay',
-      detail: 'Show the native recording overlay with static recording feedback in the status bar.'
+      detail: 'Show the enhanced native recording overlay and the animated status-bar waveform.'
     },
     {
       mode: 'enhancedOverlay',
-      detail: 'Show the enhanced amplitude-driven native overlay with static recording feedback in the status bar.'
+      detail: 'Show the enhanced native overlay with static recording feedback in the status bar.'
     },
     {
       mode: 'statusBar',
