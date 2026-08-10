@@ -18,11 +18,12 @@ import {
   warmWhisper
 } from './whisper';
 
-type VisualizationMode = 'both' | 'overlay' | 'statusBar' | 'off';
+type VisualizationMode = 'both' | 'overlay' | 'enhancedOverlay' | 'statusBar' | 'off';
 
 const VISUALIZATION_LABELS: Record<VisualizationMode, string> = {
   both: 'Both',
   overlay: 'Large overlay only',
+  enhancedOverlay: 'Enhanced overlay',
   statusBar: 'Status bar only',
   off: 'Off'
 };
@@ -30,21 +31,22 @@ const VISUALIZATION_LABELS: Record<VisualizationMode, string> = {
 function getConfiguredVisualization(): VisualizationMode {
   const value = vscode.workspace
     .getConfiguration('universalDictate')
-    .get<string>('visualization', 'both');
+    .get<string>('visualization', 'enhancedOverlay');
 
   switch (value) {
+    case 'both':
     case 'overlay':
+    case 'enhancedOverlay':
     case 'statusBar':
     case 'off':
       return value;
-    case 'both':
     default:
-      return 'both';
+      return 'enhancedOverlay';
   }
 }
 
 function showsOverlay(mode: VisualizationMode): boolean {
-  return mode === 'both' || mode === 'overlay';
+  return mode === 'both' || mode === 'overlay' || mode === 'enhancedOverlay';
 }
 
 function showsStatusBarWaveform(mode: VisualizationMode): boolean {
@@ -56,7 +58,7 @@ class DictationController implements vscode.Disposable {
   private readonly settingsStatusBar: vscode.StatusBarItem;
   private readonly levelHistory = Array<number>(9).fill(0);
   private readonly engine: DictationEngine;
-  private activeVisualization: VisualizationMode = 'both';
+  private activeVisualization: VisualizationMode = 'enhancedOverlay';
 
   constructor(private readonly context: vscode.ExtensionContext) {
     // Use distinct stable IDs so VS Code can track the Dictate and settings
@@ -92,7 +94,8 @@ class DictationController implements vscode.Disposable {
         return RecorderSession.start(
           this.context,
           onLevel,
-          showsOverlay(this.activeVisualization)
+          showsOverlay(this.activeVisualization),
+          this.activeVisualization === 'enhancedOverlay' ? 'enhanced' : 'compact'
         );
       },
       transcribe: (audioPath) => transcribe(this.context, audioPath),
@@ -205,9 +208,11 @@ class DictationController implements vscode.Disposable {
   private showStaticRecordingStatus(): void {
     this.statusBar.command = 'universalDictate.toggle';
     this.statusBar.text = '$(record) Recording · Stop (Ctrl+Alt+D)';
-    this.statusBar.tooltip = showsOverlay(this.activeVisualization)
-      ? 'Recording locally. Click this status item, use the non-activating ✓ overlay, or press Ctrl+Alt+D to stop and transcribe. Press Esc or × to cancel.'
-      : 'Recording locally. Click this status item or press Ctrl+Alt+D to stop and transcribe. Press Esc to cancel.';
+    this.statusBar.tooltip = this.activeVisualization === 'enhancedOverlay'
+      ? 'Recording locally. Click this status item, use Insert in the non-activating overlay, or press Ctrl+Alt+D to stop and transcribe. Press Esc or Discard to cancel.'
+      : showsOverlay(this.activeVisualization)
+        ? 'Recording locally. Click this status item, use the non-activating ✓ overlay, or press Ctrl+Alt+D to stop and transcribe. Press Esc or × to cancel.'
+        : 'Recording locally. Click this status item or press Ctrl+Alt+D to stop and transcribe. Press Esc to cancel.';
     this.statusBar.show();
   }
 
@@ -280,6 +285,10 @@ async function selectVisualization(): Promise<void> {
     {
       mode: 'overlay',
       detail: 'Show the native recording overlay with static recording feedback in the status bar.'
+    },
+    {
+      mode: 'enhancedOverlay',
+      detail: 'Show the enhanced amplitude-driven native overlay with static recording feedback in the status bar.'
     },
     {
       mode: 'statusBar',
