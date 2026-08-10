@@ -30,6 +30,7 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <windowsx.h>
+#include <objidl.h>
 #include <gdiplus.h>
 
 #pragma comment(lib, "gdiplus.lib")
@@ -306,20 +307,21 @@ void drawRoundedBox(
     DeleteObject(brush);
 }
 
-Gdiplus::GraphicsPath roundedRectPath(const RECT& rect, Gdiplus::REAL radius) {
+void appendRoundedRectPath(
+    Gdiplus::GraphicsPath& path,
+    const RECT& rect,
+    Gdiplus::REAL radius) {
     const Gdiplus::REAL left = static_cast<Gdiplus::REAL>(rect.left);
     const Gdiplus::REAL top = static_cast<Gdiplus::REAL>(rect.top);
     const Gdiplus::REAL right = static_cast<Gdiplus::REAL>(rect.right);
     const Gdiplus::REAL bottom = static_cast<Gdiplus::REAL>(rect.bottom);
     const Gdiplus::REAL diameter = radius * 2.0f;
 
-    Gdiplus::GraphicsPath path;
     path.AddArc(left, top, diameter, diameter, 180.0f, 90.0f);
     path.AddArc(right - diameter, top, diameter, diameter, 270.0f, 90.0f);
     path.AddArc(right - diameter, bottom - diameter, diameter, diameter, 0.0f, 90.0f);
     path.AddArc(left, bottom - diameter, diameter, diameter, 90.0f, 90.0f);
     path.CloseFigure();
-    return path;
 }
 
 void drawAntialiasedRoundedButton(
@@ -332,7 +334,8 @@ void drawAntialiasedRoundedButton(
     graphics.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
     graphics.SetPixelOffsetMode(Gdiplus::PixelOffsetModeHighQuality);
 
-    auto path = roundedRectPath(rect, 12.0f);
+    Gdiplus::GraphicsPath path;
+    appendRoundedRectPath(path, rect, 12.0f);
     Gdiplus::SolidBrush fillBrush(gdiplusColor(fill));
     Gdiplus::Pen borderPen(gdiplusColor(border, disabled ? 150 : 235), 1.5f);
     graphics.FillPath(&fillBrush, &path);
