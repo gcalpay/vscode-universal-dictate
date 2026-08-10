@@ -59,17 +59,22 @@ class DictationController implements vscode.Disposable {
   private activeVisualization: VisualizationMode = 'both';
 
   constructor(private readonly context: vscode.ExtensionContext) {
-    // Keep dictation in the secondary/right status-bar group, but with enough
-    // priority to sit toward the left edge of that group rather than at the
-    // extreme right. Higher priority values render farther left in VS Code.
-    this.statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 1000);
+    // Use distinct stable IDs so VS Code can track the Dictate and settings
+    // entries independently. Keep them at the low-priority end of the primary
+    // group so existing workspace items such as Git Graph can remain to their left.
+    this.statusBar = vscode.window.createStatusBarItem(
+      'universalDictate.dictate',
+      vscode.StatusBarAlignment.Left,
+      0
+    );
     this.statusBar.name = 'Universal Dictate';
 
-    // A slightly lower priority places this separate, content-sized gear
-    // immediately to the right of the existing Dictate item.
+    // A slightly lower priority keeps this separate, content-sized gear
+    // immediately to the right of the Dictate item.
     this.settingsStatusBar = vscode.window.createStatusBarItem(
-      vscode.StatusBarAlignment.Right,
-      999
+      'universalDictate.settings',
+      vscode.StatusBarAlignment.Left,
+      -1
     );
     this.settingsStatusBar.name = 'Universal Dictate Settings';
     this.settingsStatusBar.text = '$(gear)';
