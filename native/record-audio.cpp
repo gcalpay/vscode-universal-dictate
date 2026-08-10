@@ -5,9 +5,9 @@
  * compiled at build time; it is not a runtime dependency.
  *
  * The recorder also owns a non-activating Win32 overlay. The overlay renders
- * a compact adaptive rolling signal field and exposes confirm/cancel controls
- * without taking keyboard focus away from the VS Code input being dictated
- * into.
+ * a compact adaptive rolling signal field or an optional enhanced amplitude-
+ * driven signal field and exposes confirm/cancel controls without taking
+ * keyboard focus away from the VS Code input being dictated into.
  *
  * Protocol (stdout):
  *   READY
@@ -54,9 +54,12 @@ constexpr ma_uint32 kChannels = 1;
 constexpr auto kLevelInterval = std::chrono::milliseconds(50);
 constexpr int kOverlayWidth = 400;
 constexpr int kOverlayHeight = 110;
+constexpr int kEnhancedOverlayWidth = 820;
+constexpr int kEnhancedOverlayHeight = 150;
 constexpr int kOverlayMargin = 18;
 constexpr int kSignalPoints = 64;
 constexpr int kNoiseFloorMilli = 6;
+constexpr int kEnhancedReferenceMilli = 240;
 constexpr wchar_t kOverlayClassName[] = L"UniversalDictateRecordingOverlay";
 
 enum class RecorderCommand : int {
@@ -182,18 +185,28 @@ struct OverlayState {
     HWND window = nullptr;
     HFONT textFont = nullptr;
     HFONT symbolFont = nullptr;
+    HFONT enhancedTitleFont = nullptr;
+    HFONT enhancedSubtitleFont = nullptr;
+    HFONT enhancedButtonFont = nullptr;
     int levelMilli = 0;
     std::array<int, kSignalPoints> levelHistory{};
+    bool enhanced = false;
     std::atomic<bool> actionSent{false};
 };
 
 OverlayState g_overlay;
 
 RECT confirmRect(const RECT& client) {
+    if (g_overlay.enhanced) {
+        return RECT{client.right - 210, 51, client.right - 112, 101};
+    }
     return RECT{client.right - 92, 30, client.right - 52, client.bottom - 30};
 }
 
 RECT cancelRect(const RECT& client) {
+    if (g_overlay.enhanced) {
+        return RECT{client.right - 104, 51, client.right - 6, 101};
+    }
     return RECT{client.right - 46, 30, client.right - 6, client.bottom - 30};
 }
 
@@ -221,6 +234,58 @@ int smoothedHistoryLevel(int index) {
     }
 
     return weightTotal == 0 ? 0 : weighted / weightTotal;
+}
+
+COLORREF interpolateColor(COLORREF left, COLORREF right, double amount) {
+    const double t = std::clamp(amount, 0.0, 1.0);
+    const int red = static_cast<int>(std::lround(
+        static_cast<double>(GetRValue(left)) +
+        (static_cast<double>(GetRValue(right)) - GetRValue(left)) * t));
+    const int green = static_cast<int>(std::lround(
+        static_cast<double>(GetGValue(left)) +
+        (static_cast<double>(GetGValue(right)) - GetGValue(left)) * t));
+    const int blue = static_cast<int>(std::lround(
+        static_cast<double>(GetBValue(left)) +
+        (static_cast<double>(GetBValue(right)) - GetBValue(left)) * t));
+    return RGB(red, green, blue);
+}
+
+COLORREF enhancedGradientColor(double position) {
+    const COLORREF cyan = RGB(38, 226, 239);
+    const COLORREF blue = RGB(47, 116, 255);
+    const COLORREF violet = RGB(139, 74, 255);
+    const COLORREF magenta = RGB(238, 57, 191);
+    const double t = std::clamp(position, 0.0, 1.0);
+
+    if (t < 1.0 / 3.0) {
+        return interpolateColor(cyan, blue, t * 3.0);
+    }
+    if (t < 2.0 / 3.0) {
+        return interpolateColor(blue, violet, (t - 1.0 / 3.0) * 3.0);
+    }
+    return interpolateColor(violet, magenta, (t - 2.0 / 3.0) * 3.0);
+}
+
+COLORREF fadeToBackground(COLORREF color, double strength) {
+    return interpolateColor(RGB(14, 18, 27), color, strength);
+}
+
+void drawRoundedBox(
+    HDC dc,
+    const RECT& rect,
+    int radius,
+    COLORREF fill,
+    COLORREF border,
+    int borderWidth = 1) {
+    HBRUSH brush = CreateSolidBrush(fill);
+    HPEN pen = CreatePen(PS_SOLID, borderWidth, border);
+    HGDIOBJ previousBrush = SelectObject(dc, brush);
+    HGDIOBJ previousPen = SelectObject(dc, pen);
+    RoundRect(dc, rect.left, rect.top, rect.right, rect.bottom, radius, radius);
+    SelectObject(dc, previousPen);
+    SelectObject(dc, previousBrush);
+    DeleteObject(pen);
+    DeleteObject(brush);
 }
 
 void drawSignalField(HDC dc, const RECT& client) {
@@ -336,10 +401,188 @@ void drawSignalField(HDC dc, const RECT& client) {
     DeleteObject(axisPen);
 }
 
-void drawOverlay(HWND window, HDC dc) {
-    RECT client{};
-    GetClientRect(window, &client);
+void drawEnhancedWaveform(HDC dc, const RECT& client) {
+    constexpr int kGradientBands = 16;
+    static constexpr std::array<double, 4> scales{1.00, 0.78, 0.57, 0.38};
+    static constexpr std::array<double, 4> colorStrengths{1.00, 0.78, 0.58, 0.42};
 
+    const int left = 205;
+    const int right = client.right - 236;
+    const int top = 17;
+    const int bottom = client.bottom - 17;
+    const int centerY = (top + bottom) / 2;
+    const int width = std::max(1, right - left);
+    const int maxAmplitude = std::max(18, (bottom - top) / 2 - 7);
+
+    std::array<int, kSignalPoints> amplitudes{};
+    for (int index = 0; index < kSignalPoints; ++index) {
+        const int level = smoothedHistoryLevel(index);
+        const double numerator = static_cast<double>(std::max(0, level - kNoiseFloorMilli));
+        const double denominator = static_cast<double>(kEnhancedReferenceMilli - kNoiseFloorMilli);
+        const double normalized = std::clamp(numerator / denominator, 0.0, 1.0);
+        const double shaped = normalized <= 0.0 ? 0.0 : std::pow(normalized, 0.54);
+        amplitudes[static_cast<std::size_t>(index)] = normalized <= 0.0
+            ? 0
+            : std::max(2, static_cast<int>(std::lround(shaped * maxAmplitude)));
+    }
+
+    // Fine color-coded filaments add depth without extra audio analysis. Color
+    // is intentionally stylistic; microphone amplitude remains the actual data.
+    for (int index = 1; index < kSignalPoints; index += 2) {
+        const int amplitude = amplitudes[static_cast<std::size_t>(index)];
+        if (amplitude <= 0) {
+            continue;
+        }
+        const int x = left + (index * width) / (kSignalPoints - 1);
+        const double position = static_cast<double>(index) / (kSignalPoints - 1);
+        HPEN pen = CreatePen(PS_SOLID, 1, fadeToBackground(enhancedGradientColor(position), 0.30));
+        HGDIOBJ previousPen = SelectObject(dc, pen);
+        MoveToEx(dc, x, centerY - amplitude, nullptr);
+        LineTo(dc, x, centerY + amplitude);
+        SelectObject(dc, previousPen);
+        DeleteObject(pen);
+    }
+
+    std::array<POINT, kSignalPoints> upper{};
+    std::array<POINT, kSignalPoints> lower{};
+
+    for (std::size_t layer = 0; layer < scales.size(); ++layer) {
+        for (int index = 0; index < kSignalPoints; ++index) {
+            const int x = left + (index * width) / (kSignalPoints - 1);
+            const double organic = 0.92 + 0.08 * std::sin(index * 0.72 + layer * 1.37);
+            const int amplitude = static_cast<int>(std::lround(
+                amplitudes[static_cast<std::size_t>(index)] * scales[layer] * organic));
+            upper[static_cast<std::size_t>(index)] = POINT{x, centerY - amplitude};
+            lower[static_cast<std::size_t>(index)] = POINT{x, centerY + amplitude};
+        }
+
+        for (int band = 0; band < kGradientBands; ++band) {
+            const int start = (band * (kSignalPoints - 1)) / kGradientBands;
+            const int end = ((band + 1) * (kSignalPoints - 1)) / kGradientBands;
+            if (end <= start) {
+                continue;
+            }
+
+            const double position = (static_cast<double>(start + end) * 0.5) /
+                static_cast<double>(kSignalPoints - 1);
+            const COLORREF color = fadeToBackground(
+                enhancedGradientColor(position),
+                colorStrengths[layer]);
+            HPEN pen = CreatePen(PS_SOLID, layer == 0 ? 2 : 1, color);
+            HGDIOBJ previousPen = SelectObject(dc, pen);
+            Polyline(dc, upper.data() + start, end - start + 1);
+            Polyline(dc, lower.data() + start, end - start + 1);
+            SelectObject(dc, previousPen);
+            DeleteObject(pen);
+        }
+    }
+
+    // Draw the centerline in the same stable horizontal gradient.
+    for (int band = 0; band < kGradientBands; ++band) {
+        const int x1 = left + (band * width) / kGradientBands;
+        const int x2 = left + ((band + 1) * width) / kGradientBands;
+        const double position = (band + 0.5) / static_cast<double>(kGradientBands);
+        HPEN pen = CreatePen(
+            PS_SOLID,
+            1,
+            fadeToBackground(enhancedGradientColor(position), 0.70));
+        HGDIOBJ previousPen = SelectObject(dc, pen);
+        MoveToEx(dc, x1, centerY, nullptr);
+        LineTo(dc, x2, centerY);
+        SelectObject(dc, previousPen);
+        DeleteObject(pen);
+    }
+}
+
+void drawEnhancedOverlay(HDC dc, const RECT& client) {
+    const RECT panel{0, 0, client.right - 1, client.bottom - 1};
+    drawRoundedBox(dc, panel, 28, RGB(14, 18, 27), RGB(61, 73, 97), 1);
+
+    // Listening indicator.
+    const int centerX = 42;
+    const int centerY = client.bottom / 2;
+    HPEN outerPen = CreatePen(PS_SOLID, 2, RGB(32, 204, 224));
+    HGDIOBJ previousPen = SelectObject(dc, outerPen);
+    HGDIOBJ previousBrush = SelectObject(dc, GetStockObject(NULL_BRUSH));
+    Ellipse(dc, centerX - 26, centerY - 26, centerX + 26, centerY + 26);
+    SelectObject(dc, previousBrush);
+    SelectObject(dc, previousPen);
+    DeleteObject(outerPen);
+
+    HPEN innerPen = CreatePen(PS_SOLID, 1, RGB(29, 104, 139));
+    previousPen = SelectObject(dc, innerPen);
+    previousBrush = SelectObject(dc, GetStockObject(NULL_BRUSH));
+    Ellipse(dc, centerX - 19, centerY - 19, centerX + 19, centerY + 19);
+    SelectObject(dc, previousBrush);
+    SelectObject(dc, previousPen);
+    DeleteObject(innerPen);
+
+    HBRUSH dotBrush = CreateSolidBrush(RGB(42, 225, 235));
+    previousBrush = SelectObject(dc, dotBrush);
+    previousPen = SelectObject(dc, GetStockObject(NULL_PEN));
+    Ellipse(dc, centerX - 7, centerY - 7, centerX + 7, centerY + 7);
+    SelectObject(dc, previousPen);
+    SelectObject(dc, previousBrush);
+    DeleteObject(dotBrush);
+
+    SetBkMode(dc, TRANSPARENT);
+    SetTextColor(dc, RGB(246, 247, 250));
+    HFONT previousFont = reinterpret_cast<HFONT>(SelectObject(dc, g_overlay.enhancedTitleFont));
+    RECT title{76, 46, 196, 75};
+    DrawTextW(dc, L"Listening", -1, &title, DT_LEFT | DT_SINGLELINE | DT_VCENTER);
+
+    SelectObject(dc, g_overlay.enhancedSubtitleFont);
+    SetTextColor(dc, RGB(158, 170, 190));
+    RECT subtitle{76, 76, 196, 101};
+    DrawTextW(dc, L"Universal Dictate", -1, &subtitle, DT_LEFT | DT_SINGLELINE | DT_VCENTER);
+
+    drawEnhancedWaveform(dc, client);
+
+    const int dividerX = client.right - 224;
+    HPEN dividerPen = CreatePen(PS_SOLID, 1, RGB(48, 58, 76));
+    previousPen = SelectObject(dc, dividerPen);
+    MoveToEx(dc, dividerX, 34, nullptr);
+    LineTo(dc, dividerX, client.bottom - 34);
+    SelectObject(dc, previousPen);
+    DeleteObject(dividerPen);
+
+    const bool actionSent = g_overlay.actionSent.load(std::memory_order_acquire);
+    const RECT okRect = confirmRect(client);
+    const RECT xRect = cancelRect(client);
+    drawRoundedBox(
+        dc,
+        okRect,
+        16,
+        actionSent ? RGB(36, 40, 47) : RGB(17, 30, 40),
+        actionSent ? RGB(71, 75, 82) : RGB(35, 197, 219),
+        1);
+    drawRoundedBox(
+        dc,
+        xRect,
+        16,
+        actionSent ? RGB(36, 40, 47) : RGB(31, 22, 37),
+        actionSent ? RGB(71, 75, 82) : RGB(221, 58, 168),
+        1);
+
+    SelectObject(dc, g_overlay.symbolFont);
+    SetTextColor(dc, actionSent ? RGB(145, 145, 145) : RGB(57, 222, 235));
+    RECT okIcon{okRect.left + 8, okRect.top, okRect.left + 34, okRect.bottom};
+    DrawTextW(dc, L"\x2713", -1, &okIcon, DT_CENTER | DT_SINGLELINE | DT_VCENTER);
+    SetTextColor(dc, actionSent ? RGB(145, 145, 145) : RGB(239, 76, 186));
+    RECT xIcon{xRect.left + 8, xRect.top, xRect.left + 34, xRect.bottom};
+    DrawTextW(dc, L"\x00D7", -1, &xIcon, DT_CENTER | DT_SINGLELINE | DT_VCENTER);
+
+    SelectObject(dc, g_overlay.enhancedButtonFont);
+    SetTextColor(dc, actionSent ? RGB(155, 155, 155) : RGB(241, 244, 249));
+    RECT okLabel{okRect.left + 34, okRect.top, okRect.right - 6, okRect.bottom};
+    RECT xLabel{xRect.left + 32, xRect.top, xRect.right - 4, xRect.bottom};
+    DrawTextW(dc, L"Insert", -1, &okLabel, DT_CENTER | DT_SINGLELINE | DT_VCENTER);
+    DrawTextW(dc, L"Discard", -1, &xLabel, DT_CENTER | DT_SINGLELINE | DT_VCENTER);
+
+    SelectObject(dc, previousFont);
+}
+
+void drawCompactOverlay(HDC dc, const RECT& client) {
     HBRUSH background = CreateSolidBrush(RGB(21, 24, 26));
     FillRect(dc, &client, background);
     DeleteObject(background);
@@ -377,6 +620,17 @@ void drawOverlay(HWND window, HDC dc) {
     SelectObject(dc, previousFont);
 }
 
+void drawOverlay(HWND window, HDC dc) {
+    RECT client{};
+    GetClientRect(window, &client);
+
+    if (g_overlay.enhanced) {
+        drawEnhancedOverlay(dc, client);
+    } else {
+        drawCompactOverlay(dc, client);
+    }
+}
+
 LRESULT CALLBACK overlayWindowProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
     switch (message) {
         case WM_MOUSEACTIVATE:
@@ -409,7 +663,32 @@ LRESULT CALLBACK overlayWindowProc(HWND window, UINT message, WPARAM wParam, LPA
         case WM_PAINT: {
             PAINTSTRUCT paint{};
             HDC dc = BeginPaint(window, &paint);
-            drawOverlay(window, dc);
+            RECT client{};
+            GetClientRect(window, &client);
+            const int width = std::max(1L, client.right - client.left);
+            const int height = std::max(1L, client.bottom - client.top);
+
+            HDC bufferDc = CreateCompatibleDC(dc);
+            HBITMAP bufferBitmap = bufferDc == nullptr
+                ? nullptr
+                : CreateCompatibleBitmap(dc, width, height);
+            if (bufferDc != nullptr && bufferBitmap != nullptr) {
+                HGDIOBJ previousBitmap = SelectObject(bufferDc, bufferBitmap);
+                drawOverlay(window, bufferDc);
+                BitBlt(dc, 0, 0, width, height, bufferDc, 0, 0, SRCCOPY);
+                SelectObject(bufferDc, previousBitmap);
+                DeleteObject(bufferBitmap);
+                DeleteDC(bufferDc);
+            } else {
+                if (bufferBitmap != nullptr) {
+                    DeleteObject(bufferBitmap);
+                }
+                if (bufferDc != nullptr) {
+                    DeleteDC(bufferDc);
+                }
+                drawOverlay(window, dc);
+            }
+
             EndPaint(window, &paint);
             return 0;
         }
@@ -460,7 +739,7 @@ RECT overlayWorkArea(HMONITOR monitor) {
     return RECT{0, 0, GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN)};
 }
 
-bool createOverlay(HMONITOR targetMonitor) {
+bool createOverlay(HMONITOR targetMonitor, bool enhanced) {
     HINSTANCE instance = GetModuleHandleW(nullptr);
 
     WNDCLASSEXW windowClass{};
@@ -475,9 +754,16 @@ bool createOverlay(HMONITOR targetMonitor) {
         return false;
     }
 
+    g_overlay.enhanced = enhanced;
+    g_overlay.levelMilli = 0;
+    g_overlay.levelHistory.fill(0);
+    g_overlay.actionSent.store(false, std::memory_order_release);
+
+    const int overlayWidth = enhanced ? kEnhancedOverlayWidth : kOverlayWidth;
+    const int overlayHeight = enhanced ? kEnhancedOverlayHeight : kOverlayHeight;
     const RECT workArea = overlayWorkArea(targetMonitor);
-    const int x = std::max(workArea.left, workArea.right - kOverlayWidth - kOverlayMargin);
-    const int y = std::max(workArea.top, workArea.bottom - kOverlayHeight - kOverlayMargin);
+    const int x = std::max(workArea.left, workArea.right - overlayWidth - kOverlayMargin);
+    const int y = std::max(workArea.top, workArea.bottom - overlayHeight - kOverlayMargin);
 
     g_overlay.textFont = CreateFontW(
         -15, 0, 0, 0, FW_SEMIBOLD, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
@@ -488,6 +774,21 @@ bool createOverlay(HMONITOR targetMonitor) {
         OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
         DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI Symbol");
 
+    if (enhanced) {
+        g_overlay.enhancedTitleFont = CreateFontW(
+            -20, 0, 0, 0, FW_SEMIBOLD, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
+            OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
+            DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
+        g_overlay.enhancedSubtitleFont = CreateFontW(
+            -13, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
+            OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
+            DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
+        g_overlay.enhancedButtonFont = CreateFontW(
+            -14, 0, 0, 0, FW_SEMIBOLD, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
+            OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
+            DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
+    }
+
     g_overlay.window = CreateWindowExW(
         WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE,
         kOverlayClassName,
@@ -495,8 +796,8 @@ bool createOverlay(HMONITOR targetMonitor) {
         WS_POPUP,
         x,
         y,
-        kOverlayWidth,
-        kOverlayHeight,
+        overlayWidth,
+        overlayHeight,
         nullptr,
         nullptr,
         instance,
@@ -506,14 +807,21 @@ bool createOverlay(HMONITOR targetMonitor) {
         return false;
     }
 
+    if (enhanced) {
+        HRGN region = CreateRoundRectRgn(0, 0, overlayWidth + 1, overlayHeight + 1, 30, 30);
+        if (region != nullptr && SetWindowRgn(g_overlay.window, region, FALSE) == 0) {
+            DeleteObject(region);
+        }
+    }
+
     ShowWindow(g_overlay.window, SW_SHOWNOACTIVATE);
     SetWindowPos(
         g_overlay.window,
         HWND_TOPMOST,
         x,
         y,
-        kOverlayWidth,
-        kOverlayHeight,
+        overlayWidth,
+        overlayHeight,
         SWP_NOACTIVATE | SWP_SHOWWINDOW);
     UpdateWindow(g_overlay.window);
     return true;
@@ -532,6 +840,19 @@ void destroyOverlay() noexcept {
         DeleteObject(g_overlay.symbolFont);
         g_overlay.symbolFont = nullptr;
     }
+    if (g_overlay.enhancedTitleFont != nullptr) {
+        DeleteObject(g_overlay.enhancedTitleFont);
+        g_overlay.enhancedTitleFont = nullptr;
+    }
+    if (g_overlay.enhancedSubtitleFont != nullptr) {
+        DeleteObject(g_overlay.enhancedSubtitleFont);
+        g_overlay.enhancedSubtitleFont = nullptr;
+    }
+    if (g_overlay.enhancedButtonFont != nullptr) {
+        DeleteObject(g_overlay.enhancedButtonFont);
+        g_overlay.enhancedButtonFont = nullptr;
+    }
+    g_overlay.enhanced = false;
     UnregisterClassW(kOverlayClassName, GetModuleHandleW(nullptr));
 }
 
@@ -591,6 +912,7 @@ int main(int argc, char** argv) {
     }
 
     const bool overlayEnabled = !hasFlag(argc, argv, "--no-overlay");
+    const bool enhancedOverlay = hasFlag(argc, argv, "--enhanced-overlay");
 
     // Capture the active target monitor immediately, before microphone setup can
     // introduce enough delay for the foreground window to change.
@@ -650,7 +972,7 @@ int main(int argc, char** argv) {
 
     bool overlayAvailable = false;
     if (overlayEnabled) {
-        overlayAvailable = createOverlay(overlayMonitor);
+        overlayAvailable = createOverlay(overlayMonitor, enhancedOverlay);
         if (!overlayAvailable) {
             std::cerr << "WARNING recording overlay could not be created; keyboard controls remain available\n";
         }
