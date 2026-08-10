@@ -31,17 +31,17 @@ const VISUALIZATION_LABELS: Record<VisualizationMode, string> = {
 function getConfiguredVisualization(): VisualizationMode {
   const value = vscode.workspace
     .getConfiguration('universalDictate')
-    .get<string>('visualization', 'both');
+    .get<string>('visualization', 'enhancedOverlay');
 
   switch (value) {
+    case 'both':
     case 'overlay':
     case 'enhancedOverlay':
     case 'statusBar':
     case 'off':
       return value;
-    case 'both':
     default:
-      return 'both';
+      return 'enhancedOverlay';
   }
 }
 
@@ -58,7 +58,7 @@ class DictationController implements vscode.Disposable {
   private readonly settingsStatusBar: vscode.StatusBarItem;
   private readonly levelHistory = Array<number>(9).fill(0);
   private readonly engine: DictationEngine;
-  private activeVisualization: VisualizationMode = 'both';
+  private activeVisualization: VisualizationMode = 'enhancedOverlay';
 
   constructor(private readonly context: vscode.ExtensionContext) {
     // Use distinct stable IDs so VS Code can track the Dictate and settings
