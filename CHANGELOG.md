@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.2
+
+Enhanced recording visualization, settings and status-bar polish.
+
+- Add the new default **Enhanced overlay**: a non-activating native Windows recording panel with a sensitive signed PCM waveform, scientific signal styling and compact `Insert` / `Discard` controls.
+- Keep captured waveform samples visually stable as they move through the bounded history instead of continuously reshaping older signal segments.
+- Add audio-visualization choices for **Both**, **Enhanced overlay**, **Status bar only** and **Off**; remove the legacy large overlay from the user-facing settings while mapping old persisted `overlay` values to Enhanced for compatibility.
+- Add the Universal Dictate settings gear and in-app audio-visualization picker alongside the existing 99-language Whisper picker.
+- Move the `Dictate` and settings status-bar items into VS Code's right-side utility group while preserving the order `Dictate` → settings.
+- Keep the status-bar microphone level display width stable during recording and make the recording item clickable to stop and transcribe.
+- Preserve the accepted non-activating overlay behavior, multi-monitor placement including negative virtual-screen coordinates, `Ctrl+Alt+D`, `Esc`, focused insertion and Remote - WSL support.
+
 ## 0.1.1
 
 Performance, UI and Marketplace polish.
