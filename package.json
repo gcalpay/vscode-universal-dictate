@@ -1,7 +1,7 @@
 {
   "name": "vscode-universal-dictate",
   "displayName": "Universal Dictate",
-  "description": "Local, offline, multilingual speech-to-text for VS Code on Windows, with 99 Whisper languages and support for agent/chat extensions such as OpenAI Codex, including Remote - WSL.",
+  "description": "Local, offline dictation for VS Code on Windows. Dictate into editors and agent/chat prompts such as Codex, then review the transcript before sending. 99 Whisper languages. Remote-WSL.",
   "version": "0.1.2",
   "license": "MIT",
   "publisher": "gcalpay",
