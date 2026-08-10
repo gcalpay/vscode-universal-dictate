@@ -5,9 +5,9 @@
  * compiled at build time; it is not a runtime dependency.
  *
  * The recorder also owns a non-activating Win32 overlay. The overlay renders
- * a compact adaptive rolling signal field or an optional enhanced amplitude-
- * driven signal field and exposes confirm/cancel controls without taking
- * keyboard focus away from the VS Code input being dictated into.
+ * a compact adaptive rolling signal field or an optional enhanced PCM-driven
+ * signal view and exposes confirm/cancel controls without taking keyboard
+ * focus away from the VS Code input being dictated into.
  *
  * Protocol (stdout):
  *   READY
@@ -63,7 +63,10 @@ constexpr int kEnhancedOverlayHeight = 128;
 constexpr int kOverlayMargin = 18;
 constexpr int kSignalPoints = 64;
 constexpr int kNoiseFloorMilli = 6;
-constexpr int kEnhancedReferenceMilli = 105;
+constexpr int kEnhancedSignalPoints = 256;
+constexpr int kEnhancedBucketFrames = 50;
+constexpr double kEnhancedPcmNoiseFloor = 0.001;
+constexpr double kEnhancedPcmReference = 0.045;
 constexpr wchar_t kOverlayClassName[] = L"UniversalDictateRecordingOverlay";
 
 enum class RecorderCommand : int {
@@ -112,11 +115,52 @@ private:
     bool open_ = false;
 };
 
+int enhancedVisualSample(int sample) {
+    const int clamped = std::clamp(sample, -32767, 32767);
+    const int magnitude = std::abs(clamped);
+    if (magnitude == 0) {
+        return 0;
+    }
+
+    const double normalizedPcm = static_cast<double>(magnitude) / 32767.0;
+    if (normalizedPcm <= kEnhancedPcmNoiseFloor) {
+        return 0;
+    }
+
+    const double normalized = std::clamp(
+        (normalizedPcm - kEnhancedPcmNoiseFloor) /
+            (kEnhancedPcmReference - kEnhancedPcmNoiseFloor),
+        0.0,
+        1.0);
+    const double shaped = std::pow(normalized, 0.62);
+    const int visualMagnitude = std::clamp(
+        static_cast<int>(std::lround(shaped * 1000.0)),
+        0,
+        1000);
+    return clamped < 0 ? -visualMagnitude : visualMagnitude;
+}
+
 struct CaptureState {
     Encoder* encoder = nullptr;
     std::atomic<int> peakMilli{0};
-    std::atomic<int> signedPeakMilli{0};
+
+    // Lock-free bounded PCM visualization ring. The capture callback is the
+    // sole writer. The overlay thread snapshots completed entries via the
+    // monotonically increasing write counter.
+    std::array<std::atomic<int>, kEnhancedSignalPoints> enhancedSignal{};
+    std::atomic<std::uint64_t> enhancedWriteCount{0};
+    int enhancedBucketFrames = 0;
+    int enhancedBucketPeak = 0;
 };
+
+void pushEnhancedSignalPoint(CaptureState& state, int signedPcmPeak) {
+    const int visualSample = enhancedVisualSample(signedPcmPeak);
+    const std::uint64_t writeIndex =
+        state.enhancedWriteCount.load(std::memory_order_relaxed);
+    state.enhancedSignal[static_cast<std::size_t>(writeIndex % kEnhancedSignalPoints)]
+        .store(visualSample, std::memory_order_relaxed);
+    state.enhancedWriteCount.store(writeIndex + 1, std::memory_order_release);
+}
 
 void captureCallback(
     ma_device* device,
@@ -134,22 +178,27 @@ void captureCallback(
 
     const auto* samples = static_cast<const ma_int16*>(input);
     int peak = 0;
-    int signedPeak = 0;
     const auto sampleCount = static_cast<std::size_t>(frameCount) * kChannels;
 
     for (std::size_t i = 0; i < sampleCount; ++i) {
         const int sample = static_cast<int>(samples[i]);
         const int magnitude = std::abs(sample);
-        if (magnitude > peak) {
-            peak = magnitude;
-            signedPeak = sample;
+        peak = std::max(peak, magnitude);
+
+        if (magnitude > std::abs(state->enhancedBucketPeak)) {
+            state->enhancedBucketPeak = sample;
+        }
+        ++state->enhancedBucketFrames;
+
+        if (state->enhancedBucketFrames >= kEnhancedBucketFrames) {
+            pushEnhancedSignalPoint(*state, state->enhancedBucketPeak);
+            state->enhancedBucketFrames = 0;
+            state->enhancedBucketPeak = 0;
         }
     }
 
     peak = std::min(peak, 32767);
-    signedPeak = std::clamp(signedPeak, -32767, 32767);
     state->peakMilli.store((peak * 1000) / 32767, std::memory_order_relaxed);
-    state->signedPeakMilli.store((signedPeak * 1000) / 32767, std::memory_order_relaxed);
 }
 
 class CaptureDevice {
@@ -203,8 +252,7 @@ struct OverlayState {
     ULONG_PTR gdiplusToken = 0;
     int levelMilli = 0;
     std::array<int, kSignalPoints> levelHistory{};
-    std::array<int, kSignalPoints> enhancedEnvelopeHistory{};
-    std::array<int, kSignalPoints> enhancedWaveHistory{};
+    std::array<int, kEnhancedSignalPoints> enhancedSignalHistory{};
     bool enhanced = false;
     std::atomic<bool> actionSent{false};
 };
@@ -213,14 +261,14 @@ OverlayState g_overlay;
 
 RECT confirmRect(const RECT& client) {
     if (g_overlay.enhanced) {
-        return RECT{client.right - 166, 41, client.right - 88, 87};
+        return RECT{client.right - 132, 49, client.right - 72, 79};
     }
     return RECT{client.right - 92, 30, client.right - 52, client.bottom - 30};
 }
 
 RECT cancelRect(const RECT& client) {
     if (g_overlay.enhanced) {
-        return RECT{client.right - 82, 41, client.right - 4, 87};
+        return RECT{client.right - 66, 49, client.right - 6, 79};
     }
     return RECT{client.right - 46, 30, client.right - 6, client.bottom - 30};
 }
@@ -249,40 +297,6 @@ int smoothedHistoryLevel(int index) {
     }
 
     return weightTotal == 0 ? 0 : weighted / weightTotal;
-}
-
-COLORREF interpolateColor(COLORREF left, COLORREF right, double amount) {
-    const double t = std::clamp(amount, 0.0, 1.0);
-    const int red = static_cast<int>(std::lround(
-        static_cast<double>(GetRValue(left)) +
-        (static_cast<double>(GetRValue(right)) - GetRValue(left)) * t));
-    const int green = static_cast<int>(std::lround(
-        static_cast<double>(GetGValue(left)) +
-        (static_cast<double>(GetGValue(right)) - GetGValue(left)) * t));
-    const int blue = static_cast<int>(std::lround(
-        static_cast<double>(GetBValue(left)) +
-        (static_cast<double>(GetBValue(right)) - GetBValue(left)) * t));
-    return RGB(red, green, blue);
-}
-
-COLORREF enhancedGradientColor(double position) {
-    const COLORREF green = RGB(48, 214, 112);
-    const COLORREF blue = RGB(50, 124, 255);
-    const COLORREF red = RGB(235, 65, 82);
-    const COLORREF orange = RGB(255, 155, 54);
-    const double t = std::clamp(position, 0.0, 1.0);
-
-    if (t < 1.0 / 3.0) {
-        return interpolateColor(green, blue, t * 3.0);
-    }
-    if (t < 2.0 / 3.0) {
-        return interpolateColor(blue, red, (t - 1.0 / 3.0) * 3.0);
-    }
-    return interpolateColor(red, orange, (t - 2.0 / 3.0) * 3.0);
-}
-
-COLORREF fadeToBackground(COLORREF color, double strength) {
-    return interpolateColor(RGB(14, 18, 27), color, strength);
 }
 
 Gdiplus::Color gdiplusColor(COLORREF color, BYTE alpha = 255) {
@@ -335,9 +349,9 @@ void drawAntialiasedRoundedButton(
     graphics.SetPixelOffsetMode(Gdiplus::PixelOffsetModeHighQuality);
 
     Gdiplus::GraphicsPath path;
-    appendRoundedRectPath(path, rect, 12.0f);
+    appendRoundedRectPath(path, rect, 9.0f);
     Gdiplus::SolidBrush fillBrush(gdiplusColor(fill));
-    Gdiplus::Pen borderPen(gdiplusColor(border, disabled ? 150 : 235), 1.5f);
+    Gdiplus::Pen borderPen(gdiplusColor(border, disabled ? 150 : 225), 1.25f);
     graphics.FillPath(&fillBrush, &path);
     graphics.DrawPath(&borderPen, &path);
 }
@@ -377,8 +391,6 @@ void drawSignalField(HDC dc, const RECT& client) {
         lowerOuter[static_cast<std::size_t>(index)] = POINT{x, centerY + amplitude};
     }
 
-    // A restrained filled body gives the wave visual mass. The many contour
-    // lines below provide the Schlieren/interference-like structure.
     std::array<POINT, kSignalPoints * 2> ribbon{};
     for (int index = 0; index < kSignalPoints; ++index) {
         ribbon[static_cast<std::size_t>(index)] = upperOuter[static_cast<std::size_t>(index)];
@@ -394,8 +406,6 @@ void drawSignalField(HDC dc, const RECT& client) {
     DeleteObject(ribbonBrush);
     SelectObject(dc, previousPen);
 
-    // Fine vertical filaments give the field the line-stack character of a
-    // Schlieren/spectral visualization without pretending to be an FFT.
     HPEN filamentPen = CreatePen(PS_SOLID, 1, RGB(42, 78, 84));
     previousPen = SelectObject(dc, filamentPen);
     for (int index = 0; index < kSignalPoints; ++index) {
@@ -455,25 +465,9 @@ void drawSignalField(HDC dc, const RECT& client) {
     DeleteObject(axisPen);
 }
 
-int enhancedVisualAmplitude(int levelMilli) {
-    const double numerator = static_cast<double>(std::max(0, levelMilli - kNoiseFloorMilli));
-    const double denominator = static_cast<double>(kEnhancedReferenceMilli - kNoiseFloorMilli);
-    const double normalized = std::clamp(numerator / denominator, 0.0, 1.0);
-    if (normalized <= 0.0) {
-        return 0;
-    }
-
-    const double shaped = std::pow(normalized, 0.48);
-    return std::clamp(static_cast<int>(std::lround(shaped * 1000.0)), 0, 1000);
-}
-
 void drawEnhancedWaveform(HDC dc, const RECT& client) {
-    constexpr int kGradientBands = 16;
-    static constexpr std::array<double, 4> envelopeScales{1.00, 0.72, 0.46, 0.24};
-    static constexpr std::array<BYTE, 4> envelopeAlpha{235, 170, 120, 80};
-
     const int left = 148;
-    const int right = client.right - 182;
+    const int right = client.right - 144;
     const int top = 8;
     const int bottom = client.bottom - 8;
     const int centerY = (top + bottom) / 2;
@@ -484,108 +478,64 @@ void drawEnhancedWaveform(HDC dc, const RECT& client) {
     graphics.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
     graphics.SetPixelOffsetMode(Gdiplus::PixelOffsetModeHighQuality);
 
-    // Stable, fixed-height vertical filaments make the display read like a
-    // scientific signal plot. Each filament is computed once when that audio
-    // slice arrives, then merely shifts left with the bounded history.
-    for (int index = 0; index < kSignalPoints; index += 2) {
-        const int envelope = g_overlay.enhancedEnvelopeHistory[static_cast<std::size_t>(index)];
-        if (envelope <= 0) {
-            continue;
-        }
+    const Gdiplus::Color axisColor(115, 41, 82, 58);
+    const Gdiplus::Color envelopeOuterColor(130, 36, 118, 72);
+    const Gdiplus::Color envelopeInnerColor(85, 45, 145, 88);
+    const Gdiplus::Color mainWaveColor(245, 66, 205, 118);
+
+    Gdiplus::Pen axisPen(axisColor, 0.8f);
+    graphics.DrawLine(
+        &axisPen,
+        Gdiplus::PointF(static_cast<Gdiplus::REAL>(left), static_cast<Gdiplus::REAL>(centerY)),
+        Gdiplus::PointF(static_cast<Gdiplus::REAL>(right), static_cast<Gdiplus::REAL>(centerY)));
+
+    std::array<Gdiplus::PointF, kEnhancedSignalPoints> wave{};
+    std::array<Gdiplus::PointF, kEnhancedSignalPoints> upperOuter{};
+    std::array<Gdiplus::PointF, kEnhancedSignalPoints> lowerOuter{};
+    std::array<Gdiplus::PointF, kEnhancedSignalPoints> upperInner{};
+    std::array<Gdiplus::PointF, kEnhancedSignalPoints> lowerInner{};
+
+    for (int index = 0; index < kEnhancedSignalPoints; ++index) {
+        const int storedSample =
+            g_overlay.enhancedSignalHistory[static_cast<std::size_t>(index)];
+        const int storedMagnitude = std::abs(storedSample);
         const Gdiplus::REAL x = static_cast<Gdiplus::REAL>(left) +
-            static_cast<Gdiplus::REAL>(index * width) / static_cast<Gdiplus::REAL>(kSignalPoints - 1);
-        const Gdiplus::REAL amplitude = static_cast<Gdiplus::REAL>(maxAmplitude * envelope) / 1000.0f;
-        const double position = static_cast<double>(index) / static_cast<double>(kSignalPoints - 1);
-        Gdiplus::Pen filament(
-            gdiplusColor(enhancedGradientColor(position), 58),
-            1.0f);
-        graphics.DrawLine(
-            &filament,
-            Gdiplus::PointF(x, static_cast<Gdiplus::REAL>(centerY) - amplitude),
-            Gdiplus::PointF(x, static_cast<Gdiplus::REAL>(centerY) + amplitude));
-    }
-
-    std::array<Gdiplus::PointF, kSignalPoints> upper{};
-    std::array<Gdiplus::PointF, kSignalPoints> lower{};
-
-    // Multiple deterministic nested envelopes create the Fourier/signal-plot
-    // aesthetic without FFT work. There is intentionally no time-varying shape
-    // perturbation: generated history never wobbles or morphs in place.
-    for (std::size_t layer = 0; layer < envelopeScales.size(); ++layer) {
-        for (int index = 0; index < kSignalPoints; ++index) {
-            const Gdiplus::REAL x = static_cast<Gdiplus::REAL>(left) +
-                static_cast<Gdiplus::REAL>(index * width) / static_cast<Gdiplus::REAL>(kSignalPoints - 1);
-            const Gdiplus::REAL amplitude =
-                static_cast<Gdiplus::REAL>(maxAmplitude) *
-                static_cast<Gdiplus::REAL>(g_overlay.enhancedEnvelopeHistory[static_cast<std::size_t>(index)]) /
-                1000.0f * static_cast<Gdiplus::REAL>(envelopeScales[layer]);
-            upper[static_cast<std::size_t>(index)] =
-                Gdiplus::PointF(x, static_cast<Gdiplus::REAL>(centerY) - amplitude);
-            lower[static_cast<std::size_t>(index)] =
-                Gdiplus::PointF(x, static_cast<Gdiplus::REAL>(centerY) + amplitude);
-        }
-
-        for (int band = 0; band < kGradientBands; ++band) {
-            const int start = (band * (kSignalPoints - 1)) / kGradientBands;
-            const int end = ((band + 1) * (kSignalPoints - 1)) / kGradientBands;
-            if (end <= start) {
-                continue;
-            }
-            const double position = (static_cast<double>(start + end) * 0.5) /
-                static_cast<double>(kSignalPoints - 1);
-            Gdiplus::Pen pen(
-                gdiplusColor(enhancedGradientColor(position), envelopeAlpha[layer]),
-                layer == 0 ? 1.8f : 1.0f);
-            graphics.DrawLines(&pen, upper.data() + start, end - start + 1);
-            graphics.DrawLines(&pen, lower.data() + start, end - start + 1);
-        }
-    }
-
-    // The signed trace comes from the actual sign of the strongest PCM sample
-    // in each 50 ms slice. It gives the visualization a genuine waveform-like
-    // center trace while the symmetric envelopes continue to encode loudness.
-    std::array<Gdiplus::PointF, kSignalPoints> wave{};
-    for (int index = 0; index < kSignalPoints; ++index) {
-        const Gdiplus::REAL x = static_cast<Gdiplus::REAL>(left) +
-            static_cast<Gdiplus::REAL>(index * width) / static_cast<Gdiplus::REAL>(kSignalPoints - 1);
+            static_cast<Gdiplus::REAL>(index * width) /
+                static_cast<Gdiplus::REAL>(kEnhancedSignalPoints - 1);
         const Gdiplus::REAL signedAmplitude =
-            static_cast<Gdiplus::REAL>(maxAmplitude) * 0.82f *
-            static_cast<Gdiplus::REAL>(g_overlay.enhancedWaveHistory[static_cast<std::size_t>(index)]) /
-            1000.0f;
+            static_cast<Gdiplus::REAL>(maxAmplitude * storedSample) / 1000.0f;
+        const Gdiplus::REAL envelopeAmplitude =
+            static_cast<Gdiplus::REAL>(maxAmplitude * storedMagnitude) / 1000.0f;
+
         wave[static_cast<std::size_t>(index)] =
             Gdiplus::PointF(x, static_cast<Gdiplus::REAL>(centerY) - signedAmplitude);
+        upperOuter[static_cast<std::size_t>(index)] =
+            Gdiplus::PointF(x, static_cast<Gdiplus::REAL>(centerY) - envelopeAmplitude);
+        lowerOuter[static_cast<std::size_t>(index)] =
+            Gdiplus::PointF(x, static_cast<Gdiplus::REAL>(centerY) + envelopeAmplitude);
+        upperInner[static_cast<std::size_t>(index)] =
+            Gdiplus::PointF(x, static_cast<Gdiplus::REAL>(centerY) - envelopeAmplitude * 0.56f);
+        lowerInner[static_cast<std::size_t>(index)] =
+            Gdiplus::PointF(x, static_cast<Gdiplus::REAL>(centerY) + envelopeAmplitude * 0.56f);
     }
 
-    for (int band = 0; band < kGradientBands; ++band) {
-        const int start = (band * (kSignalPoints - 1)) / kGradientBands;
-        const int end = ((band + 1) * (kSignalPoints - 1)) / kGradientBands;
-        if (end <= start) {
-            continue;
-        }
-        const double position = (static_cast<double>(start + end) * 0.5) /
-            static_cast<double>(kSignalPoints - 1);
-        Gdiplus::Pen wavePen(gdiplusColor(enhancedGradientColor(position), 245), 1.6f);
-        graphics.DrawLines(&wavePen, wave.data() + start, end - start + 1);
-    }
-
-    for (int band = 0; band < kGradientBands; ++band) {
-        const Gdiplus::REAL x1 = static_cast<Gdiplus::REAL>(left + (band * width) / kGradientBands);
-        const Gdiplus::REAL x2 = static_cast<Gdiplus::REAL>(left + ((band + 1) * width) / kGradientBands);
-        const double position = (band + 0.5) / static_cast<double>(kGradientBands);
-        Gdiplus::Pen axis(gdiplusColor(enhancedGradientColor(position), 120), 0.8f);
-        graphics.DrawLine(
-            &axis,
-            Gdiplus::PointF(x1, static_cast<Gdiplus::REAL>(centerY)),
-            Gdiplus::PointF(x2, static_cast<Gdiplus::REAL>(centerY)));
-    }
+    // All geometry is derived directly from stored visual PCM samples. No
+    // neighbor smoothing, rolling normalization, phase animation or per-frame
+    // modulation is applied, so old samples never change shape in place.
+    Gdiplus::Pen outerPen(envelopeOuterColor, 0.9f);
+    Gdiplus::Pen innerPen(envelopeInnerColor, 0.8f);
+    Gdiplus::Pen wavePen(mainWaveColor, 1.55f);
+    graphics.DrawLines(&outerPen, upperOuter.data(), static_cast<INT>(upperOuter.size()));
+    graphics.DrawLines(&outerPen, lowerOuter.data(), static_cast<INT>(lowerOuter.size()));
+    graphics.DrawLines(&innerPen, upperInner.data(), static_cast<INT>(upperInner.size()));
+    graphics.DrawLines(&innerPen, lowerInner.data(), static_cast<INT>(lowerInner.size()));
+    graphics.DrawLines(&wavePen, wave.data(), static_cast<INT>(wave.size()));
 }
 
 void drawEnhancedOverlay(HDC dc, const RECT& client) {
     const RECT panel{0, 0, client.right - 1, client.bottom - 1};
     drawRoundedBox(dc, panel, 24, RGB(14, 18, 27), RGB(59, 70, 91), 1);
 
-    // GDI+ anti-aliasing removes the jagged small-circle appearance seen in the
-    // first physical acceptance passes without changing the Win32 overlay model.
     {
         Gdiplus::Graphics graphics(dc);
         graphics.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
@@ -593,37 +543,34 @@ void drawEnhancedOverlay(HDC dc, const RECT& client) {
         const Gdiplus::REAL centerX = 28.0f;
         const Gdiplus::REAL centerY = static_cast<Gdiplus::REAL>(client.bottom) / 2.0f;
 
-        Gdiplus::SolidBrush outerBrush(gdiplusColor(RGB(48, 214, 112), 245));
-        graphics.FillEllipse(&outerBrush, centerX - 18.0f, centerY - 18.0f, 36.0f, 36.0f);
+        Gdiplus::SolidBrush outerBrush(gdiplusColor(RGB(49, 190, 105), 240));
+        graphics.FillEllipse(&outerBrush, centerX - 16.0f, centerY - 16.0f, 32.0f, 32.0f);
 
         Gdiplus::SolidBrush innerBrush(gdiplusColor(RGB(14, 18, 27)));
-        graphics.FillEllipse(&innerBrush, centerX - 15.0f, centerY - 15.0f, 30.0f, 30.0f);
+        graphics.FillEllipse(&innerBrush, centerX - 13.0f, centerY - 13.0f, 26.0f, 26.0f);
 
-        Gdiplus::Pen innerRing(gdiplusColor(RGB(50, 124, 255), 155), 1.0f);
-        graphics.DrawEllipse(&innerRing, centerX - 12.0f, centerY - 12.0f, 24.0f, 24.0f);
-
-        Gdiplus::SolidBrush dotBrush(gdiplusColor(RGB(50, 124, 255)));
-        graphics.FillEllipse(&dotBrush, centerX - 4.5f, centerY - 4.5f, 9.0f, 9.0f);
+        Gdiplus::SolidBrush dotBrush(gdiplusColor(RGB(66, 205, 118)));
+        graphics.FillEllipse(&dotBrush, centerX - 4.0f, centerY - 4.0f, 8.0f, 8.0f);
     }
 
     SetBkMode(dc, TRANSPARENT);
     SetTextColor(dc, RGB(244, 246, 250));
     HFONT previousFont = reinterpret_cast<HFONT>(SelectObject(dc, g_overlay.enhancedTitleFont));
-    RECT title{52, 39, 143, 63};
+    RECT title{50, 39, 143, 63};
     DrawTextW(dc, L"Listening", -1, &title, DT_LEFT | DT_SINGLELINE | DT_VCENTER);
 
     SelectObject(dc, g_overlay.enhancedSubtitleFont);
     SetTextColor(dc, RGB(151, 164, 184));
-    RECT subtitle{52, 64, 143, 84};
+    RECT subtitle{50, 64, 143, 84};
     DrawTextW(dc, L"Universal Dictate", -1, &subtitle, DT_LEFT | DT_SINGLELINE | DT_VCENTER);
 
     drawEnhancedWaveform(dc, client);
 
-    const int dividerX = client.right - 174;
+    const int dividerX = client.right - 140;
     HPEN dividerPen = CreatePen(PS_SOLID, 1, RGB(44, 53, 69));
     HGDIOBJ previousPen = SelectObject(dc, dividerPen);
-    MoveToEx(dc, dividerX, 26, nullptr);
-    LineTo(dc, dividerX, client.bottom - 26);
+    MoveToEx(dc, dividerX, 30, nullptr);
+    LineTo(dc, dividerX, client.bottom - 30);
     SelectObject(dc, previousPen);
     DeleteObject(dividerPen);
 
@@ -633,21 +580,21 @@ void drawEnhancedOverlay(HDC dc, const RECT& client) {
     drawAntialiasedRoundedButton(
         dc,
         okRect,
-        actionSent ? RGB(35, 39, 46) : RGB(15, 29, 24),
-        actionSent ? RGB(71, 75, 82) : RGB(48, 214, 112),
+        actionSent ? RGB(35, 39, 46) : RGB(15, 27, 22),
+        actionSent ? RGB(71, 75, 82) : RGB(47, 151, 91),
         actionSent);
     drawAntialiasedRoundedButton(
         dc,
         xRect,
-        actionSent ? RGB(35, 39, 46) : RGB(31, 20, 23),
-        actionSent ? RGB(71, 75, 82) : RGB(235, 65, 82),
+        actionSent ? RGB(35, 39, 46) : RGB(29, 22, 24),
+        actionSent ? RGB(71, 75, 82) : RGB(168, 71, 78),
         actionSent);
 
     SelectObject(dc, g_overlay.enhancedButtonFont);
-    SetTextColor(dc, actionSent ? RGB(150, 150, 150) : RGB(238, 244, 240));
+    SetTextColor(dc, actionSent ? RGB(150, 150, 150) : RGB(222, 236, 228));
     RECT okLabel = okRect;
     DrawTextW(dc, L"Insert", -1, &okLabel, DT_CENTER | DT_SINGLELINE | DT_VCENTER);
-    SetTextColor(dc, actionSent ? RGB(150, 150, 150) : RGB(248, 238, 239));
+    SetTextColor(dc, actionSent ? RGB(150, 150, 150) : RGB(236, 222, 224));
     RECT xLabel = xRect;
     DrawTextW(dc, L"Discard", -1, &xLabel, DT_CENTER | DT_SINGLELINE | DT_VCENTER);
 
@@ -781,8 +728,6 @@ HMONITOR captureOverlayMonitor() {
         }
     }
 
-    // GetForegroundWindow can transiently return null while activation changes.
-    // The cursor is a useful fallback for mouse-started dictation on multi-monitor setups.
     POINT cursor{};
     if (GetCursorPos(&cursor)) {
         const HMONITOR cursorMonitor = MonitorFromPoint(cursor, MONITOR_DEFAULTTONEAREST);
@@ -829,8 +774,7 @@ bool createOverlay(HMONITOR targetMonitor, bool enhanced) {
     g_overlay.enhanced = enhanced;
     g_overlay.levelMilli = 0;
     g_overlay.levelHistory.fill(0);
-    g_overlay.enhancedEnvelopeHistory.fill(0);
-    g_overlay.enhancedWaveHistory.fill(0);
+    g_overlay.enhancedSignalHistory.fill(0);
     g_overlay.actionSent.store(false, std::memory_order_release);
 
     if (enhanced) {
@@ -866,7 +810,7 @@ bool createOverlay(HMONITOR targetMonitor, bool enhanced) {
             OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
             DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
         g_overlay.enhancedButtonFont = CreateFontW(
-            -13, 0, 0, 0, FW_SEMIBOLD, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
+            -11, 0, 0, 0, FW_SEMIBOLD, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
             OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
             DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
     }
@@ -886,6 +830,10 @@ bool createOverlay(HMONITOR targetMonitor, bool enhanced) {
         nullptr);
 
     if (g_overlay.window == nullptr) {
+        if (g_overlay.gdiplusToken != 0) {
+            Gdiplus::GdiplusShutdown(g_overlay.gdiplusToken);
+            g_overlay.gdiplusToken = 0;
+        }
         return false;
     }
 
@@ -950,7 +898,30 @@ void pumpOverlayMessages() {
     }
 }
 
-void updateOverlayLevel(int levelMilli, int signedPeakMilli) {
+void snapshotEnhancedSignal(const CaptureState& state) {
+    const std::uint64_t writeCount =
+        state.enhancedWriteCount.load(std::memory_order_acquire);
+    const std::uint64_t available = std::min<std::uint64_t>(
+        writeCount,
+        static_cast<std::uint64_t>(kEnhancedSignalPoints));
+    const std::uint64_t start = writeCount - available;
+    const std::size_t leadingZeros =
+        kEnhancedSignalPoints - static_cast<std::size_t>(available);
+
+    std::fill(
+        g_overlay.enhancedSignalHistory.begin(),
+        g_overlay.enhancedSignalHistory.begin() + static_cast<std::ptrdiff_t>(leadingZeros),
+        0);
+
+    for (std::uint64_t index = 0; index < available; ++index) {
+        const std::size_t ringIndex = static_cast<std::size_t>(
+            (start + index) % static_cast<std::uint64_t>(kEnhancedSignalPoints));
+        g_overlay.enhancedSignalHistory[leadingZeros + static_cast<std::size_t>(index)] =
+            state.enhancedSignal[ringIndex].load(std::memory_order_relaxed);
+    }
+}
+
+void updateOverlayLevel(int levelMilli, const CaptureState* captureState) {
     g_overlay.levelMilli = std::clamp(levelMilli, 0, 1000);
     std::move(
         g_overlay.levelHistory.begin() + 1,
@@ -958,21 +929,8 @@ void updateOverlayLevel(int levelMilli, int signedPeakMilli) {
         g_overlay.levelHistory.begin());
     g_overlay.levelHistory.back() = g_overlay.levelMilli;
 
-    if (g_overlay.enhanced) {
-        const int visualAmplitude = enhancedVisualAmplitude(g_overlay.levelMilli);
-        const int sign = signedPeakMilli < 0 ? -1 : (signedPeakMilli > 0 ? 1 : 0);
-
-        std::move(
-            g_overlay.enhancedEnvelopeHistory.begin() + 1,
-            g_overlay.enhancedEnvelopeHistory.end(),
-            g_overlay.enhancedEnvelopeHistory.begin());
-        g_overlay.enhancedEnvelopeHistory.back() = visualAmplitude;
-
-        std::move(
-            g_overlay.enhancedWaveHistory.begin() + 1,
-            g_overlay.enhancedWaveHistory.end(),
-            g_overlay.enhancedWaveHistory.begin());
-        g_overlay.enhancedWaveHistory.back() = visualAmplitude * sign;
+    if (g_overlay.enhanced && captureState != nullptr) {
+        snapshotEnhancedSignal(*captureState);
     }
 
     if (g_overlay.window != nullptr) {
@@ -1017,8 +975,6 @@ int main(int argc, char** argv) {
     const bool overlayEnabled = !hasFlag(argc, argv, "--no-overlay");
     const bool enhancedOverlay = hasFlag(argc, argv, "--enhanced-overlay");
 
-    // Capture the active target monitor immediately, before microphone setup can
-    // introduce enough delay for the foreground window to change.
     const HMONITOR overlayMonitor = overlayEnabled ? captureOverlayMonitor() : nullptr;
 
     Encoder encoder;
@@ -1029,6 +985,10 @@ int main(int argc, char** argv) {
     }
 
     CaptureState captureState{&encoder};
+    for (auto& sample : captureState.enhancedSignal) {
+        sample.store(0, std::memory_order_relaxed);
+    }
+
     CaptureDevice device;
     const ma_result deviceResult = device.open(&captureState, encoder);
     if (deviceResult != MA_SUCCESS) {
@@ -1090,9 +1050,8 @@ int main(int argc, char** argv) {
         }
 
         const int level = captureState.peakMilli.exchange(0, std::memory_order_relaxed);
-        const int signedPeak = captureState.signedPeakMilli.exchange(0, std::memory_order_relaxed);
         if (overlayAvailable) {
-            updateOverlayLevel(level, signedPeak);
+            updateOverlayLevel(level, enhancedOverlay ? &captureState : nullptr);
         }
         if (level != previousLevel) {
             std::printf("LEVEL %.3f\n", static_cast<double>(level) / 1000.0);
