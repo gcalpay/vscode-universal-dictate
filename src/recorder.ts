@@ -29,7 +29,8 @@ export class RecorderSession {
     context: vscode.ExtensionContext,
     onLevel: (level: number) => void,
     showOverlay = true,
-    overlayStyle: RecorderOverlayStyle = 'compact'
+    overlayStyle: RecorderOverlayStyle = 'compact',
+    waveformTimeSpanSeconds = 1
   ): Promise<RecorderSession> {
     const recorderPath = getRecorderPath(context);
     if (!fs.existsSync(recorderPath)) {
@@ -41,7 +42,7 @@ export class RecorderSession {
     const outputPath = path.join(recordingsDir, `dictation-${Date.now()}.wav`);
 
     const core = await CoreRecorderSession.start(
-      { recorderPath, outputPath, showOverlay, overlayStyle },
+      { recorderPath, outputPath, showOverlay, overlayStyle, waveformTimeSpanSeconds },
       onLevel
     );
     return new RecorderSession(core);
