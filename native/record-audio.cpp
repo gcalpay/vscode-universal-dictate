@@ -142,7 +142,7 @@ int enhancedVisualSample(int sample) {
     return clamped < 0 ? -visualMagnitude : visualMagnitude;
 }
 
-int enhancedBucketTargetFrames(int waveformTimeSpanMs) {
+int calculateEnhancedBucketTargetFrames(int waveformTimeSpanMs) {
     const double target =
         static_cast<double>(kSampleRate) * static_cast<double>(waveformTimeSpanMs) /
         (1000.0 * static_cast<double>(kEnhancedSignalPoints));
@@ -158,7 +158,7 @@ struct CaptureState {
     // monotonically increasing write counter.
     std::array<std::atomic<int>, kEnhancedSignalPoints> enhancedSignal{};
     std::atomic<std::uint64_t> enhancedWriteCount{0};
-    int enhancedBucketTargetFrames = enhancedBucketTargetFrames(kDefaultWaveformTimeSpanMs);
+    int enhancedBucketTargetFrames = calculateEnhancedBucketTargetFrames(kDefaultWaveformTimeSpanMs);
     int enhancedBucketFrames = 0;
     int enhancedBucketPeak = 0;
 };
@@ -1019,7 +1019,7 @@ int main(int argc, char** argv) {
     }
 
     CaptureState captureState{&encoder};
-    captureState.enhancedBucketTargetFrames = enhancedBucketTargetFrames(waveformTimeSpanMs);
+    captureState.enhancedBucketTargetFrames = calculateEnhancedBucketTargetFrames(waveformTimeSpanMs);
     for (auto& sample : captureState.enhancedSignal) {
         sample.store(0, std::memory_order_relaxed);
     }
