@@ -3,6 +3,9 @@ import * as fs from 'node:fs';
 import * as readline from 'node:readline';
 
 const START_TIMEOUT_MS = 10000;
+const DEFAULT_WAVEFORM_TIME_SPAN_SECONDS = 1;
+const MIN_WAVEFORM_TIME_SPAN_SECONDS = 1;
+const MAX_WAVEFORM_TIME_SPAN_SECONDS = 20;
 
 export type RecorderAction = 'stop' | 'cancel';
 export type RecorderOverlayStyle = 'compact' | 'enhanced';
@@ -12,6 +15,7 @@ export interface RecorderStartOptions {
   readonly outputPath: string;
   readonly showOverlay?: boolean;
   readonly overlayStyle?: RecorderOverlayStyle;
+  readonly waveformTimeSpanSeconds?: number;
 }
 
 /**
@@ -129,6 +133,14 @@ export class CoreRecorderSession {
       args.push('--no-overlay');
     } else if (options.overlayStyle === 'enhanced') {
       args.push('--enhanced-overlay');
+      const configuredSpan = options.waveformTimeSpanSeconds ?? DEFAULT_WAVEFORM_TIME_SPAN_SECONDS;
+      const waveformTimeSpanSeconds = Number.isFinite(configuredSpan)
+        ? Math.min(
+            MAX_WAVEFORM_TIME_SPAN_SECONDS,
+            Math.max(MIN_WAVEFORM_TIME_SPAN_SECONDS, configuredSpan)
+          )
+        : DEFAULT_WAVEFORM_TIME_SPAN_SECONDS;
+      args.push('--waveform-timespan-ms', String(Math.round(waveformTimeSpanSeconds * 1000)));
     }
 
     const child = childProcess.spawn(options.recorderPath, args, {
