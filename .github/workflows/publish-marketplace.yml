@@ -99,4 +99,4 @@ jobs:
           if-no-files-found: error
 
       - name: Publish to Visual Studio Marketplace with OIDC
-        run: npx vsce publish --packagePath universal-dictate-win32-x64.vsix --oidc
+        run: npx @vscode/vsce publish --packagePath universal-dictate-win32-x64.vsix --oidc

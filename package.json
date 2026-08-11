@@ -123,12 +123,12 @@
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "check": "tsc --noEmit -p ./",
-    "package:vsix": "npm run compile && vsce package --target win32-x64 --out universal-dictate-win32-x64.vsix"
+    "package:vsix": "npm run compile && vsce package --no-dependencies --target win32-x64 --out universal-dictate-win32-x64.vsix"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
     "@types/vscode": "^1.96.0",
-    "@vscode/vsce": "^3.9.2",
+    "@vscode/vsce": "3.9.3-5",
     "typescript": "^5.7.2"
   }
 }
