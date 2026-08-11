@@ -19,6 +19,7 @@ import {
 } from './whisper';
 
 type VisualizationMode = 'both' | 'enhancedOverlay' | 'statusBar' | 'off';
+type WaveformTimeSpanSeconds = 1 | 3 | 5 | 10 | 20;
 
 const VISUALIZATION_LABELS: Record<VisualizationMode, string> = {
   both: 'Both',
@@ -26,6 +27,8 @@ const VISUALIZATION_LABELS: Record<VisualizationMode, string> = {
   statusBar: 'Status bar only',
   off: 'Off'
 };
+
+const WAVEFORM_TIME_SPANS: readonly WaveformTimeSpanSeconds[] = [1, 3, 5, 10, 20];
 
 function getConfiguredVisualization(): VisualizationMode {
   const value = vscode.workspace
@@ -44,6 +47,20 @@ function getConfiguredVisualization(): VisualizationMode {
     default:
       return 'enhancedOverlay';
   }
+}
+
+function getConfiguredWaveformTimeSpanSeconds(): WaveformTimeSpanSeconds {
+  const value = vscode.workspace
+    .getConfiguration('universalDictate')
+    .get<number>('waveformTimeSpanSeconds', 1);
+
+  return WAVEFORM_TIME_SPANS.includes(value as WaveformTimeSpanSeconds)
+    ? (value as WaveformTimeSpanSeconds)
+    : 1;
+}
+
+function waveformTimeSpanLabel(seconds: WaveformTimeSpanSeconds): string {
+  return `${seconds} ${seconds === 1 ? 'second' : 'seconds'}`;
 }
 
 function showsOverlay(mode: VisualizationMode): boolean {
@@ -96,7 +113,8 @@ class DictationController implements vscode.Disposable {
           this.context,
           onLevel,
           showsOverlay(this.activeVisualization),
-          'enhanced'
+          'enhanced',
+          getConfiguredWaveformTimeSpanSeconds()
         );
       },
       transcribe: (audioPath) => transcribe(this.context, audioPath),
@@ -230,9 +248,12 @@ class DictationController implements vscode.Disposable {
 
 type LanguageQuickPickItem = vscode.QuickPickItem & { code: string };
 type SettingsQuickPickItem = vscode.QuickPickItem & {
-  action: 'language' | 'visualization';
+  action: 'language' | 'visualization' | 'waveformTimeSpan';
 };
 type VisualizationQuickPickItem = vscode.QuickPickItem & { mode: VisualizationMode };
+type WaveformTimeSpanQuickPickItem = vscode.QuickPickItem & {
+  seconds: WaveformTimeSpanSeconds;
+};
 
 async function selectLanguage(): Promise<void> {
   const configuration = vscode.workspace.getConfiguration('universalDictate');
@@ -318,12 +339,43 @@ async function selectVisualization(): Promise<void> {
   );
 }
 
+async function selectWaveformTimeSpan(): Promise<void> {
+  const configuration = vscode.workspace.getConfiguration('universalDictate');
+  const current = getConfiguredWaveformTimeSpanSeconds();
+  const items: WaveformTimeSpanQuickPickItem[] = WAVEFORM_TIME_SPANS.map((seconds) => ({
+    label: waveformTimeSpanLabel(seconds),
+    description: current === seconds ? 'Current' : undefined,
+    detail: 'Amount of recent audio visible across the enhanced native waveform.',
+    seconds
+  }));
+
+  const selected = await vscode.window.showQuickPick(items, {
+    placeHolder: 'Waveform time span · enhanced overlay only · changes apply from next dictation',
+    matchOnDescription: true,
+    matchOnDetail: true
+  });
+
+  if (!selected) {
+    return;
+  }
+
+  await configuration.update(
+    'waveformTimeSpanSeconds',
+    selected.seconds,
+    vscode.ConfigurationTarget.Global
+  );
+  void vscode.window.showInformationMessage(
+    `Universal Dictate waveform time span: ${waveformTimeSpanLabel(selected.seconds)}. Applies from the next dictation session.`
+  );
+}
+
 async function openSettings(): Promise<void> {
   const configuration = vscode.workspace.getConfiguration('universalDictate');
   const currentLanguage = normalizeWhisperLanguage(
     configuration.get<string>('language', 'auto')
   );
   const currentVisualization = getConfiguredVisualization();
+  const currentWaveformTimeSpan = getConfiguredWaveformTimeSpanSeconds();
 
   const items: SettingsQuickPickItem[] = [
     {
@@ -337,6 +389,12 @@ async function openSettings(): Promise<void> {
       description: VISUALIZATION_LABELS[currentVisualization],
       detail: 'Choose which recording visualizations are shown.',
       action: 'visualization'
+    },
+    {
+      label: '$(graph-line) Waveform time span',
+      description: waveformTimeSpanLabel(currentWaveformTimeSpan),
+      detail: 'Choose how much recent audio is visible across the enhanced native waveform.',
+      action: 'waveformTimeSpan'
     }
   ];
 
@@ -355,7 +413,12 @@ async function openSettings(): Promise<void> {
     return;
   }
 
-  await selectVisualization();
+  if (selected.action === 'visualization') {
+    await selectVisualization();
+    return;
+  }
+
+  await selectWaveformTimeSpan();
 }
 
 export function activate(context: vscode.ExtensionContext): void {

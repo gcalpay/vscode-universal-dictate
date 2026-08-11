@@ -64,7 +64,9 @@ constexpr int kOverlayMargin = 18;
 constexpr int kSignalPoints = 64;
 constexpr int kNoiseFloorMilli = 6;
 constexpr int kEnhancedSignalPoints = 256;
-constexpr int kEnhancedBucketFrames = 50;
+constexpr int kDefaultWaveformTimeSpanMs = 1000;
+constexpr int kMinWaveformTimeSpanMs = 1000;
+constexpr int kMaxWaveformTimeSpanMs = 20000;
 constexpr double kEnhancedPcmNoiseFloor = 0.001;
 constexpr double kEnhancedPcmReference = 0.045;
 constexpr wchar_t kOverlayClassName[] = L"UniversalDictateRecordingOverlay";
@@ -140,6 +142,13 @@ int enhancedVisualSample(int sample) {
     return clamped < 0 ? -visualMagnitude : visualMagnitude;
 }
 
+int calculateEnhancedBucketTargetFrames(int waveformTimeSpanMs) {
+    const double target =
+        static_cast<double>(kSampleRate) * static_cast<double>(waveformTimeSpanMs) /
+        (1000.0 * static_cast<double>(kEnhancedSignalPoints));
+    return std::max(1, static_cast<int>(std::lround(target)));
+}
+
 struct CaptureState {
     Encoder* encoder = nullptr;
     std::atomic<int> peakMilli{0};
@@ -149,6 +158,7 @@ struct CaptureState {
     // monotonically increasing write counter.
     std::array<std::atomic<int>, kEnhancedSignalPoints> enhancedSignal{};
     std::atomic<std::uint64_t> enhancedWriteCount{0};
+    int enhancedBucketTargetFrames = calculateEnhancedBucketTargetFrames(kDefaultWaveformTimeSpanMs);
     int enhancedBucketFrames = 0;
     int enhancedBucketPeak = 0;
 };
@@ -190,7 +200,7 @@ void captureCallback(
         }
         ++state->enhancedBucketFrames;
 
-        if (state->enhancedBucketFrames >= kEnhancedBucketFrames) {
+        if (state->enhancedBucketFrames >= state->enhancedBucketTargetFrames) {
             pushEnhancedSignalPoint(*state, state->enhancedBucketPeak);
             state->enhancedBucketFrames = 0;
             state->enhancedBucketPeak = 0;
@@ -953,6 +963,29 @@ std::string parseOutputPath(int argc, char** argv) {
     return {};
 }
 
+int parseWaveformTimeSpanMs(int argc, char** argv) {
+    for (int i = 1; i + 1 < argc; ++i) {
+        if (std::string_view(argv[i]) != "--waveform-timespan-ms") {
+            continue;
+        }
+
+        char* end = nullptr;
+        const long parsed = std::strtol(argv[i + 1], &end, 10);
+        if (end == argv[i + 1] || end == nullptr || *end != '\0') {
+            return kDefaultWaveformTimeSpanMs;
+        }
+        if (parsed <= kMinWaveformTimeSpanMs) {
+            return kMinWaveformTimeSpanMs;
+        }
+        if (parsed >= kMaxWaveformTimeSpanMs) {
+            return kMaxWaveformTimeSpanMs;
+        }
+        return static_cast<int>(parsed);
+    }
+
+    return kDefaultWaveformTimeSpanMs;
+}
+
 bool hasFlag(int argc, char** argv, std::string_view flag) {
     for (int i = 1; i < argc; ++i) {
         if (std::string_view(argv[i]) == flag) {
@@ -974,6 +1007,7 @@ int main(int argc, char** argv) {
 
     const bool overlayEnabled = !hasFlag(argc, argv, "--no-overlay");
     const bool enhancedOverlay = hasFlag(argc, argv, "--enhanced-overlay");
+    const int waveformTimeSpanMs = parseWaveformTimeSpanMs(argc, argv);
 
     const HMONITOR overlayMonitor = overlayEnabled ? captureOverlayMonitor() : nullptr;
 
@@ -985,6 +1019,7 @@ int main(int argc, char** argv) {
     }
 
     CaptureState captureState{&encoder};
+    captureState.enhancedBucketTargetFrames = calculateEnhancedBucketTargetFrames(waveformTimeSpanMs);
     for (auto& sample : captureState.enhancedSignal) {
         sample.store(0, std::memory_order_relaxed);
     }

@@ -115,6 +115,18 @@
           ],
           "default": "enhancedOverlay",
           "description": "Controls recording visualizations. Default: enhanced overlay. Changes apply from the next dictation session."
+        },
+        "universalDictate.waveformTimeSpanSeconds": {
+          "type": "number",
+          "enum": [
+            1,
+            3,
+            5,
+            10,
+            20
+          ],
+          "default": 1,
+          "description": "Amount of recent audio, in seconds, shown across the enhanced native waveform. Changes apply from the next dictation session."
         }
       }
     }
