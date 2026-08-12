@@ -2,16 +2,16 @@
 
 ## Current state
 
-- Current milestone: Milestone 0 — baseline and wording
-- Current chunk: Milestone 0 gate
-- Status: complete; awaiting user approval to proceed
+- Current phase: workflow infrastructure before Milestone 1
+- Current chunk: automation-account workflow setup
+- Status: Milestone 0 approved; repository guidance/log complete; automation setup pending
 - Active repository: `gcalpay/vscode-universal-dictate`
 - Active branch: `docs/issue-38-platform-wording`
 - Baseline `main`: `f0265bc4398643c3b3a27e6d2ad64183b115b6ba`
 - Current extension version: `0.1.5`
-- Last completed chunk: Milestone 0 gate — branch review
-- Next action: user decides whether to open/merge the documentation PR, then begin Milestone 1
-- Blockers: none
+- Last completed work: add root `AGENTS.md` and `docs/issue-38-implementation-log.md`
+- Next action: set up an automated `gcalpay-automation` PR/bookkeeping workflow, then review this documentation branch before PR creation
+- Blockers: automation credentials/workflow not configured yet
 
 ## Working rules
 
@@ -20,6 +20,8 @@
 - Create a coherent commit after each completed implementation chunk when the repository is in a reviewable state.
 - Perform a lightweight review after each chunk and a formal review/test gate after each milestone.
 - Review the complete branch before opening a PR; PR creation and merge are separate explicit gates.
+- Stop after each milestone and require maintainer approval before continuing.
+- `gcalpay-automation` is a machine account and must be used only through automation, not manual operation.
 - Keep proposed VS Code API work out of Marketplace releases.
 - Use the real Windows VS Code desktop for behavior that cannot be validated in the web/GitHub environment.
 - Never auto-submit dictated text.
@@ -38,12 +40,29 @@
 - [x] **Milestone 0 gate**
   - Review the entire documentation branch against `main`.
   - Confirm no unrelated files or implementation changes.
-  - Decide whether to open/merge the documentation PR.
+  - Maintainer approved Milestone 0.
+
+## Workflow infrastructure before Milestone 1
+
+- [x] **Repository agent guidance**
+  - Add root `AGENTS.md` containing stable repo-wide agent rules.
+  - Point Issue #38 work to the living plan and implementation log rather than duplicating milestone detail.
+- [x] **Persistent implementation log**
+  - Add `docs/issue-38-implementation-log.md` for completed work, commits, reviews, tests, decisions and deviations.
+- [ ] **Automation-account workflow**
+  - Configure `gcalpay-automation` to act only through automation.
+  - Use narrowly scoped credentials stored as GitHub secrets or an appropriate GitHub App; never commit credentials.
+  - Automate legitimate machine-account tasks such as final milestone bookkeeping and PR creation.
+  - Keep `gcalpay` as the human reviewer/approver/merger.
+- [ ] **Workflow-infrastructure gate**
+  - Review the full documentation/infrastructure branch against `main`.
+  - Confirm automation behavior and permissions are minimal and understandable before opening the PR.
 
 ## Milestone 1 — Map the upstream VS Code implementation
 
 - [ ] **1.1 Prepare upstream working repository**
   - Work in a fork of `microsoft/vscode`, never directly on Microsoft `main`.
+  - The fork is development/test infrastructure only; end users must continue using official VS Code.
   - Create a dedicated Issue #38 feature branch from current upstream-compatible base.
 - [ ] **1.2 Trace the complete status-bar path**
   - Trace public `StatusBarItem` API through extension host/RPC, status-bar service and renderer.
@@ -152,6 +171,8 @@
 ## Decisions
 
 - The real VS Code status-bar item remains mandatory; a nearby native replacement is out of scope.
+- End users must never be required to install a custom VS Code fork; a fork is only for development/testing of an upstream contribution.
+- If the necessary upstream API is declined and no safe public-API alternative exists, treat that as a blocker rather than shipping unsafe focus hacks.
 - No UI Automation/MSAA focus tracking, mouse hooks, click replay, accessibility-setting changes, focus-restoration hacks or synthesized Enter.
 - Focus preservation should prevent the pointer-induced focus move rather than remember and restore an old target afterward.
 - Deliberate focus changes made by the user while recording must remain authoritative.
@@ -162,9 +183,11 @@
 - Removed runtime capability detection and one-time warnings for old VS Code versions. If the API stabilizes, the extension minimum engine version will move to the supporting VS Code release.
 - Treat `preserveFocus` as a candidate API shape pending upstream review.
 - Separate the documentation-only wording change from implementation and release work.
+- Added root `AGENTS.md` and a backward-looking implementation log so future chats/agents can recover state without a separate handoff.
+- Added an explicit automation-account workflow phase before starting Milestone 1.
 
 ## Test record
 
-- Milestone 0: branch review against `main` passed. The branch changes only `README.md`, `package.json`, and this implementation-plan document; there are no code, version, native, CI or release changes.
-- No implementation tests were required for Milestone 0.
+- Milestone 0: branch review against `main` passed before workflow-infrastructure additions. No implementation behavior changed.
+- No implementation tests were required for Milestone 0 or the documentation-only agent/log additions.
 - GUI testing begins after a working upstream prototype exists.
