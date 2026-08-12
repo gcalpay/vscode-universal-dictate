@@ -1,6 +1,6 @@
 # VS Code Universal Dictate
 
-**Local, offline dictation for VS Code on Windows. Dictate into editors and agent/chat prompts such as Codex, then review the transcript before sending. 99 Whisper languages. Remote-WSL.**
+**Local, offline dictation across VS Code inputs on Windows, including WSL workspaces. Dictate into editors and agent/chat prompts such as Codex, then review the transcript before sending. 99 Whisper languages.**
 
 **Open source · MIT · [GitHub](https://github.com/gcalpay/vscode-universal-dictate)**
 

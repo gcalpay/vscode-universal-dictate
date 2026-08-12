@@ -1,0 +1,169 @@
+# Issue #38 — Implementation Plan
+
+## Current state
+
+- Current milestone: Milestone 0 — baseline and wording
+- Current chunk: 0.2 — documentation wording
+- Status: in progress
+- Active repository: `gcalpay/vscode-universal-dictate`
+- Active branch: `docs/issue-38-platform-wording`
+- Baseline `main`: `f0265bc4398643c3b3a27e6d2ad64183b115b6ba`
+- Current extension version: `0.1.5`
+- Last completed chunk: 0.1 — baseline verification
+- Next action: finish and review the documentation-only branch
+- Blockers: none
+
+## Working rules
+
+- Never implement directly on `main`.
+- Use one branch per coherent PR/workstream, not one branch per small chunk.
+- Create a coherent commit after each completed implementation chunk when the repository is in a reviewable state.
+- Perform a lightweight review after each chunk and a formal review/test gate after each milestone.
+- Review the complete branch before opening a PR; PR creation and merge are separate explicit gates.
+- Keep proposed VS Code API work out of Marketplace releases.
+- Use the real Windows VS Code desktop for behavior that cannot be validated in the web/GitHub environment.
+- Never auto-submit dictated text.
+
+## Milestone 0 — Baseline and wording
+
+- [x] **0.1 Verify repository state**
+  - Confirm `main`, current version, recent commits and open PR state.
+  - Confirm the current README and Marketplace-facing description.
+  - Make no implementation changes.
+- [ ] **0.2 Documentation wording**
+  - Change the opening positioning to make Windows the supported OS and WSL a workspace scenario.
+  - Preferred wording: "Local, offline dictation across VS Code inputs on Windows, including WSL workspaces."
+  - Update README and Marketplace-facing package description only.
+  - No version bump and no release solely for this wording.
+- [ ] **Milestone 0 gate**
+  - Review the entire documentation branch against `main`.
+  - Confirm no unrelated files or implementation changes.
+  - Decide whether to open/merge the documentation PR.
+
+## Milestone 1 — Map the upstream VS Code implementation
+
+- [ ] **1.1 Prepare upstream working repository**
+  - Work in a fork of `microsoft/vscode`, never directly on Microsoft `main`.
+  - Create a dedicated Issue #38 feature branch from current upstream-compatible base.
+- [ ] **1.2 Trace the complete status-bar path**
+  - Trace public `StatusBarItem` API through extension host/RPC, status-bar service and renderer.
+  - Identify exact interfaces/files requiring propagation.
+  - Identify the browser event that causes pointer focus movement.
+  - Make no broad implementation changes yet.
+- [ ] **1.3 Architecture checkpoint**
+  - Re-evaluate candidate `StatusBarItem.preserveFocus?: boolean` semantics.
+  - `undefined`/`false`: current behavior.
+  - `true` + pointer activation: command executes without moving keyboard focus into the status item.
+  - Keyboard navigation and Enter/Space activation remain unchanged.
+  - No after-the-fact focus restoration.
+- [ ] **Milestone 1 gate**
+  - Confirm the complete propagation path and API semantics before implementing the prototype.
+
+## Milestone 2 — Minimal upstream prototype
+
+- [ ] **2.1 Implement internal pointer behavior**
+  - Prevent incidental pointer focus without executing the command on pointer-down.
+  - Preserve ordinary click semantics and exactly-once command execution.
+  - Leave keyboard behavior unchanged.
+- [ ] **2.2 Propagate the candidate API**
+  - Carry the property through the proposed/public API boundary, extension host/protocol, service and renderer.
+  - Preserve existing behavior by default.
+- [ ] **2.3 Add automated tests**
+  - Default is false/undefined.
+  - Property round-trips through the bridge.
+  - Pointer activation preserves previous focus when enabled.
+  - Command executes exactly once.
+  - Default status items retain current behavior.
+  - Keyboard Enter/Space remains functional and accessible.
+- [ ] **2.4 Build/check patched VS Code**
+  - Run relevant upstream checks available in the chosen environment.
+- [ ] **Milestone 2 gate**
+  - Review the full prototype branch and automated results before local GUI testing.
+
+## Milestone 3 — Real GUI proof
+
+- [ ] **3.1 Prepare isolated patched VS Code locally**
+  - Use a dedicated `D:\CodexWork\issue-38\` environment for source/build/profile/extensions/logs/temp artifacts.
+  - Do not install the experimental build into the normal profile before isolated testing passes.
+  - Reuse the verified Whisper model rather than downloading another copy.
+- [ ] **3.2 Basic focus tests**
+  - Editor: status Start and Stop.
+  - Codex/agent/chat composer: status Start and Stop.
+- [ ] **3.3 Full interaction matrix**
+  - status/status, status/keyboard, status/overlay, keyboard/status, keyboard/keyboard, keyboard/overlay.
+  - Confirm deliberate retargeting while recording wins.
+- [ ] **3.4 Other controls and accessibility**
+  - Search, Settings and other editable VS Code controls supported by the existing paste mechanism.
+  - Integrated terminal where existing policy permits.
+  - Clipboard restored; cancellation inserts nothing; dictated text never auto-submits.
+  - No screen-reader prompt, accessibility-setting change, unexpected sound or new background helper.
+- [ ] **Milestone 3 gate**
+  - The patched VS Code must solve the actual Codex-composer case, not only editor focus.
+
+## Milestone 4 — Prepare upstream contribution
+
+- [ ] **4.1 Clean the prototype**
+  - Remove diagnostics, temporary logs and unrelated changes.
+- [ ] **4.2 Final API design review**
+  - Re-evaluate naming and generality; treat `preserveFocus` as a candidate shape, not a fixed requirement.
+  - Check accessibility and backward compatibility.
+- [ ] **4.3 Prepare the upstream proposal**
+  - Use `microsoft/vscode#145432` as evidence of a generic status-bar focus problem, not as evidence Microsoft already accepted this solution.
+  - Explain why an extension cannot reliably restore an arbitrary previously focused control owned by another extension such as the Codex composer.
+  - Reference Universal Dictate #38 as a concrete motivating case.
+- [ ] **4.4 Submit through the current VS Code API process**
+  - Review the complete branch before opening an upstream PR/proposal.
+- [ ] **Milestone 4 gate**
+  - Upstream proposal submitted with tested implementation evidence.
+
+## Milestone 5 — Upstream iteration
+
+- [ ] Address maintainer feedback in small, reviewable commits.
+- [ ] Adapt API design if maintainers request a different shape.
+- [ ] Continue proposed-API validation if accepted.
+- [ ] If declined, record the decision and leave Universal Dictate #38 blocked/open rather than reviving unsafe focus-tracking hacks.
+- [ ] **Milestone 5 gate**
+  - Stable API exists before Marketplace integration begins.
+
+## Milestone 6 — Stable Universal Dictate integration
+
+- [ ] **6.1 Update compatibility baseline**
+  - Bump `engines.vscode` and matching VS Code types to the first stable version containing the API.
+  - Do not add runtime old-version warning/capability-detection machinery merely to keep the old engine range.
+- [ ] **6.2 Enable focus preservation**
+  - Apply the stable property only to the Dictate/Stop status item, not the settings gear.
+- [ ] **6.3 Automated/build checks**
+  - Typecheck, compile, package and CI.
+- [ ] **6.4 Real regression test**
+  - Repeat the Milestone 3 interaction matrix on stable VS Code/public API.
+- [ ] **Milestone 6 gate**
+  - Universal Dictate #38 acceptance criteria pass using only stable public APIs.
+
+## Milestone 7 — Release
+
+- [ ] Use the next available patch version; do not reserve `0.1.6` if another release occurs first.
+- [ ] Version bump/changelog/release metadata on a release branch.
+- [ ] Package and inspect the final Windows x64 VSIX.
+- [ ] Install and test the exact VSIX intended for publication.
+- [ ] Publish manually to the VS Code Marketplace using the established release process.
+- [ ] Install/update from the Marketplace and repeat the critical Codex composer test.
+- [ ] Close Issue #38 only after the Marketplace artifact itself passes.
+
+## Decisions
+
+- The real VS Code status-bar item remains mandatory; a nearby native replacement is out of scope.
+- No UI Automation/MSAA focus tracking, mouse hooks, click replay, accessibility-setting changes, focus-restoration hacks or synthesized Enter.
+- Focus preservation should prevent the pointer-induced focus move rather than remember and restore an old target afterward.
+- Deliberate focus changes made by the user while recording must remain authoritative.
+- WSL is a supported workspace scenario while the extension runtime remains in the local Windows UI extension host.
+
+## Deviations from the earlier plan
+
+- Removed runtime capability detection and one-time warnings for old VS Code versions. If the API stabilizes, the extension minimum engine version will move to the supporting VS Code release.
+- Treat `preserveFocus` as a candidate API shape pending upstream review.
+- Separate the documentation-only wording change from implementation and release work.
+
+## Test record
+
+- No implementation tests required for Milestone 0; only branch/diff review.
+- GUI testing begins after a working upstream prototype exists.
