@@ -56,24 +56,53 @@ Review result:
 
 Status: completed
 
-Change:
+Changes:
 
 - Added root `AGENTS.md` with stable repository-wide agent rules.
 - `AGENTS.md` points Issue #38 work to the living implementation plan and this implementation log rather than duplicating the milestone roadmap.
 - It records branch/review gates, Windows UI testing requirements, release constraints, behavioral invariants, and the rule that `gcalpay-automation` is used only through automation.
+- Added this backward-looking implementation log so future chats/agents can recover completed work without reconstructing a separate handoff.
 
-Commit:
+Commits:
 
 - `369168a82473cc5672b025517c127b83437f0229` — add repository agent guidance.
+- `0afdc456ea66af1ddcd26ff6ad50519690b744e0` — add Issue #38 implementation log.
+- `6a8b1282b6735cb4a88bc0ca360e4c3abc74956c` — record the workflow-infrastructure phase in the living plan.
 
 ### Automation workflow
 
-Status: pending
+Status: workflow definition added; credential/bootstrap validation pending
 
-Planned next step:
+Changes:
 
-- Set up a narrowly scoped automated path for `gcalpay-automation` to perform legitimate machine-account work such as milestone bookkeeping and PR creation without manual login/use of the bot identity.
-- Do not commit machine-account credentials; store them as appropriate repository secrets or use a GitHub App.
+- Added `.github/workflows/automation-open-pr.yml`.
+- The workflow is manual (`workflow_dispatch`) and the job runs only when triggered by `gcalpay`.
+- It validates branch names and refuses handoff from `main` or from the selected base branch.
+- It checks out the selected feature branch using `AUTOMATION_BOT_TOKEN` and verifies via the GitHub API that the token belongs to `gcalpay-automation`.
+- It refuses to create a duplicate open PR for the same head/base pair.
+- It appends an automated handoff record to this log, commits it as `gcalpay-automation [bot] <bot@alpay.de>`, and pushes that bookkeeping commit to the feature branch.
+- It opens the PR using the machine-account token and requests review from `gcalpay`.
+
+Commit:
+
+- `d42fd6369eb15bf93386c0142fc85456db51b5c5` — add automation account PR workflow.
+
+Credential decision:
+
+- `gcalpay-automation` is a collaborator on the personal-account-owned public repository. GitHub currently lists collaborator repositories as a limitation of fine-grained personal access tokens.
+- To preserve the `gcalpay-automation` machine-user identity for this public repository, the planned credential is therefore a classic PAT with the `public_repo` scope only, stored as the repository Actions secret `AUTOMATION_BOT_TOKEN`.
+- Do not use the broader `repo` scope for this public-only workflow.
+
+Bootstrap constraint:
+
+- A manually dispatched workflow must already exist on the default branch before it can be run from GitHub Actions.
+- Therefore this workflow cannot open the PR that introduces itself. The first infrastructure PR requires a one-time bootstrap merge path; after the workflow reaches `main`, future milestone PRs can be opened by `gcalpay-automation` automatically.
+
+Next validation:
+
+- Create the machine-account classic PAT with `public_repo` only.
+- Store it as the `AUTOMATION_BOT_TOKEN` Actions secret in `gcalpay/vscode-universal-dictate`.
+- Bootstrap and merge the infrastructure PR, then run the workflow on a subsequent feature branch to verify bot-authored bookkeeping, PR authorship, reviewer request, CI triggering, and contributor attribution.
 
 ## Durable decisions
 
