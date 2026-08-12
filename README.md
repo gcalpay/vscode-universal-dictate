@@ -10,7 +10,7 @@
 
 ![Universal Dictate settings menu](media/settings-menu.webp)
 
-Universal Dictate transcribes locally with the multilingual Whisper `base` model through `whisper.cpp` and inserts the transcript into the focused VS Code editor or prompt box. **It never submits or sends dictated text automatically.**
+Universal Dictate transcribes locally with the multilingual Whisper `base` model through `whisper.cpp`, including automatic punctuation, and inserts the transcript where the text cursor is currently active. It works in VS Code editors and agent/chat prompts and can also paste into text fields in other Windows applications while Universal Dictate is running. **It never submits or sends dictated text automatically.**
 
 ## Installation
 
@@ -55,7 +55,9 @@ The audio-visualization choices are:
 - **Status bar only** — animated status-bar signal without the native overlay.
 - **Off** — no waveform visualization; static recording feedback remains available.
 
-Visualization changes apply from the next dictation session. Existing persisted legacy `overlay` settings are treated as Enhanced overlay for compatibility.
+The Enhanced waveform time span is configurable, so you can choose how much recent audio is visible across the waveform. This only changes the visualization and does **not** limit dictation length.
+
+Visualization and waveform time-span changes apply from the next dictation session. Existing persisted legacy `overlay` settings are treated as Enhanced overlay for compatibility.
 
 ## Languages
 

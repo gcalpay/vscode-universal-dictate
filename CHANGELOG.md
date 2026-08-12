@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.5
+
+Configurable Enhanced waveform time span.
+
+- Add a configurable Enhanced waveform history.
+- Add the `universalDictate.waveformTimeSpanSeconds` setting and expose it through the Universal Dictate settings picker.
+- Apply waveform time-span changes from the next dictation session.
+- Keep the existing Enhanced waveform renderer, recorded audio and status-bar visualization behavior unchanged.
+
 ## 0.1.4
 
 Presentation republish from the merged repository state.
