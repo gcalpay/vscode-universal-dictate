@@ -3,14 +3,14 @@
 ## Current state
 
 - Current milestone: Milestone 0 — baseline and wording
-- Current chunk: 0.2 — documentation wording
-- Status: in progress
+- Current chunk: Milestone 0 gate
+- Status: complete; awaiting user approval to proceed
 - Active repository: `gcalpay/vscode-universal-dictate`
 - Active branch: `docs/issue-38-platform-wording`
 - Baseline `main`: `f0265bc4398643c3b3a27e6d2ad64183b115b6ba`
 - Current extension version: `0.1.5`
-- Last completed chunk: 0.1 — baseline verification
-- Next action: finish and review the documentation-only branch
+- Last completed chunk: Milestone 0 gate — branch review
+- Next action: user decides whether to open/merge the documentation PR, then begin Milestone 1
 - Blockers: none
 
 ## Working rules
@@ -30,12 +30,12 @@
   - Confirm `main`, current version, recent commits and open PR state.
   - Confirm the current README and Marketplace-facing description.
   - Make no implementation changes.
-- [ ] **0.2 Documentation wording**
+- [x] **0.2 Documentation wording**
   - Change the opening positioning to make Windows the supported OS and WSL a workspace scenario.
   - Preferred wording: "Local, offline dictation across VS Code inputs on Windows, including WSL workspaces."
   - Update README and Marketplace-facing package description only.
   - No version bump and no release solely for this wording.
-- [ ] **Milestone 0 gate**
+- [x] **Milestone 0 gate**
   - Review the entire documentation branch against `main`.
   - Confirm no unrelated files or implementation changes.
   - Decide whether to open/merge the documentation PR.
@@ -165,5 +165,6 @@
 
 ## Test record
 
-- No implementation tests required for Milestone 0; only branch/diff review.
+- Milestone 0: branch review against `main` passed. The branch changes only `README.md`, `package.json`, and this implementation-plan document; there are no code, version, native, CI or release changes.
+- No implementation tests were required for Milestone 0.
 - GUI testing begins after a working upstream prototype exists.
