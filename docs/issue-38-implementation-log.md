@@ -164,3 +164,10 @@ Result:
 - Keyboard navigation/Enter/Space behavior must remain unchanged.
 - Deliberate user retargeting during recording remains authoritative.
 - Proposed VS Code APIs must never be shipped in a Marketplace build.
+
+### Automated PR handoff — 2026-08-13T00:55:19Z
+
+- Automation account: `gcalpay-automation`
+- Head: `docs/issue-38-workflow-validation`
+- Base: `main`
+- Triggered by maintainer: `gcalpay`
