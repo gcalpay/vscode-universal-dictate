@@ -162,7 +162,7 @@ Result:
 
 ## Automatic handoff and repository documentation refresh
 
-Status: branch review passed and maintainer approved handoff; automatic-trigger validation and merge pending
+Status: automatic trigger works, but first automatic validation exposed a PR-title derivation bug; fix is on the branch and a clean retest is pending
 
 Branch:
 
@@ -175,7 +175,7 @@ Purpose:
 - Make repository Markdown accurately describe the shipped 0.1.5 runtime and active Issue #38 state.
 - Make a fresh chat/session able to recover the exact current state and next action from repository files alone.
 
-Completed commits before the Issue #38 state update:
+Completed implementation/documentation commits:
 
 - `79fb5087e509b74978d9e5703abe538a2986c7c9` — `Add automatic automation handoff trigger`.
   - Adds a non-`main` `push` trigger alongside `workflow_dispatch`.
@@ -192,6 +192,8 @@ Completed commits before the Issue #38 state update:
 - `b9ca3ac74c768446346d78a01db6e3ab0782a649` — `Harden automatic handoff request parsing`.
   - Makes the job condition explicitly distinguish push events from manual dispatch.
   - Uses multiline-safe `$GITHUB_OUTPUT` syntax for PR bodies so the manual fallback remains robust.
+- `f7cb200e5ba6b5c9a033b019eb1af80dac3c5e69` — `Fix automatic handoff PR title derivation`.
+  - Replaces Bash glob-style suffix removal with explicit string-length slicing so the literal `[automation-handoff]` marker is removed from the generated PR title.
 
 Markdown audit:
 
@@ -212,23 +214,26 @@ Markdown audit:
   - `docs/issue-38-implementation-plan.md`
 - `CHANGELOG.md`, `SUPPORT.md`, `THIRD_PARTY_NOTICES.md` and `docs/DEPENDENCIES.md` were reviewed and left unchanged because their current claims remain factual.
 - `AGENTS.md`, README and the stale runtime/status/testing documents were updated.
-- The Issue #38 plan/log are updated on this branch so the branch can be resumed without conversation context.
+- The Issue #38 plan/log are maintained on this branch so the work can be resumed without conversation context.
 
-Branch review and approval:
+### Automatic-trigger validation attempt 1
 
-- Complete branch diff was reviewed against `main`; only the intended workflow/documentation changes and removal of obsolete `docs/PR_NOTE.md` are present.
-- No TypeScript runtime, native C++, extension version, Whisper runtime or release behavior changed.
-- Non-marker pushes by `gcalpay` produced skipped `Automation PR Handoff` runs as intended.
-- The workflow cannot automatically hand off `main` because `main` is excluded from the push trigger.
-- Bot bookkeeping pushes cannot retrigger automatic handoff because the job requires `github.actor == 'gcalpay'`.
-- The maintainer explicitly approved this mini-milestone handoff on 2026-08-13.
-- Next action: create the final approved commit whose subject ends exactly in ` [automation-handoff]`, then verify the workflow opens the PR automatically and requests `gcalpay` as reviewer.
+- Maintainer approved the branch gate on 2026-08-13.
+- Marker commit `2ec5f9f9366f3f197761c03466e0cb5faa13f9db` (`Validate automatic handoff and docs refresh [automation-handoff]`) was pushed by `gcalpay`.
+- Workflow run `31662552028` started automatically from that push and completed successfully without a manual Actions dispatch.
+- The workflow appended bot bookkeeping commit `3df088444a264272213d806f9119a798242de7dd` and opened PR #46 as `gcalpay-automation`.
+- `gcalpay` was correctly requested as reviewer.
+- Acceptance issue: PR #46 title remained `Validate automatic handoff and docs refresh [automation-handoff]` instead of removing the marker.
+- Cause: `${first_line%$marker}` interpreted the square brackets in the marker as Bash pattern syntax during suffix removal.
+- PR #46 was closed without merge.
+- Commit `f7cb200e5ba6b5c9a033b019eb1af80dac3c5e69` fixes title derivation using literal-length slicing.
+- Because the branch changed after approval, a fresh branch review and explicit maintainer approval are required before the second marker commit/retest.
 
 Fresh-session recovery state:
 
 - Read `AGENTS.md` → plan → log.
 - Verify `main`, open PRs and whether `chore/automatic-handoff-and-docs-refresh` has merged.
-- If not merged, the branch gate is already approved; verify whether the automatic marker commit/PR exists and continue automatic-trigger validation rather than asking for approval again.
+- If not merged, review the current branch including the title-derivation fix. If clean, obtain maintainer approval, create a new final marker commit, and verify the second automatic PR has a clean title, bot authorship, requested `gcalpay` reviewer and green CI.
 - If already merged, begin Issue #38 Milestone 1.1; do not redo this infrastructure cleanup.
 
 ## Durable decisions
