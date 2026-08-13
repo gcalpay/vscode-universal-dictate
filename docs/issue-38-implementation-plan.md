@@ -2,21 +2,21 @@
 
 ## Current state
 
-- Current phase: workflow infrastructure before Milestone 1
-- Current chunk: automation-account workflow setup
-- Status: Milestone 0 approved; repository guidance/log complete; automation setup pending
-- Active repository: `gcalpay/vscode-universal-dictate`
-- Active branch: `docs/issue-38-platform-wording`
-- Baseline `main`: `f0265bc4398643c3b3a27e6d2ad64183b115b6ba`
+- Current phase: Milestone 1 — map the upstream VS Code implementation
+- Current chunk: 1.1 prepare upstream working repository
+- Status: Milestone 0 and workflow infrastructure complete; automation workflow validated end to end
+- Active repository: `gcalpay/vscode-universal-dictate` for coordination; upstream VS Code working fork not prepared yet
+- Active branch: `docs/issue-38-workflow-validation`
+- Baseline `main`: `92e8250f4015e34f831bf0979e621457aa1735ed`
 - Current extension version: `0.1.5`
-- Last completed work: add root `AGENTS.md` and `docs/issue-38-implementation-log.md`
-- Next action: set up an automated `gcalpay-automation` PR/bookkeeping workflow, then review this documentation branch before PR creation
-- Blockers: automation credentials/workflow not configured yet
+- Last completed work: validated `gcalpay-automation` handoff workflow through bot-authored commit, bot-opened PR #44, maintainer approval and merge
+- Next action: merge this documentation-state update through the validated automation workflow, then begin Milestone 1.1
+- Blockers: none
 
 ## Working rules
 
 - Never implement directly on `main`.
-- Use one branch per coherent PR/workstream, not one branch per small chunk.
+- Use one feature branch per coherent PR/workstream, not one branch per small chunk.
 - Create a coherent commit after each completed implementation chunk when the repository is in a reviewable state.
 - Perform a lightweight review after each chunk and a formal review/test gate after each milestone.
 - Review the complete branch before opening a PR; PR creation and merge are separate explicit gates.
@@ -49,14 +49,18 @@
   - Point Issue #38 work to the living plan and implementation log rather than duplicating milestone detail.
 - [x] **Persistent implementation log**
   - Add `docs/issue-38-implementation-log.md` for completed work, commits, reviews, tests, decisions and deviations.
-- [ ] **Automation-account workflow**
+- [x] **Automation-account workflow**
   - Configure `gcalpay-automation` to act only through automation.
   - Use narrowly scoped credentials stored as GitHub secrets or an appropriate GitHub App; never commit credentials.
   - Automate legitimate machine-account tasks such as final milestone bookkeeping and PR creation.
   - Keep `gcalpay` as the human reviewer/approver/merger.
-- [ ] **Workflow-infrastructure gate**
-  - Review the full documentation/infrastructure branch against `main`.
-  - Confirm automation behavior and permissions are minimal and understandable before opening the PR.
+  - Validated with workflow run #2 (`31654821705`) and PR #44.
+- [x] **Workflow-infrastructure gate**
+  - Verified bot token identity as `gcalpay-automation`.
+  - Verified bot-authored commit and push.
+  - Verified bot-opened PR and reviewer request.
+  - Verified maintainer `APPROVED` review and normal merge preserving the bot-authored commit.
+  - Verified the bot-authored commit is reachable from `main` and attributed to `gcalpay-automation`.
 
 ## Milestone 1 — Map the upstream VS Code implementation
 
@@ -185,9 +189,13 @@
 - Separate the documentation-only wording change from implementation and release work.
 - Added root `AGENTS.md` and a backward-looking implementation log so future chats/agents can recover state without a separate handoff.
 - Added an explicit automation-account workflow phase before starting Milestone 1.
+- Kept the bot PAT at `public_repo`; switched PR creation and reviewer requests from `gh pr` GraphQL behavior to direct REST API calls after validation attempt #1.
 
 ## Test record
 
 - Milestone 0: branch review against `main` passed before workflow-infrastructure additions. No implementation behavior changed.
-- No implementation tests were required for Milestone 0 or the documentation-only agent/log additions.
+- Workflow validation attempt #1: authentication, bot commit and bot PR creation succeeded, but the GitHub CLI command returned a GraphQL scope error before the reviewer-request step; PR #42 was closed without merge.
+- Workflow repair PR #43 passed CI and Windows packaging and was merged.
+- Workflow validation attempt #2: run #2 (`31654821705`) completed successfully; bot commit `aba3816c5b6983bd2da8b435c0463d89babd16c6` opened PR #44 as `gcalpay-automation`, requested `gcalpay`, received an `APPROVED` review and was merged with a merge commit.
+- Bot commit `aba3816c5b6983bd2da8b435c0463d89babd16c6` is reachable from `main` and GitHub attributes its author and committer to `gcalpay-automation`.
 - GUI testing begins after a working upstream prototype exists.
