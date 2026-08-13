@@ -4,14 +4,14 @@
 
 - Current phase: pre-Milestone-1 infrastructure mini-milestone — automatic PR handoff and repository documentation refresh.
 - Current chunk: final human review and merge of PR #47.
-- Status: automatic push-trigger handoff is validated end to end; PR #47 is open, bot-authored, has a clean generated title, requests `gcalpay` as reviewer, and repository CI is green.
+- Status: automatic push-trigger handoff is validated end to end; PR #47 is open, bot-authored, has a clean generated title, requests `gcalpay` as reviewer, and repository CI is green apart from any rerun caused by final documentation-only state corrections.
 - Active repository: `gcalpay/vscode-universal-dictate`.
 - Active branch: `chore/automatic-handoff-and-docs-refresh` until PR #47 is merged.
 - Active PR: #47 — `Validate automatic handoff title fix`.
 - Branch base: `main` at `23ebc2c9c966863ff948c976fc6f81fff8145109` (PR #45 merged).
 - Current extension version: `0.1.5`.
-- Last completed work: second automatic-trigger validation succeeded through workflow run `31662910677`; the bot added bookkeeping commit `c28ff006a895aabdaea9c0760c330fb5cea4d2c9`, opened PR #47, requested `gcalpay`, and both `typecheck` and Windows `package` checks passed.
-- Exact next action: `gcalpay` reviews the final PR #47 diff, submits a formal GitHub approval, and merges it. After merge, verify `main` and begin Milestone 1.1.
+- Last completed work: second automatic-trigger validation succeeded through workflow run `31662910677`; the bot added bookkeeping commit `c28ff006a895aabdaea9c0760c330fb5cea4d2c9`, opened PR #47, requested `gcalpay`, and both `typecheck` and Windows `package` checks passed on that validated head.
+- Exact next action: after final documentation-only CI is green, `gcalpay` reviews the final PR #47 diff, submits a formal GitHub approval, and merges it. After merge, verify `main` and begin Milestone 1.1.
 - Blockers: none.
 
 ### Exact next action for a fresh session
@@ -77,14 +77,15 @@
 - [x] Workflow run `31662910677` completed successfully without manual Actions dispatch.
 - [x] Bot bookkeeping commit `c28ff006a895aabdaea9c0760c330fb5cea4d2c9` was authored by `gcalpay-automation`.
 - [x] PR #47 was opened by `gcalpay-automation` with clean title `Validate automatic handoff title fix` and requested reviewer `gcalpay`.
-- [x] PR #47 `typecheck` passed.
-- [x] PR #47 Windows `package` passed.
+- [x] PR #47 `typecheck` passed on the validated automatic-handoff head.
+- [x] PR #47 Windows `package` passed on the validated automatic-handoff head.
+- [ ] Final documentation-only head checks complete successfully.
 - [ ] `gcalpay` formally reviews/approves PR #47 and merges it.
 - [ ] Verify the merged `main` state, then start Milestone 1.1.
 
 ## Repository housekeeping
 
-The following historical branches are no longer needed for active work and may be deleted:
+The authoritative remote inventory contains 11 branches. The following historical branches are no longer needed for active work and may be deleted:
 
 - `chore/automation-handoff-validation` — failed/superseded validation for closed PR #42.
 - `chore/automation-handoff-validation-2` — successful validation branch for merged PR #44.
@@ -100,8 +101,6 @@ Keep:
 
 - `main`.
 - `chore/automatic-handoff-and-docs-refresh` only until PR #47 is merged; it may be deleted after merge.
-
-Temporary branches `__temp__`, `__temp2__` and `__temp3__` were accidentally created during connector-based branch inventory. They contain no intended project work and should be deleted immediately.
 
 ## Milestone 1 — Map the upstream VS Code implementation
 
