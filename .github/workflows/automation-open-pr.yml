@@ -1,0 +1,136 @@
+name: Automation PR Handoff
+
+on:
+  workflow_dispatch:
+    inputs:
+      head_branch:
+        description: Feature branch to hand off for review
+        required: true
+        type: string
+      base_branch:
+        description: PR base branch
+        required: true
+        default: main
+        type: string
+      pr_title:
+        description: Pull request title
+        required: true
+        type: string
+      pr_body:
+        description: Pull request body
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  open-pr:
+    name: Record handoff and open PR as gcalpay-automation
+    if: github.actor == 'gcalpay'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Validate request
+        shell: bash
+        env:
+          HEAD_BRANCH: ${{ inputs.head_branch }}
+          BASE_BRANCH: ${{ inputs.base_branch }}
+        run: |
+          set -euo pipefail
+
+          branch_pattern='^[A-Za-z0-9._/-]+$'
+          if [[ ! "$HEAD_BRANCH" =~ $branch_pattern ]]; then
+            echo "Invalid head branch: $HEAD_BRANCH" >&2
+            exit 1
+          fi
+          if [[ ! "$BASE_BRANCH" =~ $branch_pattern ]]; then
+            echo "Invalid base branch: $BASE_BRANCH" >&2
+            exit 1
+          fi
+          if [[ "$HEAD_BRANCH" == "$BASE_BRANCH" || "$HEAD_BRANCH" == "main" ]]; then
+            echo "Refusing to create a PR from the base/default branch." >&2
+            exit 1
+          fi
+
+      - name: Check out feature branch as automation account
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.head_branch }}
+          fetch-depth: 0
+          token: ${{ secrets.AUTOMATION_BOT_TOKEN }}
+
+      - name: Verify automation identity
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.AUTOMATION_BOT_TOKEN }}
+        run: |
+          set -euo pipefail
+          login="$(gh api user --jq .login)"
+          if [[ "$login" != "gcalpay-automation" ]]; then
+            echo "AUTOMATION_BOT_TOKEN belongs to '$login', expected 'gcalpay-automation'." >&2
+            exit 1
+          fi
+
+      - name: Refuse duplicate open PR
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.AUTOMATION_BOT_TOKEN }}
+          HEAD_BRANCH: ${{ inputs.head_branch }}
+          BASE_BRANCH: ${{ inputs.base_branch }}
+        run: |
+          set -euo pipefail
+          existing="$(gh pr list --state open --head "$HEAD_BRANCH" --base "$BASE_BRANCH" --json number --jq 'length')"
+          if [[ "$existing" != "0" ]]; then
+            echo "An open PR already exists from $HEAD_BRANCH to $BASE_BRANCH." >&2
+            exit 1
+          fi
+
+      - name: Record automated handoff
+        shell: bash
+        env:
+          HEAD_BRANCH: ${{ inputs.head_branch }}
+          BASE_BRANCH: ${{ inputs.base_branch }}
+        run: |
+          set -euo pipefail
+
+          log='docs/issue-38-implementation-log.md'
+          if [[ ! -f "$log" ]]; then
+            echo "$log is missing; refusing to create untracked bookkeeping elsewhere." >&2
+            exit 1
+          fi
+
+          timestamp="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          {
+            printf '\n### Automated PR handoff — %s\n\n' "$timestamp"
+            printf -- '- Automation account: `gcalpay-automation`\n'
+            printf -- '- Head: `%s`\n' "$HEAD_BRANCH"
+            printf -- '- Base: `%s`\n' "$BASE_BRANCH"
+            printf -- '- Triggered by maintainer: `%s`\n' "$GITHUB_ACTOR"
+          } >> "$log"
+
+          git config user.name 'gcalpay-automation [bot]'
+          git config user.email '315580681+gcalpay-automation@users.noreply.github.com'
+          git add "$log"
+          git commit -m 'Record automated PR handoff'
+          git push origin "HEAD:$HEAD_BRANCH"
+
+      - name: Open pull request and request maintainer review
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.AUTOMATION_BOT_TOKEN }}
+          HEAD_BRANCH: ${{ inputs.head_branch }}
+          BASE_BRANCH: ${{ inputs.base_branch }}
+          PR_TITLE: ${{ inputs.pr_title }}
+          PR_BODY: ${{ inputs.pr_body }}
+        run: |
+          set -euo pipefail
+
+          pr_url="$(gh pr create \
+            --head "$HEAD_BRANCH" \
+            --base "$BASE_BRANCH" \
+            --title "$PR_TITLE" \
+            --body "$PR_BODY")"
+
+          gh pr edit "$pr_url" --add-reviewer gcalpay
+          echo "Opened $pr_url"
