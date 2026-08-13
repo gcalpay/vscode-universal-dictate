@@ -71,7 +71,7 @@ Commits:
 
 ### Automation workflow
 
-Status: bootstrap merged; first validation partially passed; PR creation fix pending
+Status: completed and validated end to end
 
 Changes:
 
@@ -82,6 +82,7 @@ Changes:
 - It refuses to create a duplicate open PR for the same head/base pair.
 - It appends an automated handoff record to this log, commits it as `gcalpay-automation [bot] <315580681+gcalpay-automation@users.noreply.github.com>`, and pushes that bookkeeping commit to the feature branch.
 - It opens the PR using the machine-account token and requests review from `gcalpay`.
+- PR creation and reviewer requests use direct GitHub REST API calls so the classic PAT can remain limited to `public_repo`.
 
 Bootstrap:
 
@@ -111,19 +112,47 @@ Passed:
 - Duplicate-PR guard.
 - Automated bookkeeping commit and push.
 - Bot-authored commit `977fb34` (`Record automated PR handoff`) was pushed to the validation branch.
+- PR #42 (`Validate automation PR handoff`) was successfully created by `gcalpay-automation`.
 
 Failed:
 
-- `gh pr create` failed before creating the PR.
-- The GitHub CLI command queried GraphQL fields requiring `read:org`, while the intentionally narrow classic PAT has only `public_repo`.
-- The failure was therefore in the CLI command path, not authentication, branch push, or bot identity.
+- After PR creation, `gh pr create` queried additional GraphQL fields requiring `read:org` and returned an error.
+- Because the step stopped on that error, the subsequent reviewer-request command did not run.
+- PR #42 therefore existed and passed normal CI, but `gcalpay` was not requested as reviewer.
 
 Resolution:
 
-- Do not broaden the bot PAT merely to satisfy `gh pr create` GraphQL queries.
+- Do not broaden the bot PAT merely to satisfy extra GitHub CLI GraphQL queries.
 - Replace `gh pr create` / `gh pr edit` with direct GitHub REST API calls for PR creation and reviewer request.
-- Fix branch: `fix/automation-pr-rest-api`.
-- After the fix reaches `main`, validate again on a fresh clean branch before beginning Issue #38 Milestone 1.
+- PR #42 was closed without merge.
+- Repair branch `fix/automation-pr-rest-api` became PR #43 and was merged to `main` as `82a20716ca479763fc33c683c81bf4aec387483c` after CI and Windows packaging passed.
+
+### Validation attempt 2
+
+Status: complete success
+
+Run:
+
+- Workflow run #2 / run ID `31654821705` on 2026-08-13.
+- Validation branch: `chore/automation-handoff-validation-2`.
+- Workflow conclusion: success.
+
+Verified:
+
+- Token identity: `gcalpay-automation`.
+- Bot-authored commit: `aba3816c5b6983bd2da8b435c0463d89babd16c6` (`Record automated PR handoff`).
+- PR #44 (`Validate automation PR handoff after REST fix`) was opened by `gcalpay-automation`.
+- `gcalpay` was requested as reviewer.
+- CI passed.
+- `gcalpay` submitted a formal `APPROVED` review.
+- PR #44 was merged with a normal merge commit (`92e8250f4015e34f831bf0979e621457aa1735ed`) rather than squashed so the original bot-authored commit remained in `main` history.
+- GitHub attributes both author and committer of `aba3816c5b6983bd2da8b435c0463d89babd16c6` to `gcalpay-automation`.
+- The bot-authored commit is an ancestor of `main`.
+
+Result:
+
+- The standard automation handoff is validated: maintainer triggers workflow → bot records handoff and commits → bot opens PR → maintainer reviews/approves → maintainer merges.
+- Workflow infrastructure is complete. Issue #38 may proceed to Milestone 1 after this documentation-state update is merged.
 
 ## Durable decisions
 
@@ -135,10 +164,3 @@ Resolution:
 - Keyboard navigation/Enter/Space behavior must remain unchanged.
 - Deliberate user retargeting during recording remains authoritative.
 - Proposed VS Code APIs must never be shipped in a Marketplace build.
-
-### Automated PR handoff — 2026-08-13T00:33:42Z
-
-- Automation account: `gcalpay-automation`
-- Head: `chore/automation-handoff-validation-2`
-- Base: `main`
-- Triggered by maintainer: `gcalpay`
