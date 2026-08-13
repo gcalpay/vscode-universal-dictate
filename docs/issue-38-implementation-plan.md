@@ -3,20 +3,20 @@
 ## Current state
 
 - Current phase: pre-Milestone-1 infrastructure mini-milestone — automatic PR handoff and repository documentation refresh.
-- Current chunk: finish branch review and validate the new automatic handoff trigger.
-- Status: implementation/documentation refresh is complete on `chore/automatic-handoff-and-docs-refresh`; automatic push-trigger validation and merge are still pending.
+- Current chunk: validate the automatic push-triggered PR handoff and merge this infrastructure branch.
+- Status: branch review passed and maintainer approved handoff; the final `[automation-handoff]` marker commit has been created; automatic workflow, PR CI and merge are pending.
 - Active repository: `gcalpay/vscode-universal-dictate`.
 - Active branch: `chore/automatic-handoff-and-docs-refresh` until this mini-milestone is merged.
 - Branch base: `main` at `23ebc2c9c966863ff948c976fc6f81fff8145109` (PR #45 merged).
 - Current extension version: `0.1.5`.
-- Last completed work: added the `[automation-handoff]` push trigger, refreshed stale product/runtime/testing Markdown, removed obsolete `docs/PR_NOTE.md`, and audited every tracked Markdown file.
+- Last completed work: complete branch review, repository-wide Markdown audit, automatic-trigger hardening and explicit maintainer approval.
 - Blockers: none.
 
 ### Exact next action for a fresh session
 
 1. Read `AGENTS.md`, this plan and `issue-38-implementation-log.md` in that order.
 2. Verify current `main`, open PRs and whether `chore/automatic-handoff-and-docs-refresh` still exists or has already merged.
-3. If this branch is **not yet merged**: review the complete branch against `main`; if clean, obtain explicit maintainer approval for handoff, then make the final state/bookkeeping commit with a subject ending exactly in ` [automation-handoff]`. Verify the automatic workflow opens the PR as `gcalpay-automation`, requests `gcalpay`, and CI passes. The maintainer reviews/approves and merges.
+3. If this branch is **not yet merged**: the branch gate is already approved. Verify the marker push ran `Automation PR Handoff`, that the PR was opened by `gcalpay-automation`, that `gcalpay` was requested as reviewer and that repository CI/checks pass. Do not ask for the handoff approval again. The maintainer then formally reviews/approves and merges.
 4. If this branch **has already merged**: verify `main` contains the automatic trigger and refreshed documentation, then begin Milestone 1.1 below. Do not repeat the infrastructure work.
 
 ## Working rules
@@ -86,17 +86,17 @@
   - Leave historical changelog, support, dependency and third-party notices unchanged where they remain factual.
 - [x] **Update durable Issue #38 state**
   - Make this plan and the implementation log sufficient to resume without conversation context.
-- [ ] **Mini-milestone branch gate**
-  - Review the complete branch against `main`.
-  - Confirm only the intended workflow/documentation changes are present.
-  - Confirm the workflow cannot automatically hand off `main` or a bot-authored bookkeeping push.
-  - Obtain explicit maintainer approval before adding the marker.
+- [x] **Mini-milestone branch gate**
+  - Reviewed the complete branch against `main`.
+  - Confirmed only the intended workflow/documentation changes are present.
+  - Confirmed the workflow cannot automatically hand off `main` or a bot-authored bookkeeping push.
+  - Maintainer explicitly approved handoff on 2026-08-13.
 - [ ] **Automatic-trigger validation and merge**
-  - Create the approved final marker commit.
-  - Verify the push event runs `Automation PR Handoff` successfully without visiting Actions manually.
-  - Verify PR author is `gcalpay-automation` and reviewer request is `gcalpay`.
-  - Verify normal repository CI/checks pass.
-  - Maintainer formally reviews/approves and merges.
+  - [x] Create the approved final marker commit.
+  - [ ] Verify the push event runs `Automation PR Handoff` successfully without visiting Actions manually.
+  - [ ] Verify PR author is `gcalpay-automation` and reviewer request is `gcalpay`.
+  - [ ] Verify normal repository CI/checks pass.
+  - [ ] Maintainer formally reviews/approves and merges.
   - After merge, Issue #38 proceeds to Milestone 1.1.
 
 ## Milestone 1 — Map the upstream VS Code implementation
@@ -238,5 +238,5 @@
 - Workflow repair PR #43 passed CI and Windows packaging and was merged.
 - Workflow validation attempt #2: run #2 (`31654821705`) completed successfully; bot commit `aba3816c5b6983bd2da8b435c0463d89babd16c6` opened PR #44 as `gcalpay-automation`, requested `gcalpay`, received an `APPROVED` review and was merged with a merge commit.
 - Bot commit `aba3816c5b6983bd2da8b435c0463d89babd16c6` is reachable from `main` and GitHub attributes its author and committer to `gcalpay-automation`.
-- Automatic push-marker trigger on `chore/automatic-handoff-and-docs-refresh`: implementation complete, validation pending the mini-milestone approval gate.
+- Automatic push-marker trigger on `chore/automatic-handoff-and-docs-refresh`: branch review passed, maintainer approved, marker commit created; automatic workflow result pending.
 - GUI testing for Issue #38 begins after a working upstream prototype exists.
