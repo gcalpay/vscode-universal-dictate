@@ -7,7 +7,7 @@ This document records completed work and durable findings for Issue #38. It is i
 - Repository: `gcalpay/vscode-universal-dictate`
 - Issue: #38 — Preserve insertion target when starting dictation from the status bar
 - Initial Issue #38 baseline `main`: `f0265bc4398643c3b3a27e6d2ad64183b115b6ba`
-- Baseline extension version: `0.1.5`
+- Baseline/current extension version during this work: `0.1.5`
 - Product scope: Windows VS Code extension; Remote - WSL is a supported workspace scenario.
 
 ## Milestone 0 — Baseline and wording
@@ -54,7 +54,6 @@ Status: completed.
 - Credential: classic PAT with `public_repo` only for this public repository.
 - Workflow verifies the token identity is exactly `gcalpay-automation`.
 - Bot commits use `gcalpay-automation [bot] <315580681+gcalpay-automation@users.noreply.github.com>`.
-- Bot opens the PR and requests review from `gcalpay`.
 - Human `gcalpay` retains formal review, approval, merge and release authority.
 
 Bootstrap PR:
@@ -88,10 +87,10 @@ Status: complete success.
 - Branch: `chore/automation-handoff-validation-2`.
 - Bot bookkeeping commit: `aba3816c5b6983bd2da8b435c0463d89babd16c6`.
 - PR #44 opened by `gcalpay-automation`.
-- `gcalpay` requested as reviewer.
+- `gcalpay` was requested as reviewer.
 - CI passed.
 - `gcalpay` submitted formal `APPROVED` review.
-- PR #44 was merged with a normal merge commit `92e8250f4015e34f831bf0979e621457aa1735ed` so the original bot-authored commit remained in `main` history.
+- PR #44 was merged with normal merge commit `92e8250f4015e34f831bf0979e621457aa1735ed` so the original bot-authored commit remained in `main` history.
 - GitHub attributes author and committer of `aba3816...` to `gcalpay-automation`.
 
 Result: manual `workflow_dispatch` fallback is validated end to end.
@@ -105,7 +104,7 @@ Result: manual `workflow_dispatch` fallback is validated end to end.
 
 ## Automatic handoff and repository documentation refresh
 
-Status: automatic trigger validated end to end; PR #47 is open and awaiting final human approval/merge.
+Status: completed and merged.
 
 Branch:
 
@@ -123,7 +122,7 @@ Purpose:
 - `79fb5087e509b74978d9e5703abe538a2986c7c9` — `Add automatic automation handoff trigger`.
   - Adds push trigger for non-`main` branches.
   - Automatic job requires `github.actor == 'gcalpay'` and a head commit subject ending in ` [automation-handoff]`.
-  - PR base is `main`; title derives from marker commit subject.
+  - PR base is `main`; title derives from the marker commit subject.
   - Bot bookkeeping pushes cannot loop because their actor is `gcalpay-automation`.
 - `cc7cfebcdd251c2c01f201b018a60eda113ef637` — `Refresh current product documentation`.
   - Updated README manual-VSIX wording.
@@ -140,7 +139,7 @@ Purpose:
 
 A recursive repository-tree inventory was used, not only `docs/`.
 
-After deleting `docs/PR_NOTE.md`, there are 13 intended tracked Markdown files:
+After deleting `docs/PR_NOTE.md`, the intended tracked Markdown set is 13 files:
 
 - `AGENTS.md`
 - `CHANGELOG.md`
@@ -160,7 +159,7 @@ After deleting `docs/PR_NOTE.md`, there are 13 intended tracked Markdown files:
 
 ### Automatic-trigger validation attempt 1
 
-Status: trigger path worked, one acceptance defect found.
+Status: trigger path worked; one acceptance defect found.
 
 - Maintainer approved the branch gate.
 - Marker commit `2ec5f9f9366f3f197761c03466e0cb5faa13f9db` — `Validate automatic handoff and docs refresh [automation-handoff]`.
@@ -183,33 +182,50 @@ Status: complete success.
 - No manual Actions dispatch was used.
 - Bot bookkeeping commit: `c28ff006a895aabdaea9c0760c330fb5cea4d2c9` (`Record automated PR handoff`).
 - PR #47 opened automatically by `gcalpay-automation`.
-- Generated PR title is clean: `Validate automatic handoff title fix`.
-- `gcalpay` is requested as reviewer.
-- PR #47 `typecheck`: success on the automatic-handoff validation head.
-- PR #47 Windows `package`: success on the automatic-handoff validation head.
-- Bot bookkeeping push generated a skipped automatic-handoff job, confirming the actor guard prevents recursion.
+- Generated PR title was clean: `Validate automatic handoff title fix`.
+- `gcalpay` was requested as reviewer.
+- Typecheck and Windows package checks passed on the final PR head.
+- Bot bookkeeping pushes produced skipped handoff jobs, confirming the actor guard prevents recursion.
+- `gcalpay` submitted a formal `APPROVED` review on 2026-08-13.
+- PR #47 merged to `main` on 2026-08-13 as `608528183a26b299e26eed4564280797cb1a4449`.
 
-Remaining gate:
+Result:
 
-- Final documentation-only state corrections are on PR #47 and must have green latest checks.
-- `gcalpay` then inspects the final PR #47 diff, submits formal approval and merges it.
-- After merge, verify `main` and proceed to Issue #38 Milestone 1.1.
+- Normal future handoff requires no manual visit to Actions: reviewed branch → explicit maintainer approval → final marker commit → bot bookkeeping/PR/reviewer request → human review/merge.
+- `workflow_dispatch` remains available only as fallback.
 
-## Branch housekeeping audit
+## Post-PR-#47 repository verification
 
-The authoritative remote branch API currently reports exactly 11 branches. The following branches are historical/superseded and may be deleted:
+Status: completed before the final state-refresh branch was created.
 
-- `chore/automation-handoff-validation` — PR #42 validation branch, closed/superseded.
-- `chore/automation-handoff-validation-2` — PR #44 merged.
-- `docs/issue-38-platform-wording` — PR #41 merged.
-- `docs/issue-38-workflow-validation` — PR #45 merged.
-- `feat/visualization-timespan` — PR #39 merged; waveform time-span feature is already in `main`/0.1.5.
-- `fix/automation-pr-rest-api` — PR #43 merged and superseded by `main`.
-- `fix/preserve-insertion-target` — old baseline branch; comparison shows zero commits ahead of current `main`.
-- `release/0.1.4` — zero commits ahead of `main`, fully behind it.
-- `release/0.1.5` — zero commits ahead of `main`, fully behind it.
+Verified:
 
-Keep `main`. Keep `chore/automatic-handoff-and-docs-refresh` only until PR #47 is merged, then delete it as well.
+- `main` = `608528183a26b299e26eed4564280797cb1a4449` (`Merge pull request #47 ...`).
+- No open pull requests.
+- PR #47 is merged and its author is `gcalpay-automation`.
+- Formal `APPROVED` review by `gcalpay` is recorded.
+- The automatic handoff workflow and refreshed documentation are on `main`.
+- The recursive tree still contains the intended 13 Markdown files and no obsolete `docs/PR_NOTE.md`.
+
+Remote branch cleanup state before creating `docs/issue-38-post-infrastructure-state`:
+
+- `main` — keep.
+- `fix/preserve-insertion-target` — stale baseline branch at `f0265bc4398643c3b3a27e6d2ad64183b115b6ba`; may be deleted.
+- `release/0.1.5` — stale release branch at `f2e8722aceada04aba73ca8d4fa87848373ad6ac`; may be deleted.
+
+All other previously listed merged/test/release branches had already been deleted by the maintainer.
+
+## Final post-infrastructure state refresh
+
+Branch: `docs/issue-38-post-infrastructure-state`.
+
+Purpose:
+
+- Correct the two durable Issue #38 state files after PR #47 merged so a fresh session does not see the pre-merge PR #47 gate as current work.
+- Set the next implementation work unambiguously to **Milestone 1.1 — Prepare the upstream working repository**.
+- Preserve the three-file recovery order: `AGENTS.md` → plan → log.
+
+This branch is documentation/state only. No extension runtime, native code, version, packaging or release behavior is changed.
 
 ## Durable Issue #38 decisions
 
@@ -226,6 +242,7 @@ Keep `main`. Keep `chore/automatic-handoff-and-docs-refresh` only until PR #47 i
 ## Fresh-session recovery
 
 - Read `AGENTS.md` → implementation plan → this log.
-- Verify current `main`, PR #47 and the active branch before editing anything.
-- If PR #47 remains open, do not create another handoff marker: the automatic path is already validated. Inspect the final diff/checks; the maintainer then formally approves and merges.
-- If PR #47 is merged, verify `main`, clean up historical branches if desired, and begin Milestone 1.1.
+- Verify current `main`, open PRs and branches before editing anything.
+- If `docs/issue-38-post-infrastructure-state` or its bot-opened PR is still active, finish that documentation-only review/merge gate first.
+- If that state-refresh PR is already merged, begin Milestone 1.1 immediately. Do not repeat the automation setup, Markdown audit or PR #47 validation.
+- The old Universal Dictate branches `fix/preserve-insertion-target` and `release/0.1.5`, if still present, are cleanup only and are not the active Issue #38 implementation branch.
