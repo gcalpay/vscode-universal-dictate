@@ -3,20 +3,20 @@
 ## Current state
 
 - Current phase: pre-Milestone-1 infrastructure mini-milestone — automatic PR handoff and repository documentation refresh.
-- Current chunk: validate the automatic push-triggered PR handoff and merge this infrastructure branch.
-- Status: branch review passed and maintainer approved handoff; the final `[automation-handoff]` marker commit has been created; automatic workflow, PR CI and merge are pending.
+- Current chunk: re-review the branch after fixing automatic PR-title derivation, then run one clean automatic-trigger retest.
+- Status: first automatic trigger run proved the push trigger, bot PR authorship and reviewer request, but PR #46 retained the literal marker in its title; #46 was closed without merge and the title derivation is fixed on the branch.
 - Active repository: `gcalpay/vscode-universal-dictate`.
 - Active branch: `chore/automatic-handoff-and-docs-refresh` until this mini-milestone is merged.
 - Branch base: `main` at `23ebc2c9c966863ff948c976fc6f81fff8145109` (PR #45 merged).
 - Current extension version: `0.1.5`.
-- Last completed work: complete branch review, repository-wide Markdown audit, automatic-trigger hardening and explicit maintainer approval.
+- Last completed work: closed failed acceptance PR #46, fixed literal marker removal in the generated PR title and recorded the validation result in the implementation log.
 - Blockers: none.
 
 ### Exact next action for a fresh session
 
 1. Read `AGENTS.md`, this plan and `issue-38-implementation-log.md` in that order.
 2. Verify current `main`, open PRs and whether `chore/automatic-handoff-and-docs-refresh` still exists or has already merged.
-3. If this branch is **not yet merged**: the branch gate is already approved. Verify the marker push ran `Automation PR Handoff`, that the PR was opened by `gcalpay-automation`, that `gcalpay` was requested as reviewer and that repository CI/checks pass. Do not ask for the handoff approval again. The maintainer then formally reviews/approves and merges.
+3. If this branch is **not yet merged**: review the complete current branch against `main`, including commit `f7cb200e5ba6b5c9a033b019eb1af80dac3c5e69` that fixes title derivation. If clean, obtain explicit maintainer approval again because the branch changed after the previous approval. Then create a new final commit whose subject ends exactly in ` [automation-handoff]` and verify the automatically opened PR has a clean title, author `gcalpay-automation`, requested reviewer `gcalpay` and green repository CI/checks.
 4. If this branch **has already merged**: verify `main` contains the automatic trigger and refreshed documentation, then begin Milestone 1.1 below. Do not repeat the infrastructure work.
 
 ## Working rules
@@ -24,11 +24,12 @@
 - Never implement directly on `main`.
 - Use one feature branch per coherent PR/workstream, not one branch per small chunk.
 - Create a coherent commit after each completed implementation chunk when the repository is in a reviewable state.
-- Perform a lightweight review after each chunk and a formal review/test gate after each milestone.
+- Perform a lightweight review after each chunk and a formal milestone review/test gate before PR handoff.
 - Review the complete branch before opening a PR; PR creation and merge are separate explicit gates.
-- Stop after each milestone and require maintainer approval before continuing.
+- Stop after each milestone and require maintainer approval before proceeding to the next milestone/workstream.
 - `gcalpay-automation` is a machine account and must be used only through automation, not manual operation.
 - After an approved gate, the normal PR handoff is a final commit whose subject ends exactly in ` [automation-handoff]`; manual `workflow_dispatch` is fallback only.
+- If the branch changes after approval, re-review it and obtain fresh maintainer approval before adding another marker.
 - Keep proposed VS Code API work out of Marketplace releases.
 - Use the real Windows VS Code desktop for behavior that cannot be validated in the web/GitHub environment.
 - Never auto-submit dictated text.
@@ -86,15 +87,20 @@
   - Leave historical changelog, support, dependency and third-party notices unchanged where they remain factual.
 - [x] **Update durable Issue #38 state**
   - Make this plan and the implementation log sufficient to resume without conversation context.
-- [x] **Mini-milestone branch gate**
-  - Reviewed the complete branch against `main`.
-  - Confirmed only the intended workflow/documentation changes are present.
-  - Confirmed the workflow cannot automatically hand off `main` or a bot-authored bookkeeping push.
-  - Maintainer explicitly approved handoff on 2026-08-13.
+- [ ] **Mini-milestone branch gate**
+  - Previous branch gate was approved on 2026-08-13 and triggered automatic validation attempt 1.
+  - Automatic validation attempt 1 exposed a PR-title derivation defect; the branch changed to fix it, so the gate is reopened.
+  - Review the complete current branch against `main` including the title fix.
+  - Confirm only intended workflow/documentation changes are present.
+  - Obtain explicit maintainer approval before the second marker commit.
 - [ ] **Automatic-trigger validation and merge**
-  - [x] Create the approved final marker commit.
-  - [ ] Verify the push event runs `Automation PR Handoff` successfully without visiting Actions manually.
-  - [ ] Verify PR author is `gcalpay-automation` and reviewer request is `gcalpay`.
+  - [x] Attempt 1: marker push automatically ran workflow `31662552028` successfully.
+  - [x] Attempt 1: bot opened PR #46 and requested `gcalpay` without manual Actions dispatch.
+  - [x] Attempt 1: PR #46 was closed without merge because its title incorrectly retained `[automation-handoff]`.
+  - [x] Fix title derivation using literal-length slicing in commit `f7cb200e5ba6b5c9a033b019eb1af80dac3c5e69`.
+  - [ ] Create a new approved marker commit for attempt 2.
+  - [ ] Verify attempt 2 PR title has no marker and PR author is `gcalpay-automation`.
+  - [ ] Verify `gcalpay` is requested as reviewer.
   - [ ] Verify normal repository CI/checks pass.
   - [ ] Maintainer formally reviews/approves and merges.
   - After merge, Issue #38 proceeds to Milestone 1.1.
@@ -230,6 +236,7 @@
 - Kept the bot PAT at `public_repo`; switched PR creation and reviewer requests from `gh pr` GraphQL behavior to direct REST API calls after validation attempt #1.
 - Added an automatic approval-gated push-marker path so the maintainer does not normally need to visit Actions manually; retained `workflow_dispatch` as fallback.
 - Performed a repository-wide Markdown refresh before Milestone 1 because several early MVP/pre-release documents no longer described the shipped runtime.
+- First automatic push-trigger validation exposed that Bash pattern suffix removal did not remove the literal marker; PR #46 was closed and title derivation changed to string-length slicing before retest.
 
 ## Test record
 
@@ -238,5 +245,6 @@
 - Workflow repair PR #43 passed CI and Windows packaging and was merged.
 - Workflow validation attempt #2: run #2 (`31654821705`) completed successfully; bot commit `aba3816c5b6983bd2da8b435c0463d89babd16c6` opened PR #44 as `gcalpay-automation`, requested `gcalpay`, received an `APPROVED` review and was merged with a merge commit.
 - Bot commit `aba3816c5b6983bd2da8b435c0463d89babd16c6` is reachable from `main` and GitHub attributes its author and committer to `gcalpay-automation`.
-- Automatic push-marker trigger on `chore/automatic-handoff-and-docs-refresh`: branch review passed, maintainer approved, marker commit created; automatic workflow result pending.
+- Automatic trigger attempt 1: marker commit `2ec5f9f9366f3f197761c03466e0cb5faa13f9db` caused workflow run `31662552028` to complete successfully without manual dispatch; bot commit `3df088444a264272213d806f9119a798242de7dd` opened PR #46 and requested `gcalpay`; PR title incorrectly retained the marker, so #46 was closed without merge.
+- Commit `f7cb200e5ba6b5c9a033b019eb1af80dac3c5e69` fixes the title derivation; clean automatic retest pending a renewed branch gate.
 - GUI testing for Issue #38 begins after a working upstream prototype exists.
