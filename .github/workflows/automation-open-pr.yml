@@ -80,7 +80,13 @@ jobs:
           BASE_BRANCH: ${{ inputs.base_branch }}
         run: |
           set -euo pipefail
-          existing="$(gh pr list --state open --head "$HEAD_BRANCH" --base "$BASE_BRANCH" --json number --jq 'length')"
+          existing="$(gh api \
+            --method GET \
+            "repos/$GITHUB_REPOSITORY/pulls" \
+            -f state=open \
+            -f head="gcalpay:$HEAD_BRANCH" \
+            -f base="$BASE_BRANCH" \
+            --jq 'length')"
           if [[ "$existing" != "0" ]]; then
             echo "An open PR already exists from $HEAD_BRANCH to $BASE_BRANCH." >&2
             exit 1
@@ -126,11 +132,18 @@ jobs:
         run: |
           set -euo pipefail
 
-          pr_url="$(gh pr create \
-            --head "$HEAD_BRANCH" \
-            --base "$BASE_BRANCH" \
-            --title "$PR_TITLE" \
-            --body "$PR_BODY")"
+          pr_number="$(gh api \
+            --method POST \
+            "repos/$GITHUB_REPOSITORY/pulls" \
+            -f title="$PR_TITLE" \
+            -f head="$HEAD_BRANCH" \
+            -f base="$BASE_BRANCH" \
+            -f body="$PR_BODY" \
+            --jq '.number')"
 
-          gh pr edit "$pr_url" --add-reviewer gcalpay
-          echo "Opened $pr_url"
+          printf '{"reviewers":["gcalpay"]}' | gh api \
+            --method POST \
+            "repos/$GITHUB_REPOSITORY/pulls/$pr_number/requested_reviewers" \
+            --input - >/dev/null
+
+          echo "Opened https://github.com/$GITHUB_REPOSITORY/pull/$pr_number"
