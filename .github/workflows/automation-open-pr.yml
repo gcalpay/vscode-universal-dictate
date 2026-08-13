@@ -20,6 +20,9 @@ on:
         description: Pull request body
         required: true
         type: string
+  push:
+    branches-ignore:
+      - main
 
 permissions:
   contents: read
@@ -27,36 +30,85 @@ permissions:
 jobs:
   open-pr:
     name: Record handoff and open PR as gcalpay-automation
-    if: github.actor == 'gcalpay'
+    if: >-
+      github.actor == 'gcalpay' &&
+      (
+        github.event_name == 'workflow_dispatch' ||
+        (
+          github.event_name == 'push' &&
+          contains(github.event.head_commit.message, '[automation-handoff]')
+        )
+      )
     runs-on: ubuntu-latest
 
     steps:
-      - name: Validate request
+      - name: Resolve and validate request
+        id: request
         shell: bash
         env:
-          HEAD_BRANCH: ${{ inputs.head_branch }}
-          BASE_BRANCH: ${{ inputs.base_branch }}
+          EVENT_NAME: ${{ github.event_name }}
+          DISPATCH_HEAD_BRANCH: ${{ inputs.head_branch }}
+          DISPATCH_BASE_BRANCH: ${{ inputs.base_branch }}
+          DISPATCH_PR_TITLE: ${{ inputs.pr_title }}
+          DISPATCH_PR_BODY: ${{ inputs.pr_body }}
+          PUSH_BRANCH: ${{ github.ref_name }}
+          PUSH_MESSAGE: ${{ github.event.head_commit.message }}
         run: |
           set -euo pipefail
 
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            head="$DISPATCH_HEAD_BRANCH"
+            base="$DISPATCH_BASE_BRANCH"
+            title="$DISPATCH_PR_TITLE"
+            body="$DISPATCH_PR_BODY"
+            trigger_mode='manual workflow_dispatch fallback'
+          else
+            head="$PUSH_BRANCH"
+            base='main'
+            first_line="${PUSH_MESSAGE%%$'\n'*}"
+            marker=' [automation-handoff]'
+            if [[ "$first_line" != *"$marker" ]]; then
+              echo "Automatic handoff marker must appear at the end of the commit subject." >&2
+              exit 1
+            fi
+            title_length=$((${#first_line} - ${#marker}))
+            title="${first_line:0:title_length}"
+            body="Automated handoff from \`$head\` after a maintainer-approved gate. Review the complete branch diff and CI/check status before merge."
+            trigger_mode='automatic push marker'
+          fi
+
           branch_pattern='^[A-Za-z0-9._/-]+$'
-          if [[ ! "$HEAD_BRANCH" =~ $branch_pattern ]]; then
-            echo "Invalid head branch: $HEAD_BRANCH" >&2
+          if [[ ! "$head" =~ $branch_pattern ]]; then
+            echo "Invalid head branch: $head" >&2
             exit 1
           fi
-          if [[ ! "$BASE_BRANCH" =~ $branch_pattern ]]; then
-            echo "Invalid base branch: $BASE_BRANCH" >&2
+          if [[ ! "$base" =~ $branch_pattern ]]; then
+            echo "Invalid base branch: $base" >&2
             exit 1
           fi
-          if [[ "$HEAD_BRANCH" == "$BASE_BRANCH" || "$HEAD_BRANCH" == "main" ]]; then
+          if [[ "$head" == "$base" || "$head" == "main" ]]; then
             echo "Refusing to create a PR from the base/default branch." >&2
             exit 1
           fi
+          if [[ -z "$title" || -z "$body" ]]; then
+            echo "PR title and body must not be empty." >&2
+            exit 1
+          fi
+
+          {
+            echo "head_branch=$head"
+            echo "base_branch=$base"
+            echo "pr_title=$title"
+            echo "trigger_mode=$trigger_mode"
+            echo 'pr_body<<__AUTOMATION_PR_BODY__'
+            printf '%s\n' "$body"
+            echo '__AUTOMATION_PR_BODY__'
+          } >> "$GITHUB_OUTPUT"
 
       - name: Check out feature branch as automation account
         uses: actions/checkout@v7
         with:
-          ref: ${{ inputs.head_branch }}
+          ref: ${{ steps.request.outputs.head_branch }}
           fetch-depth: 0
           token: ${{ secrets.AUTOMATION_BOT_TOKEN }}
 
@@ -76,8 +128,8 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.AUTOMATION_BOT_TOKEN }}
-          HEAD_BRANCH: ${{ inputs.head_branch }}
-          BASE_BRANCH: ${{ inputs.base_branch }}
+          HEAD_BRANCH: ${{ steps.request.outputs.head_branch }}
+          BASE_BRANCH: ${{ steps.request.outputs.base_branch }}
         run: |
           set -euo pipefail
           existing="$(gh api \
@@ -95,8 +147,9 @@ jobs:
       - name: Record automated handoff
         shell: bash
         env:
-          HEAD_BRANCH: ${{ inputs.head_branch }}
-          BASE_BRANCH: ${{ inputs.base_branch }}
+          HEAD_BRANCH: ${{ steps.request.outputs.head_branch }}
+          BASE_BRANCH: ${{ steps.request.outputs.base_branch }}
+          TRIGGER_MODE: ${{ steps.request.outputs.trigger_mode }}
         run: |
           set -euo pipefail
 
@@ -112,6 +165,7 @@ jobs:
             printf -- '- Automation account: `gcalpay-automation`\n'
             printf -- '- Head: `%s`\n' "$HEAD_BRANCH"
             printf -- '- Base: `%s`\n' "$BASE_BRANCH"
+            printf -- '- Trigger: %s\n' "$TRIGGER_MODE"
             printf -- '- Triggered by maintainer: `%s`\n' "$GITHUB_ACTOR"
           } >> "$log"
 
@@ -125,10 +179,10 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.AUTOMATION_BOT_TOKEN }}
-          HEAD_BRANCH: ${{ inputs.head_branch }}
-          BASE_BRANCH: ${{ inputs.base_branch }}
-          PR_TITLE: ${{ inputs.pr_title }}
-          PR_BODY: ${{ inputs.pr_body }}
+          HEAD_BRANCH: ${{ steps.request.outputs.head_branch }}
+          BASE_BRANCH: ${{ steps.request.outputs.base_branch }}
+          PR_TITLE: ${{ steps.request.outputs.pr_title }}
+          PR_BODY: ${{ steps.request.outputs.pr_body }}
         run: |
           set -euo pipefail
 

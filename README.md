@@ -20,7 +20,7 @@ In VS Code, open **Extensions** (`Ctrl+Shift+X`), search for **Universal Dictate
 
 ### VSIX
 
-For manual/offline installation, download the latest Windows x64 `.vsix` from [GitHub Releases](https://github.com/gcalpay/vscode-universal-dictate/releases/latest), then install it directly:
+If you have a Windows x64 `.vsix` package for manual/offline installation, install it directly:
 
 ```text
 Ctrl+Shift+P

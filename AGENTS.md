@@ -28,11 +28,25 @@ This file contains stable repository-wide instructions for coding agents and fut
 - Before merge, inspect the actual PR diff and CI/check status.
 - Web/connector work writes directly to remote branches; do not describe it as a local `commit`/`push` workflow.
 
-## Automation account
+## Automatic PR handoff
 
 - `gcalpay-automation` is a machine account and must be used only through automation, not as a manually operated secondary human account.
-- Automation credentials must never be committed to the repository. Use narrowly scoped GitHub secrets or a GitHub App as appropriate.
+- Automation credentials must never be committed to the repository. The current repository secret is `AUTOMATION_BOT_TOKEN`; keep its permissions narrowly scoped.
 - The maintainer account `gcalpay` remains responsible for human review, formal approval, merge, and release decisions.
+- After a milestone/workstream has passed branch review and the maintainer explicitly approves handoff, make the final state/bookkeeping commit on the feature branch with a subject ending exactly in ` [automation-handoff]`.
+- That final approved commit must leave the plan/log current before triggering handoff. Example: `Map VS Code status-bar path [automation-handoff]`.
+- The push marker triggers `.github/workflows/automation-open-pr.yml`. The workflow acts as `gcalpay-automation`, appends its own handoff record, opens the PR, and requests review from `gcalpay`.
+- Do not add the marker before maintainer approval and do not manually open a duplicate PR after using it.
+- Manual `workflow_dispatch` remains a fallback only if the automatic marker path cannot be used.
+- Bot-authored bookkeeping pushes must not trigger another handoff; the workflow is restricted to pushes by `gcalpay`.
+
+## Persistent state and fresh-session recovery
+
+- Before starting Issue #38 work, read this file, then the implementation plan, then the implementation log.
+- At the beginning of a fresh session, verify current `main`, open PRs, and the branch named by the active work before editing anything; repository state can move after documentation was written.
+- Before any milestone stop or chat handoff, ensure the plan states the current phase/chunk, last completed work, exact next action, and blockers.
+- Record durable results, branches, commits, PRs, CI/tests, decisions, and deviations in the implementation log.
+- Prefer state wording that remains useful after a PR merge. Do not leave a fresh-session agent dependent on conversation-only context.
 
 ## Testing and release
 

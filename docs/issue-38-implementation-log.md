@@ -6,168 +6,226 @@ This document records completed work and durable findings for Issue #38. It is i
 
 - Repository: `gcalpay/vscode-universal-dictate`
 - Issue: #38 — Preserve insertion target when starting dictation from the status bar
-- Baseline `main`: `f0265bc4398643c3b3a27e6d2ad64183b115b6ba`
+- Initial Issue #38 baseline `main`: `f0265bc4398643c3b3a27e6d2ad64183b115b6ba`
 - Baseline extension version: `0.1.5`
 - Product scope: Windows VS Code extension; Remote - WSL is a supported workspace scenario.
 
 ## Milestone 0 — Baseline and wording
 
-### 0.1 Baseline verification
+Status: completed.
 
-Status: completed
+Branch: `docs/issue-38-platform-wording`.
 
-Findings:
+Results:
 
-- `main` baseline was `f0265bc4398643c3b3a27e6d2ad64183b115b6ba` (`Refine release workflow`).
-- Extension version was `0.1.5`.
-- No open pull request was active when Milestone 0 began.
-- Existing README/package positioning described Windows support and Remote-WSL separately.
+- README/package positioning changed to: `Local, offline dictation across VS Code inputs on Windows, including WSL workspaces.`
+- Added the forward-looking Issue #38 implementation plan.
+- No source/native/runtime/version/release behavior changed.
+- Maintainer reviewed and approved the branch.
 
-### 0.2 Documentation wording
+Selected commits:
 
-Status: completed
-
-Branch:
-
-- `docs/issue-38-platform-wording`
-
-Changes:
-
-- README opening changed to: `Local, offline dictation across VS Code inputs on Windows, including WSL workspaces.`
-- Marketplace-facing `package.json` description changed to the same positioning.
-- Added `docs/issue-38-implementation-plan.md` as the forward-looking source of truth for Issue #38.
-
-Commits:
-
-- `dbc2544d784c6d431ab48d9ef21699dcbc3686a2` — documentation wording and initial Issue #38 plan.
-- `8382be8d782b7c03d7d2a80aeb5b73d17feae83d` — mark Milestone 0 complete after branch review.
-
-Review result:
-
-- Milestone 0 branch review against `main` passed.
-- At the Milestone 0 gate, only `README.md`, `package.json`, and `docs/issue-38-implementation-plan.md` differed from `main`.
-- No source, native, CI, version, packaging, or release behavior changed.
-- No implementation tests were required.
-- Maintainer approved Milestone 0 before further work.
+- `dbc2544d784c6d431ab48d9ef21699dcbc3686a2` — documentation wording and initial plan.
+- `8382be8d782b7c03d7d2a80aeb5b73d17feae83d` — mark Milestone 0 complete.
 
 ## Workflow infrastructure before Milestone 1
 
-### Repository agent guidance
+### Repository agent guidance and persistent state
 
-Status: completed
-
-Changes:
+Status: completed.
 
 - Added root `AGENTS.md` with stable repository-wide agent rules.
-- `AGENTS.md` points Issue #38 work to the living implementation plan and this implementation log rather than duplicating the milestone roadmap.
-- It records branch/review gates, Windows UI testing requirements, release constraints, behavioral invariants, and the rule that `gcalpay-automation` is used only through automation.
-- Added this backward-looking implementation log so future chats/agents can recover completed work without reconstructing a separate handoff.
+- Added this implementation log as the backward-looking source of truth.
+- Kept the detailed forward roadmap in `docs/issue-38-implementation-plan.md`.
 
-Commits:
+Selected commits:
 
 - `369168a82473cc5672b025517c127b83437f0229` — add repository agent guidance.
 - `0afdc456ea66af1ddcd26ff6ad50519690b744e0` — add Issue #38 implementation log.
-- `6a8b1282b6735cb4a88bc0ca360e4c3abc74956c` — record the workflow-infrastructure phase in the living plan.
+- `6a8b1282b6735cb4a88bc0ca360e4c3abc74956c` — record workflow-infrastructure phase in the plan.
 
-### Automation workflow
+### Automation-account workflow bootstrap
 
-Status: completed and validated end to end
-
-Changes:
+Status: completed.
 
 - Added `.github/workflows/automation-open-pr.yml`.
-- The workflow is manual (`workflow_dispatch`) and the job runs only when triggered by `gcalpay`.
-- It validates branch names and refuses handoff from `main` or from the selected base branch.
-- It checks out the selected feature branch using `AUTOMATION_BOT_TOKEN` and verifies via the GitHub API that the token belongs to `gcalpay-automation`.
-- It refuses to create a duplicate open PR for the same head/base pair.
-- It appends an automated handoff record to this log, commits it as `gcalpay-automation [bot] <315580681+gcalpay-automation@users.noreply.github.com>`, and pushes that bookkeeping commit to the feature branch.
-- It opens the PR using the machine-account token and requests review from `gcalpay`.
-- PR creation and reviewer requests use direct GitHub REST API calls so the classic PAT can remain limited to `public_repo`.
+- `gcalpay-automation` is a machine account and is not manually operated.
+- Repository secret: `AUTOMATION_BOT_TOKEN`.
+- Credential: classic PAT with `public_repo` only for this public repository.
+- Workflow verifies the token identity is exactly `gcalpay-automation`.
+- Bot commits use `gcalpay-automation [bot] <315580681+gcalpay-automation@users.noreply.github.com>`.
+- Bot opens the PR and requests review from `gcalpay`.
+- Human `gcalpay` retains formal review, approval, merge and release authority.
 
-Bootstrap:
+Bootstrap PR:
 
-- PR #41 (`Bootstrap Issue #38 workflow infrastructure`) was merged to `main` as `063e754799b1a80dbc065725a8bd99ef7fb900e0`.
-- CI and Windows packaging passed before merge.
+- PR #41 — `Bootstrap Issue #38 workflow infrastructure`.
+- Merged to `main` as `063e754799b1a80dbc065725a8bd99ef7fb900e0` after CI and Windows packaging passed.
 
-Credential decision:
+### Manual workflow validation attempt 1
 
-- `gcalpay-automation` is a collaborator on the personal-account-owned public repository. GitHub currently lists collaborator repositories as a limitation of fine-grained personal access tokens.
-- To preserve the `gcalpay-automation` machine-user identity for this public repository, the credential is a classic PAT with the `public_repo` scope only, stored as the repository Actions secret `AUTOMATION_BOT_TOKEN`.
-- Do not use the broader `repo` scope for this public-only workflow.
+Status: partial success; superseded.
 
-### Validation attempt 1
-
-Status: partial success
-
-Run:
-
-- Workflow run #1 / run ID `31654172826` on 2026-08-13.
-- Validation branch: `chore/automation-handoff-validation`.
-
-Passed:
-
-- Request validation.
-- Checkout using `AUTOMATION_BOT_TOKEN`.
-- Token identity verification confirmed `gcalpay-automation`.
-- Duplicate-PR guard.
-- Automated bookkeeping commit and push.
-- Bot-authored commit `977fb34` (`Record automated PR handoff`) was pushed to the validation branch.
-- PR #42 (`Validate automation PR handoff`) was successfully created by `gcalpay-automation`.
-
-Failed:
-
-- After PR creation, `gh pr create` queried additional GraphQL fields requiring `read:org` and returned an error.
-- Because the step stopped on that error, the subsequent reviewer-request command did not run.
-- PR #42 therefore existed and passed normal CI, but `gcalpay` was not requested as reviewer.
+- Workflow run ID `31654172826`.
+- Branch: `chore/automation-handoff-validation`.
+- Token identity check succeeded.
+- Bot bookkeeping commit `977fb34` was pushed.
+- PR #42 was created by `gcalpay-automation`.
+- `gh pr create` then queried extra GraphQL fields requiring `read:org`, causing the step to fail before reviewer request.
+- PR #42 was closed without merge.
 
 Resolution:
 
-- Do not broaden the bot PAT merely to satisfy extra GitHub CLI GraphQL queries.
-- Replace `gh pr create` / `gh pr edit` with direct GitHub REST API calls for PR creation and reviewer request.
-- PR #42 was closed without merge.
-- Repair branch `fix/automation-pr-rest-api` became PR #43 and was merged to `main` as `82a20716ca479763fc33c683c81bf4aec387483c` after CI and Windows packaging passed.
+- Do not broaden the PAT to satisfy unrelated GitHub CLI GraphQL queries.
+- Switched PR creation and reviewer request to direct REST API calls.
+- Repair PR #43 merged to `main` as `82a20716ca479763fc33c683c81bf4aec387483c` after CI and Windows packaging passed.
 
-### Validation attempt 2
+### Manual workflow validation attempt 2
 
-Status: complete success
+Status: complete success.
 
-Run:
-
-- Workflow run #2 / run ID `31654821705` on 2026-08-13.
-- Validation branch: `chore/automation-handoff-validation-2`.
-- Workflow conclusion: success.
-
-Verified:
-
-- Token identity: `gcalpay-automation`.
-- Bot-authored commit: `aba3816c5b6983bd2da8b435c0463d89babd16c6` (`Record automated PR handoff`).
-- PR #44 (`Validate automation PR handoff after REST fix`) was opened by `gcalpay-automation`.
-- `gcalpay` was requested as reviewer.
+- Workflow run ID `31654821705`.
+- Branch: `chore/automation-handoff-validation-2`.
+- Bot bookkeeping commit: `aba3816c5b6983bd2da8b435c0463d89babd16c6`.
+- PR #44 opened by `gcalpay-automation`.
+- `gcalpay` requested as reviewer.
 - CI passed.
-- `gcalpay` submitted a formal `APPROVED` review.
-- PR #44 was merged with a normal merge commit (`92e8250f4015e34f831bf0979e621457aa1735ed`) rather than squashed so the original bot-authored commit remained in `main` history.
-- GitHub attributes both author and committer of `aba3816c5b6983bd2da8b435c0463d89babd16c6` to `gcalpay-automation`.
-- The bot-authored commit is an ancestor of `main`.
+- `gcalpay` submitted formal `APPROVED` review.
+- PR #44 was merged with a normal merge commit `92e8250f4015e34f831bf0979e621457aa1735ed` so the original bot-authored commit remained in `main` history.
+- GitHub attributes author and committer of `aba3816...` to `gcalpay-automation`.
 
-Result:
+Result: manual `workflow_dispatch` fallback is validated end to end.
 
-- The standard automation handoff is validated: maintainer triggers workflow → bot records handoff and commits → bot opens PR → maintainer reviews/approves → maintainer merges.
-- Workflow infrastructure is complete. Issue #38 may proceed to Milestone 1 after this documentation-state update is merged.
+### Documentation-state handoff
 
-## Durable decisions
+- Branch `docs/issue-38-workflow-validation` updated the plan/log after manual validation.
+- Bot opened PR #45 — `Record validated automation workflow`.
+- `gcalpay` formally approved it.
+- PR #45 merged to `main` as `23ebc2c9c966863ff948c976fc6f81fff8145109`.
 
-- The clean Issue #38 path depends on an upstream VS Code capability; end users must never be required to install a custom VS Code fork.
-- A VS Code fork, if used, is only a development/test vehicle for an upstream contribution to `microsoft/vscode`.
-- If the required upstream API is declined and no safe public-API alternative exists, treat that as a blocker rather than shipping unsafe focus-tracking workarounds.
+## Automatic handoff and repository documentation refresh
+
+Status: automatic trigger validated end to end; PR #47 is open and awaiting final human approval/merge.
+
+Branch:
+
+- `chore/automatic-handoff-and-docs-refresh`
+- Base: `main` at `23ebc2c9c966863ff948c976fc6f81fff8145109`.
+
+Purpose:
+
+- Remove the need for the maintainer to visit Actions for every normal handoff.
+- Keep `workflow_dispatch` only as fallback.
+- Refresh repository Markdown so a fresh session can recover the exact shipped runtime, Issue #38 state and next action without relying on conversation history.
+
+### Implementation/documentation commits
+
+- `79fb5087e509b74978d9e5703abe538a2986c7c9` — `Add automatic automation handoff trigger`.
+  - Adds push trigger for non-`main` branches.
+  - Automatic job requires `github.actor == 'gcalpay'` and a head commit subject ending in ` [automation-handoff]`.
+  - PR base is `main`; title derives from marker commit subject.
+  - Bot bookkeeping pushes cannot loop because their actor is `gcalpay-automation`.
+- `cc7cfebcdd251c2c01f201b018a60eda113ef637` — `Refresh current product documentation`.
+  - Updated README manual-VSIX wording.
+  - Replaced stale early-MVP/pre-release descriptions in architecture, implementation notes, MVP, status-bar and testing docs with the current 0.1.5 runtime and Issue #38 limitation.
+- `e71774f541e929094cb17ff8e1d725588cf6777b` — `Remove obsolete pull request note`.
+  - Deleted stale `docs/PR_NOTE.md`.
+- `b9ca3ac74c768446346d78a01db6e3ab0782a649` — `Harden automatic handoff request parsing`.
+  - Explicitly distinguishes push from manual dispatch.
+  - Makes manual fallback PR-body output multiline-safe.
+- `f7cb200e5ba6b5c9a033b019eb1af80dac3c5e69` — `Fix automatic handoff PR title derivation`.
+  - Replaced Bash glob-style suffix removal with literal string-length slicing.
+
+### Repository-wide Markdown audit
+
+A recursive repository-tree inventory was used, not only `docs/`.
+
+After deleting `docs/PR_NOTE.md`, there are 13 intended tracked Markdown files:
+
+- `AGENTS.md`
+- `CHANGELOG.md`
+- `README.md`
+- `SUPPORT.md`
+- `THIRD_PARTY_NOTICES.md`
+- `docs/ARCHITECTURE.md`
+- `docs/DEPENDENCIES.md`
+- `docs/IMPLEMENTATION_NOTES.md`
+- `docs/MVP.md`
+- `docs/STATUS_BAR_BUTTON.md`
+- `docs/TESTING.md`
+- `docs/issue-38-implementation-log.md`
+- `docs/issue-38-implementation-plan.md`
+
+`CHANGELOG.md`, `SUPPORT.md`, `THIRD_PARTY_NOTICES.md` and `docs/DEPENDENCIES.md` were inspected and left unchanged because their current statements remain factual. The stale runtime/status/testing/install documents were refreshed.
+
+### Automatic-trigger validation attempt 1
+
+Status: trigger path worked, one acceptance defect found.
+
+- Maintainer approved the branch gate.
+- Marker commit `2ec5f9f9366f3f197761c03466e0cb5faa13f9db` — `Validate automatic handoff and docs refresh [automation-handoff]`.
+- Push automatically started workflow run `31662552028`; no manual Actions dispatch was used.
+- Bot appended bookkeeping commit `3df088444a264272213d806f9119a798242de7dd`.
+- Bot opened PR #46 and requested `gcalpay` as reviewer.
+- Defect: PR title still contained literal `[automation-handoff]`.
+- Cause: Bash `${first_line%$marker}` interpreted the brackets as pattern syntax.
+- PR #46 closed without merge.
+- Title derivation fixed in `f7cb200e...`.
+
+### Automatic-trigger validation attempt 2
+
+Status: complete success.
+
+- Branch was re-reviewed after the title fix and the maintainer explicitly approved the retest.
+- Marker commit: `0a79fbaf2d52483d5ff3f29b55c69b5667e266d9` — `Validate automatic handoff title fix [automation-handoff]`.
+- Push automatically started workflow run `31662910677`.
+- Workflow conclusion: success.
+- No manual Actions dispatch was used.
+- Bot bookkeeping commit: `c28ff006a895aabdaea9c0760c330fb5cea4d2c9` (`Record automated PR handoff`).
+- PR #47 opened automatically by `gcalpay-automation`.
+- Generated PR title is clean: `Validate automatic handoff title fix`.
+- `gcalpay` is requested as reviewer.
+- PR #47 `typecheck`: success on the automatic-handoff validation head.
+- PR #47 Windows `package`: success on the automatic-handoff validation head.
+- Bot bookkeeping push generated a skipped automatic-handoff job, confirming the actor guard prevents recursion.
+
+Remaining gate:
+
+- Final documentation-only state corrections are on PR #47 and must have green latest checks.
+- `gcalpay` then inspects the final PR #47 diff, submits formal approval and merges it.
+- After merge, verify `main` and proceed to Issue #38 Milestone 1.1.
+
+## Branch housekeeping audit
+
+The authoritative remote branch API currently reports exactly 11 branches. The following branches are historical/superseded and may be deleted:
+
+- `chore/automation-handoff-validation` — PR #42 validation branch, closed/superseded.
+- `chore/automation-handoff-validation-2` — PR #44 merged.
+- `docs/issue-38-platform-wording` — PR #41 merged.
+- `docs/issue-38-workflow-validation` — PR #45 merged.
+- `feat/visualization-timespan` — PR #39 merged; waveform time-span feature is already in `main`/0.1.5.
+- `fix/automation-pr-rest-api` — PR #43 merged and superseded by `main`.
+- `fix/preserve-insertion-target` — old baseline branch; comparison shows zero commits ahead of current `main`.
+- `release/0.1.4` — zero commits ahead of `main`, fully behind it.
+- `release/0.1.5` — zero commits ahead of `main`, fully behind it.
+
+Keep `main`. Keep `chore/automatic-handoff-and-docs-refresh` only until PR #47 is merged, then delete it as well.
+
+## Durable Issue #38 decisions
+
+- The clean fix depends on an upstream VS Code capability; end users must never need a custom VS Code fork.
+- A `gcalpay/vscode` fork is development/test infrastructure only for an upstream contribution to `microsoft/vscode`.
 - Candidate API shape remains `StatusBarItem.preserveFocus?: boolean`, subject to upstream design review.
-- Pointer-induced focus should be prevented before command activation rather than restored afterward.
-- Keyboard navigation/Enter/Space behavior must remain unchanged.
-- Deliberate user retargeting during recording remains authoritative.
-- Proposed VS Code APIs must never be shipped in a Marketplace build.
+- Pointer-induced focus movement should be prevented before command activation, not restored afterward.
+- Keyboard navigation and Enter/Space behavior must remain unchanged.
+- Deliberate user retargeting while recording remains authoritative.
+- No UI Automation/MSAA focus tracking, mouse hooks, click replay, accessibility-setting changes, focus-restoration hacks or synthesized Enter.
+- Proposed VS Code APIs must never ship in Marketplace builds.
+- If upstream declines the required capability and no safe stable public alternative exists, leave Issue #38 blocked/open rather than reviving unsafe hacks.
 
-### Automated PR handoff — 2026-08-13T00:55:19Z
+## Fresh-session recovery
 
-- Automation account: `gcalpay-automation`
-- Head: `docs/issue-38-workflow-validation`
-- Base: `main`
-- Triggered by maintainer: `gcalpay`
+- Read `AGENTS.md` → implementation plan → this log.
+- Verify current `main`, PR #47 and the active branch before editing anything.
+- If PR #47 remains open, do not create another handoff marker: the automatic path is already validated. Inspect the final diff/checks; the maintainer then formally approves and merges.
+- If PR #47 is merged, verify `main`, clean up historical branches if desired, and begin Milestone 1.1.
