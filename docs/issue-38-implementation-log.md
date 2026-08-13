@@ -71,12 +71,12 @@ Commits:
 
 ### Automation workflow
 
-Status: completed and validated end to end
+Status: completed and validated end to end for the manual fallback path
 
 Changes:
 
 - Added `.github/workflows/automation-open-pr.yml`.
-- The workflow is manual (`workflow_dispatch`) and the job runs only when triggered by `gcalpay`.
+- The initial workflow was manual (`workflow_dispatch`) and restricted to `gcalpay`.
 - It validates branch names and refuses handoff from `main` or from the selected base branch.
 - It checks out the selected feature branch using `AUTOMATION_BOT_TOKEN` and verifies via the GitHub API that the token belongs to `gcalpay-automation`.
 - It refuses to create a duplicate open PR for the same head/base pair.
@@ -91,8 +91,8 @@ Bootstrap:
 
 Credential decision:
 
-- `gcalpay-automation` is a collaborator on the personal-account-owned public repository. GitHub currently lists collaborator repositories as a limitation of fine-grained personal access tokens.
-- To preserve the `gcalpay-automation` machine-user identity for this public repository, the credential is a classic PAT with the `public_repo` scope only, stored as the repository Actions secret `AUTOMATION_BOT_TOKEN`.
+- `gcalpay-automation` is a collaborator on the personal-account-owned public repository.
+- To preserve the machine-user identity for this public repository, the credential is a classic PAT with the `public_repo` scope only, stored as the repository Actions secret `AUTOMATION_BOT_TOKEN`.
 - Do not use the broader `repo` scope for this public-only workflow.
 
 ### Validation attempt 1
@@ -151,8 +151,72 @@ Verified:
 
 Result:
 
-- The standard automation handoff is validated: maintainer triggers workflow → bot records handoff and commits → bot opens PR → maintainer reviews/approves → maintainer merges.
-- Workflow infrastructure is complete. Issue #38 may proceed to Milestone 1 after this documentation-state update is merged.
+- Manual fallback handoff is validated: maintainer triggers workflow → bot records handoff and commits → bot opens PR → maintainer reviews/approves → maintainer merges.
+
+### Documentation-state handoff
+
+- Branch `docs/issue-38-workflow-validation` updated the plan/log after the successful validation.
+- The bot added its handoff record and opened PR #45 (`Record validated automation workflow`).
+- `gcalpay` submitted a formal `APPROVED` review on 2026-08-13.
+- PR #45 was merged to `main` as `23ebc2c9c966863ff948c976fc6f81fff8145109`.
+
+## Automatic handoff and repository documentation refresh
+
+Status: implementation complete on branch; branch review, automatic-trigger validation and merge pending
+
+Branch:
+
+- `chore/automatic-handoff-and-docs-refresh`
+- Base: `main` at `23ebc2c9c966863ff948c976fc6f81fff8145109`.
+
+Purpose:
+
+- Remove the need for the maintainer to visit Actions for every normal handoff.
+- Make repository Markdown accurately describe the shipped 0.1.5 runtime and active Issue #38 state.
+- Make a fresh chat/session able to recover the exact current state and next action from repository files alone.
+
+Completed commits before the Issue #38 state update:
+
+- `79fb5087e509b74978d9e5703abe538a2986c7c9` — `Add automatic automation handoff trigger`.
+  - Adds a non-`main` `push` trigger alongside `workflow_dispatch`.
+  - Automatic mode runs only when `github.actor == 'gcalpay'` and the head commit subject ends in ` [automation-handoff]`.
+  - The PR title is derived from the marker commit subject; the base is `main`.
+  - Bot bookkeeping pushes cannot loop because the actor is `gcalpay-automation`, not `gcalpay`.
+  - `workflow_dispatch` remains a manual fallback.
+  - `AGENTS.md` documents the approval gate, marker convention and fresh-session recovery order.
+- `cc7cfebcdd251c2c01f201b018a60eda113ef637` — `Refresh current product documentation`.
+  - Updates README manual-VSIX wording so it no longer falsely implies the latest Marketplace build must exist as a GitHub Release.
+  - Rewrites stale pre-release/MVP descriptions in `docs/ARCHITECTURE.md`, `docs/IMPLEMENTATION_NOTES.md`, `docs/MVP.md`, `docs/STATUS_BAR_BUTTON.md` and `docs/TESTING.md` to describe the current runtime, Enhanced overlay, warm `whisper-server`, clickable status item and Issue #38 limitation.
+- `e71774f541e929094cb17ff8e1d725588cf6777b` — `Remove obsolete pull request note`.
+  - Deletes stale one-line `docs/PR_NOTE.md`.
+
+Markdown audit:
+
+- A recursive repository-tree inventory was used, not only the `docs/` directory.
+- After removing `docs/PR_NOTE.md`, the branch contains 13 tracked Markdown files:
+  - `AGENTS.md`
+  - `CHANGELOG.md`
+  - `README.md`
+  - `SUPPORT.md`
+  - `THIRD_PARTY_NOTICES.md`
+  - `docs/ARCHITECTURE.md`
+  - `docs/DEPENDENCIES.md`
+  - `docs/IMPLEMENTATION_NOTES.md`
+  - `docs/MVP.md`
+  - `docs/STATUS_BAR_BUTTON.md`
+  - `docs/TESTING.md`
+  - `docs/issue-38-implementation-log.md`
+  - `docs/issue-38-implementation-plan.md`
+- `CHANGELOG.md`, `SUPPORT.md`, `THIRD_PARTY_NOTICES.md` and `docs/DEPENDENCIES.md` were reviewed and left unchanged because their current claims remain factual.
+- `AGENTS.md`, README and the stale runtime/status/testing documents were updated.
+- The Issue #38 plan/log are updated on this branch so the branch can be resumed without conversation context.
+
+Fresh-session recovery state:
+
+- Read `AGENTS.md` → plan → log.
+- Verify `main`, open PRs and whether `chore/automatic-handoff-and-docs-refresh` has merged.
+- If not merged, finish branch review, obtain maintainer approval, add the final ` [automation-handoff]` marker commit and validate that the push automatically opens the bot PR.
+- If already merged, begin Issue #38 Milestone 1.1; do not redo this infrastructure cleanup.
 
 ## Durable decisions
 
@@ -164,6 +228,7 @@ Result:
 - Keyboard navigation/Enter/Space behavior must remain unchanged.
 - Deliberate user retargeting during recording remains authoritative.
 - Proposed VS Code APIs must never be shipped in a Marketplace build.
+- Automatic handoff is approval-gated. The marker is added only after a reviewed branch receives explicit maintainer approval.
 
 ### Automated PR handoff — 2026-08-13T00:55:19Z
 
