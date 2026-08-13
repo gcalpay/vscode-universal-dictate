@@ -262,3 +262,11 @@ Fresh-session recovery state:
 - Base: `main`
 - Trigger: automatic push marker
 - Triggered by maintainer: `gcalpay`
+
+### Automated PR handoff — 2026-08-13T03:06:47Z
+
+- Automation account: `gcalpay-automation`
+- Head: `chore/automatic-handoff-and-docs-refresh`
+- Base: `main`
+- Trigger: automatic push marker
+- Triggered by maintainer: `gcalpay`
