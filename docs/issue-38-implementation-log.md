@@ -251,3 +251,11 @@ Approval and handoff:
 - If `docs/issue-38-post-infrastructure-state` or its bot-opened PR is still active, finish that documentation-only review/merge gate first.
 - If that state-refresh PR is already merged, begin Milestone 1.1 immediately. Do not repeat the automation setup, Markdown audit or PR #47 validation.
 - The old Universal Dictate branches `fix/preserve-insertion-target` and `release/0.1.5`, if still present, are cleanup only and are not the active Issue #38 implementation branch.
+
+### Automated PR handoff — 2026-08-13T19:20:46Z
+
+- Automation account: `gcalpay-automation`
+- Head: `docs/issue-38-post-infrastructure-state`
+- Base: `main`
+- Trigger: automatic push marker
+- Triggered by maintainer: `gcalpay`
