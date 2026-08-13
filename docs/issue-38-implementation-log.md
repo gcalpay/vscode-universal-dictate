@@ -71,7 +71,7 @@ Commits:
 
 ### Automation workflow
 
-Status: workflow definition added; credential/bootstrap validation pending
+Status: bootstrap merged; first validation partially passed; PR creation fix pending
 
 Changes:
 
@@ -80,29 +80,50 @@ Changes:
 - It validates branch names and refuses handoff from `main` or from the selected base branch.
 - It checks out the selected feature branch using `AUTOMATION_BOT_TOKEN` and verifies via the GitHub API that the token belongs to `gcalpay-automation`.
 - It refuses to create a duplicate open PR for the same head/base pair.
-- It appends an automated handoff record to this log, commits it as `gcalpay-automation [bot] <bot@alpay.de>`, and pushes that bookkeeping commit to the feature branch.
+- It appends an automated handoff record to this log, commits it as `gcalpay-automation [bot] <315580681+gcalpay-automation@users.noreply.github.com>`, and pushes that bookkeeping commit to the feature branch.
 - It opens the PR using the machine-account token and requests review from `gcalpay`.
 
-Commit:
+Bootstrap:
 
-- `d42fd6369eb15bf93386c0142fc85456db51b5c5` — add automation account PR workflow.
+- PR #41 (`Bootstrap Issue #38 workflow infrastructure`) was merged to `main` as `063e754799b1a80dbc065725a8bd99ef7fb900e0`.
+- CI and Windows packaging passed before merge.
 
 Credential decision:
 
 - `gcalpay-automation` is a collaborator on the personal-account-owned public repository. GitHub currently lists collaborator repositories as a limitation of fine-grained personal access tokens.
-- To preserve the `gcalpay-automation` machine-user identity for this public repository, the planned credential is therefore a classic PAT with the `public_repo` scope only, stored as the repository Actions secret `AUTOMATION_BOT_TOKEN`.
+- To preserve the `gcalpay-automation` machine-user identity for this public repository, the credential is a classic PAT with the `public_repo` scope only, stored as the repository Actions secret `AUTOMATION_BOT_TOKEN`.
 - Do not use the broader `repo` scope for this public-only workflow.
 
-Bootstrap constraint:
+### Validation attempt 1
 
-- A manually dispatched workflow must already exist on the default branch before it can be run from GitHub Actions.
-- Therefore this workflow cannot open the PR that introduces itself. The first infrastructure PR requires a one-time bootstrap merge path; after the workflow reaches `main`, future milestone PRs can be opened by `gcalpay-automation` automatically.
+Status: partial success
 
-Next validation:
+Run:
 
-- Create the machine-account classic PAT with `public_repo` only.
-- Store it as the `AUTOMATION_BOT_TOKEN` Actions secret in `gcalpay/vscode-universal-dictate`.
-- Bootstrap and merge the infrastructure PR, then run the workflow on a subsequent feature branch to verify bot-authored bookkeeping, PR authorship, reviewer request, CI triggering, and contributor attribution.
+- Workflow run #1 / run ID `31654172826` on 2026-08-13.
+- Validation branch: `chore/automation-handoff-validation`.
+
+Passed:
+
+- Request validation.
+- Checkout using `AUTOMATION_BOT_TOKEN`.
+- Token identity verification confirmed `gcalpay-automation`.
+- Duplicate-PR guard.
+- Automated bookkeeping commit and push.
+- Bot-authored commit `977fb34` (`Record automated PR handoff`) was pushed to the validation branch.
+
+Failed:
+
+- `gh pr create` failed before creating the PR.
+- The GitHub CLI command queried GraphQL fields requiring `read:org`, while the intentionally narrow classic PAT has only `public_repo`.
+- The failure was therefore in the CLI command path, not authentication, branch push, or bot identity.
+
+Resolution:
+
+- Do not broaden the bot PAT merely to satisfy `gh pr create` GraphQL queries.
+- Replace `gh pr create` / `gh pr edit` with direct GitHub REST API calls for PR creation and reviewer request.
+- Fix branch: `fix/automation-pr-rest-api`.
+- After the fix reaches `main`, validate again on a fresh clean branch before beginning Issue #38 Milestone 1.
 
 ## Durable decisions
 
