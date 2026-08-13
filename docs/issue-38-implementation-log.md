@@ -249,3 +249,11 @@ Fresh-session recovery state:
 - Head: `docs/issue-38-workflow-validation`
 - Base: `main`
 - Triggered by maintainer: `gcalpay`
+
+### Automated PR handoff — 2026-08-13T03:00:19Z
+
+- Automation account: `gcalpay-automation`
+- Head: `chore/automatic-handoff-and-docs-refresh`
+- Base: `main`
+- Trigger: automatic push marker
+- Triggered by maintainer: `gcalpay`
