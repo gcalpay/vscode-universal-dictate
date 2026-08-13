@@ -71,7 +71,8 @@ jobs:
               echo "Automatic handoff marker must appear at the end of the commit subject." >&2
               exit 1
             fi
-            title="${first_line%$marker}"
+            title_length=$((${#first_line} - ${#marker}))
+            title="${first_line:0:title_length}"
             body="Automated handoff from \`$head\` after a maintainer-approved gate. Review the complete branch diff and CI/check status before merge."
             trigger_mode='automatic push marker'
           fi
