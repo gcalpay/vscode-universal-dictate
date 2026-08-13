@@ -162,7 +162,7 @@ Result:
 
 ## Automatic handoff and repository documentation refresh
 
-Status: implementation complete on branch; branch review, automatic-trigger validation and merge pending
+Status: branch review passed and maintainer approved handoff; automatic-trigger validation and merge pending
 
 Branch:
 
@@ -189,6 +189,9 @@ Completed commits before the Issue #38 state update:
   - Rewrites stale pre-release/MVP descriptions in `docs/ARCHITECTURE.md`, `docs/IMPLEMENTATION_NOTES.md`, `docs/MVP.md`, `docs/STATUS_BAR_BUTTON.md` and `docs/TESTING.md` to describe the current runtime, Enhanced overlay, warm `whisper-server`, clickable status item and Issue #38 limitation.
 - `e71774f541e929094cb17ff8e1d725588cf6777b` — `Remove obsolete pull request note`.
   - Deletes stale one-line `docs/PR_NOTE.md`.
+- `b9ca3ac74c768446346d78a01db6e3ab0782a649` — `Harden automatic handoff request parsing`.
+  - Makes the job condition explicitly distinguish push events from manual dispatch.
+  - Uses multiline-safe `$GITHUB_OUTPUT` syntax for PR bodies so the manual fallback remains robust.
 
 Markdown audit:
 
@@ -211,11 +214,21 @@ Markdown audit:
 - `AGENTS.md`, README and the stale runtime/status/testing documents were updated.
 - The Issue #38 plan/log are updated on this branch so the branch can be resumed without conversation context.
 
+Branch review and approval:
+
+- Complete branch diff was reviewed against `main`; only the intended workflow/documentation changes and removal of obsolete `docs/PR_NOTE.md` are present.
+- No TypeScript runtime, native C++, extension version, Whisper runtime or release behavior changed.
+- Non-marker pushes by `gcalpay` produced skipped `Automation PR Handoff` runs as intended.
+- The workflow cannot automatically hand off `main` because `main` is excluded from the push trigger.
+- Bot bookkeeping pushes cannot retrigger automatic handoff because the job requires `github.actor == 'gcalpay'`.
+- The maintainer explicitly approved this mini-milestone handoff on 2026-08-13.
+- Next action: create the final approved commit whose subject ends exactly in ` [automation-handoff]`, then verify the workflow opens the PR automatically and requests `gcalpay` as reviewer.
+
 Fresh-session recovery state:
 
 - Read `AGENTS.md` → plan → log.
 - Verify `main`, open PRs and whether `chore/automatic-handoff-and-docs-refresh` has merged.
-- If not merged, finish branch review, obtain maintainer approval, add the final ` [automation-handoff]` marker commit and validate that the push automatically opens the bot PR.
+- If not merged, the branch gate is already approved; verify whether the automatic marker commit/PR exists and continue automatic-trigger validation rather than asking for approval again.
 - If already merged, begin Issue #38 Milestone 1.1; do not redo this infrastructure cleanup.
 
 ## Durable decisions
