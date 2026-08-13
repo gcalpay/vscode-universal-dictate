@@ -135,3 +135,10 @@ Resolution:
 - Keyboard navigation/Enter/Space behavior must remain unchanged.
 - Deliberate user retargeting during recording remains authoritative.
 - Proposed VS Code APIs must never be shipped in a Marketplace build.
+
+### Automated PR handoff — 2026-08-13T00:33:42Z
+
+- Automation account: `gcalpay-automation`
+- Head: `chore/automation-handoff-validation-2`
+- Base: `main`
+- Triggered by maintainer: `gcalpay`
