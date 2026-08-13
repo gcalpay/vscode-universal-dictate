@@ -227,6 +227,11 @@ Purpose:
 
 This branch is documentation/state only. No extension runtime, native code, version, packaging or release behavior is changed.
 
+Approval and handoff:
+
+- The maintainer explicitly approved this final documentation-state branch on 2026-08-13.
+- This approved commit triggers the automatic bot PR handoff; no manual Actions dispatch is required.
+
 ## Durable Issue #38 decisions
 
 - The clean fix depends on an upstream VS Code capability; end users must never need a custom VS Code fork.
