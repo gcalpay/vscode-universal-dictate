@@ -114,7 +114,7 @@ Branch:
 
 Purpose:
 
-- Remove the normal requirement for the maintainer to visit Actions manually for every handoff.
+- Remove the need for the maintainer to visit Actions for every normal handoff.
 - Keep `workflow_dispatch` only as fallback.
 - Refresh repository Markdown so a fresh session can recover the exact shipped runtime, Issue #38 state and next action without relying on conversation history.
 
@@ -185,18 +185,19 @@ Status: complete success.
 - PR #47 opened automatically by `gcalpay-automation`.
 - Generated PR title is clean: `Validate automatic handoff title fix`.
 - `gcalpay` is requested as reviewer.
-- PR #47 `typecheck`: success.
-- PR #47 Windows `package`: success.
+- PR #47 `typecheck`: success on the automatic-handoff validation head.
+- PR #47 Windows `package`: success on the automatic-handoff validation head.
 - Bot bookkeeping push generated a skipped automatic-handoff job, confirming the actor guard prevents recursion.
 
 Remaining gate:
 
-- `gcalpay` must inspect the final PR #47 diff, submit formal approval and merge it.
+- Final documentation-only state corrections are on PR #47 and must have green latest checks.
+- `gcalpay` then inspects the final PR #47 diff, submits formal approval and merges it.
 - After merge, verify `main` and proceed to Issue #38 Milestone 1.1.
 
 ## Branch housekeeping audit
 
-The original remote branch count before this audit was 11. The following branches are historical/superseded and may be deleted:
+The authoritative remote branch API currently reports exactly 11 branches. The following branches are historical/superseded and may be deleted:
 
 - `chore/automation-handoff-validation` — PR #42 validation branch, closed/superseded.
 - `chore/automation-handoff-validation-2` — PR #44 merged.
@@ -209,8 +210,6 @@ The original remote branch count before this audit was 11. The following branche
 - `release/0.1.5` — zero commits ahead of `main`, fully behind it.
 
 Keep `main`. Keep `chore/automatic-handoff-and-docs-refresh` only until PR #47 is merged, then delete it as well.
-
-During connector-based branch inventory, three accidental temporary branches were created: `__temp__`, `__temp2__`, `__temp3__`. They contain no intended project work and should be deleted immediately. The available connector does not expose branch deletion, so this cleanup is a maintainer UI/CLI action.
 
 ## Durable Issue #38 decisions
 
