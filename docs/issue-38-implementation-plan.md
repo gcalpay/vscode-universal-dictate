@@ -2,16 +2,22 @@
 
 ## Current state
 
-- Current phase: Milestone 1 — map the upstream VS Code implementation
-- Current chunk: 1.1 prepare upstream working repository
-- Status: Milestone 0 and workflow infrastructure complete; automation workflow validated end to end
-- Active repository: `gcalpay/vscode-universal-dictate` for coordination; upstream VS Code working fork not prepared yet
-- Active branch: `docs/issue-38-workflow-validation`
-- Baseline `main`: `92e8250f4015e34f831bf0979e621457aa1735ed`
-- Current extension version: `0.1.5`
-- Last completed work: validated `gcalpay-automation` handoff workflow through bot-authored commit, bot-opened PR #44, maintainer approval and merge
-- Next action: merge this documentation-state update through the validated automation workflow, then begin Milestone 1.1
-- Blockers: none
+- Current phase: pre-Milestone-1 infrastructure mini-milestone — automatic PR handoff and repository documentation refresh.
+- Current chunk: finish branch review and validate the new automatic handoff trigger.
+- Status: implementation/documentation refresh is complete on `chore/automatic-handoff-and-docs-refresh`; automatic push-trigger validation and merge are still pending.
+- Active repository: `gcalpay/vscode-universal-dictate`.
+- Active branch: `chore/automatic-handoff-and-docs-refresh` until this mini-milestone is merged.
+- Branch base: `main` at `23ebc2c9c966863ff948c976fc6f81fff8145109` (PR #45 merged).
+- Current extension version: `0.1.5`.
+- Last completed work: added the `[automation-handoff]` push trigger, refreshed stale product/runtime/testing Markdown, removed obsolete `docs/PR_NOTE.md`, and audited every tracked Markdown file.
+- Blockers: none.
+
+### Exact next action for a fresh session
+
+1. Read `AGENTS.md`, this plan and `issue-38-implementation-log.md` in that order.
+2. Verify current `main`, open PRs and whether `chore/automatic-handoff-and-docs-refresh` still exists or has already merged.
+3. If this branch is **not yet merged**: review the complete branch against `main`; if clean, obtain explicit maintainer approval for handoff, then make the final state/bookkeeping commit with a subject ending exactly in ` [automation-handoff]`. Verify the automatic workflow opens the PR as `gcalpay-automation`, requests `gcalpay`, and CI passes. The maintainer reviews/approves and merges.
+4. If this branch **has already merged**: verify `main` contains the automatic trigger and refreshed documentation, then begin Milestone 1.1 below. Do not repeat the infrastructure work.
 
 ## Working rules
 
@@ -22,6 +28,7 @@
 - Review the complete branch before opening a PR; PR creation and merge are separate explicit gates.
 - Stop after each milestone and require maintainer approval before continuing.
 - `gcalpay-automation` is a machine account and must be used only through automation, not manual operation.
+- After an approved gate, the normal PR handoff is a final commit whose subject ends exactly in ` [automation-handoff]`; manual `workflow_dispatch` is fallback only.
 - Keep proposed VS Code API work out of Marketplace releases.
 - Use the real Windows VS Code desktop for behavior that cannot be validated in the web/GitHub environment.
 - Never auto-submit dictated text.
@@ -51,16 +58,46 @@
   - Add `docs/issue-38-implementation-log.md` for completed work, commits, reviews, tests, decisions and deviations.
 - [x] **Automation-account workflow**
   - Configure `gcalpay-automation` to act only through automation.
-  - Use narrowly scoped credentials stored as GitHub secrets or an appropriate GitHub App; never commit credentials.
+  - Use narrowly scoped credentials stored as GitHub secrets; never commit credentials.
   - Automate legitimate machine-account tasks such as final milestone bookkeeping and PR creation.
   - Keep `gcalpay` as the human reviewer/approver/merger.
-  - Validated with workflow run #2 (`31654821705`) and PR #44.
+  - Manual workflow path validated with workflow run #2 (`31654821705`) and PR #44.
 - [x] **Workflow-infrastructure gate**
   - Verified bot token identity as `gcalpay-automation`.
   - Verified bot-authored commit and push.
   - Verified bot-opened PR and reviewer request.
   - Verified maintainer `APPROVED` review and normal merge preserving the bot-authored commit.
   - Verified the bot-authored commit is reachable from `main` and attributed to `gcalpay-automation`.
+
+## Automatic handoff and documentation refresh before Milestone 1
+
+- [x] **Add automatic handoff trigger**
+  - Keep `workflow_dispatch` as fallback.
+  - Add a non-`main` push trigger.
+  - Run automatic handoff only for pushes by `gcalpay` whose head commit subject ends in ` [automation-handoff]`.
+  - Derive the PR title from the commit subject and target `main`.
+  - Keep bot bookkeeping pushes from retriggering handoff through the actor restriction.
+- [x] **Update agent/fresh-session guidance**
+  - Document the marker workflow, approval gate and fresh-session recovery order in `AGENTS.md`.
+- [x] **Audit all tracked Markdown**
+  - Recursive inventory after cleanup contains 13 tracked `.md` files.
+  - Refresh stale runtime, UI, testing and installation claims.
+  - Remove obsolete one-line `docs/PR_NOTE.md` rather than preserving stale pre-release guidance.
+  - Leave historical changelog, support, dependency and third-party notices unchanged where they remain factual.
+- [x] **Update durable Issue #38 state**
+  - Make this plan and the implementation log sufficient to resume without conversation context.
+- [ ] **Mini-milestone branch gate**
+  - Review the complete branch against `main`.
+  - Confirm only the intended workflow/documentation changes are present.
+  - Confirm the workflow cannot automatically hand off `main` or a bot-authored bookkeeping push.
+  - Obtain explicit maintainer approval before adding the marker.
+- [ ] **Automatic-trigger validation and merge**
+  - Create the approved final marker commit.
+  - Verify the push event runs `Automation PR Handoff` successfully without visiting Actions manually.
+  - Verify PR author is `gcalpay-automation` and reviewer request is `gcalpay`.
+  - Verify normal repository CI/checks pass.
+  - Maintainer formally reviews/approves and merges.
+  - After merge, Issue #38 proceeds to Milestone 1.1.
 
 ## Milestone 1 — Map the upstream VS Code implementation
 
@@ -106,7 +143,7 @@
 ## Milestone 3 — Real GUI proof
 
 - [ ] **3.1 Prepare isolated patched VS Code locally**
-  - Use a dedicated `D:\CodexWork\issue-38\` environment for source/build/profile/extensions/logs/temp artifacts.
+  - Use a dedicated `D:\\CodexWork\\issue-38\\` environment for source/build/profile/extensions/logs/temp artifacts.
   - Do not install the experimental build into the normal profile before isolated testing passes.
   - Reuse the verified Whisper model rather than downloading another copy.
 - [ ] **3.2 Basic focus tests**
@@ -181,6 +218,7 @@
 - Focus preservation should prevent the pointer-induced focus move rather than remember and restore an old target afterward.
 - Deliberate focus changes made by the user while recording must remain authoritative.
 - WSL is a supported workspace scenario while the extension runtime remains in the local Windows UI extension host.
+- Automatic PR handoff must remain approval-gated; a marker commit is never added merely because a branch exists.
 
 ## Deviations from the earlier plan
 
@@ -190,6 +228,8 @@
 - Added root `AGENTS.md` and a backward-looking implementation log so future chats/agents can recover state without a separate handoff.
 - Added an explicit automation-account workflow phase before starting Milestone 1.
 - Kept the bot PAT at `public_repo`; switched PR creation and reviewer requests from `gh pr` GraphQL behavior to direct REST API calls after validation attempt #1.
+- Added an automatic approval-gated push-marker path so the maintainer does not normally need to visit Actions manually; retained `workflow_dispatch` as fallback.
+- Performed a repository-wide Markdown refresh before Milestone 1 because several early MVP/pre-release documents no longer described the shipped runtime.
 
 ## Test record
 
@@ -198,4 +238,5 @@
 - Workflow repair PR #43 passed CI and Windows packaging and was merged.
 - Workflow validation attempt #2: run #2 (`31654821705`) completed successfully; bot commit `aba3816c5b6983bd2da8b435c0463d89babd16c6` opened PR #44 as `gcalpay-automation`, requested `gcalpay`, received an `APPROVED` review and was merged with a merge commit.
 - Bot commit `aba3816c5b6983bd2da8b435c0463d89babd16c6` is reachable from `main` and GitHub attributes its author and committer to `gcalpay-automation`.
-- GUI testing begins after a working upstream prototype exists.
+- Automatic push-marker trigger on `chore/automatic-handoff-and-docs-refresh`: implementation complete, validation pending the mini-milestone approval gate.
+- GUI testing for Issue #38 begins after a working upstream prototype exists.
