@@ -314,7 +314,7 @@ void drawButton(HWND window, HDC dc) {
     HPEN borderPen = CreatePen(PS_SOLID, 1, border);
     HGDIOBJ previousBrush = SelectObject(dc, backgroundBrush);
     HGDIOBJ previousPen = SelectObject(dc, borderPen);
-    const int radius = std::max(4, (client.bottom - client.top) / 2);
+    const int radius = std::max(4, static_cast<int>((client.bottom - client.top) / 2));
     RoundRect(dc, client.left, client.top, client.right, client.bottom, radius, radius);
     SelectObject(dc, previousPen);
     SelectObject(dc, previousBrush);
