@@ -131,27 +131,75 @@ untested and Issue #38 remains open.
 
 ### M0.2: distinguish a fix, an alternative and a safeguard
 
-- [x] Record the classifications and boundaries for implementation decisions.
+**Status: complete as decision criteria; no implementation route selected or
+functionally validated.** M0.1's choice A remains unchanged.
 
-| Outcome | Classification |
+- [x] Define what qualifies as a literal-status-bar fix versus an alternative
+  interaction or a recovery safeguard.
+- [x] Define evidence and issue-closure boundaries without choosing a mechanism.
+- [x] Identify which later outcomes require a new user decision.
+
+| Outcome | Classification and consequence |
 | --- | --- |
-| The literal status-bar workflow meets the insertion contract without corrective clicks | Candidate fix for Issue #38, subject to acceptance tests |
-| A separate non-activating native launcher achieves correct insertion | Alternative interaction; not automatically a fix for the unchanged status-bar requirement |
-| A transcript can be copied or reinserted after failed insertion | Recovery safeguard; not a focus fix |
+| The genuine VS Code-owned status-bar Dictate action and supported finish controls meet M0.1 without corrective clicks | Candidate fix for Issue #38; becomes a validated fix only with the applicable acceptance evidence |
+| A separate native launcher achieves the insertion behavior | Alternative interaction; requires explicit adoption and is not a fix for the unchanged literal-status-bar requirement |
+| A completed transcript remains available for explicit copy/reinsertion after an insertion failure | Recovery safeguard under M2; useful independently, but does not demonstrate a focus fix |
 
-The literal status-bar control is the preferred interface. Its replacement is
-not approved by the existence of PR #49. Any adoption of a floating launcher must
-be explicit, initially optional and assessed for placement, visibility,
-accessibility, fallback behavior and multiple-window correctness.
+**A literal fix is defined by behavior, not one chosen technique.** Preventing
+focus loss or reliably restoring the latest deliberate input/caret/selection can
+both qualify if demonstrated. Uninterrupted caret blinking is not required.
+The user's normal workflow must not acquire an extra corrective click, mandatory
+hotkey-only start or routine recovery step. An editor-only success while the real
+Codex composer fails is a partial result, not a universal fix. A separate control
+positioned to look like a status-bar item remains an alternative if it receives
+the click instead of the genuine VS Code item.
 
-Do not ship a solution requiring a custom VS Code installation or injected
-modifications to its interface. An upstream proposal can be investigated, but
-upstream acceptance and availability are dependencies, not promised outcomes.
-Do not repeat editor-focus workarounds unless new evidence explains how they
-address the actual composer and selection.
+**All candidate routes keep the M0.1 contract.** Follow the latest deliberately
+selected input, caret or selection through transcription until insertion. Do not
+freeze at Stop, return to an older target after deliberate retargeting or silently
+restrict insertion to VS Code. Dictate/Stop/Insert interactions do not themselves
+retarget. Preserve review-before-send, cancellation and existing keyboard
+controls. Known loss of the intended destination invokes the recovery requirement,
+not a guessed destination. Recovery after such an exceptional loss is distinct
+from requiring manual recovery in the ordinary valid-target workflow.
 
-**Exit evidence:** these classifications. Keep Issue #38 open unless its agreed
-criteria pass; explicitly agree any change to those criteria before closure.
+**A floating launcher is not approved by PR #49's existence.** Keep its branch
+frozen and use it only as reference/evaluation material. Adoption would require
+a later explicit user decision, initially as an optional interaction. Evaluate
+placement/occlusion, visibility, accessibility, window ownership and degraded
+fallback. If a helper becomes unavailable and a fallback restores focus-stealing
+behavior, describe that limitation; do not count the fallback as focus-preserving.
+Do not silently hide or replace the existing launcher to obtain a passing result.
+
+**Proof and delivery are separate.** M1 records a concrete mechanism, its exact
+control/target scope, dependencies and observations; M0.3 defines the acceptance
+cases and M4 validates the integrated result. A build, input-API return value,
+mock input or one successful trigger path does not prove real Codex insertion or
+all other paths. Record passed, failed and unrun cases separately. An upstream
+proposal or diagnostic patch is feasibility work, not a shipped extension fix.
+Do not ship a solution requiring a custom VS Code installation or injected UI
+modifications. A supported upstream capability can be considered once available;
+acceptance and availability must not be promised. Revisit editor-focus workarounds
+only when new evidence explains how they address the actual composer/selection.
+
+**Issue-closure rule:** keep #38 open until the agreed literal workflow and
+applicable M0.1 acceptance cases pass on an identified, deliverable implementation.
+A passing alternative, recovery feature or smaller overlay cannot close it by
+itself. Do not weaken criteria, omit a failing required target or use automatic
+closure text in an unrelated PR to declare success. Criteria changes, adoption
+of a different launcher and merge/release/closure actions need explicit user
+authorization; this milestone supplies none of those permissions.
+
+**When to ask again:** no additional product decision is needed for M0.2. Ask
+with concrete M1 evidence if only an alternative passes, a required behavior
+cannot be supported by the tested mechanism or delivery needs an upstream
+capability that is not available. Do not reopen choice A merely because it is
+harder to implement. M2 recovery and M3 sizing remain independent improvements
+and need not wait indefinitely for that decision.
+
+**Exit evidence:** the classifications, common contract and decision/closure
+rules above. M0.2 is complete at the specification level only; no route has been
+proved, no launcher adopted and Issue #38 remains open.
 
 ### M0.3: define the acceptance matrix and evidence format
 
@@ -306,41 +354,48 @@ record of an unresolved issue or leave a dangling plan link.
 | Milestone | Current status | Evidence / remaining work |
 | --- | --- | --- |
 | M0.1 | Complete: requirements specification | User confirmed A on 2026-09-13; latest deliberate input/caret/selection wins through transcription; no runtime validation |
-| M0.2 | Specification recorded | Fix/alternative/safeguard classifications in section 3 |
-| M0.3 | Specification recorded | Acceptance matrix and evidence format in section 3; every test is Not run |
+| M0.2 | Complete: decision criteria | Fix/alternative/safeguard boundaries, evidence and closure rules finalized; no implementation selected or validated |
+| M0.3 | Specification recorded; focused review next | Refine cases for choice A and classify required versus feature-specific evidence; every test is Not run |
 | M1 | Not started | No new probe, implementation or live focus result |
 | M2 | Not started | No recovery or clipboard changes |
 | M3 | Not started | No new size setting or renderer changes |
 | M4 | Not started | No integrated acceptance run, merge or release |
 
-Current authorized change: finalize M0.1 on `docs/dictation-reliability-plan`
-with the user's explicit choice of A, Follow your latest target. This is a
-requirements-documentation change only, not authorization to implement, merge,
-publish or close Issue #38. M0.2 and M0.3 remain recorded specifications for their
-next focused steps; M1-M4 remain unstarted.
+Current authorized change: finalize M0.2 on `docs/dictation-reliability-plan`
+and update this handoff. This is a requirements-documentation change only, not
+authorization to implement, adopt a launcher, merge, publish or close Issue #38.
+M0.1 is unchanged; M0.3 awaits its focused review and M1-M4 remain unstarted.
 
-Handoff for this change (2026-09-13):
+Completed planning history:
 
-- Planning branch tip reviewed: `50d75cca9d201a96e120850eb33cc016c3fe7dbc`.
-- Changed file: `docs/DICTATION_RELIABILITY_PLAN.md`, M0.1 and this handoff only.
+- `50d75cca9d201a96e120850eb33cc016c3fe7dbc`: initial plan and `AGENTS.md` pointer.
+- `139509890a5171de65012910c46d14ca924433ad`: M0.1 finalized after the user
+  selected A. Keep following the latest deliberate target through transcription.
+
+Handoff for M0.2 (2026-09-13):
+
+- Planning branch tip reviewed: `139509890a5171de65012910c46d14ca924433ad`.
+  The M0.2 commit follows that tip; resolve its SHA from file/branch history.
+- Changed file: `docs/DICTATION_RELIABILITY_PLAN.md`, M0.2 and this handoff only.
   `AGENTS.md` already points here and needs no change.
-- Decision resolved: deliberate changes during transcription, including changes
-  to a caret or selection in the same input, update the destination until
-  insertion. Stop/Insert does not lock the target or require a second
-  confirmation solely for that change.
-- Validation scope: documentation diff, preservation of unrelated plan sections
-  and branch state. No runtime, GUI, build or acceptance tests were run; all
-  matrix results remain Not run.
-- Remaining uncertainty: M1 must prove a mechanism can distinguish deliberate
-  retargeting from extension-induced focus loss. No such proof is claimed here.
+- Decision criteria resolved: an actual status-bar fix, optional alternative
+  launcher and recovery safeguard have distinct evidence and closure scopes.
+  No new clarification is needed now and no implementation mechanism is selected.
+- Validation scope: documentation diff, unchanged M0.1/M0.3/M1-M4 sections,
+  unchanged acceptance results and branch state. No runtime, GUI, build or
+  acceptance tests were run; all matrix results remain Not run.
+- Remaining uncertainty: M1 must demonstrate the actual latest-target behavior
+  and supported delivery route. New interface or scope decisions require that
+  evidence rather than another speculative rewrite.
 
 Next step when asked to continue: read `AGENTS.md` and this plan, verify branch
-state, then review M0.2's fix/alternative/safeguard boundaries without reopening
-choice A. During M0.3, refine the acceptance cases to cover the now-agreed
-transcription-time retargeting and same-input caret/selection changes explicitly.
-Only then begin M1 unless the user requests a different order. If the user
-prioritizes sizing or recovery, M3 or M2 can proceed independently. Keep the
-frozen branch untouched and do not silently choose a floating launcher.
+state, then finalize M0.3. Explicitly cover deliberate retargeting during both
+recording and transcription, same-input caret/selection changes and the supported
+start/finish combinations. Separate issue-fix evidence from optional-launcher,
+recovery and sizing evidence; keep unexecuted cases marked Not run. Do not reopen
+choice A or start M1 runtime work during that documentation step. After M0.3,
+begin M1 only within the user's authorization. M2 or M3 may proceed independently
+if prioritized. Keep the frozen branch untouched.
 
 For every continuation update this section with the milestone/substep, branch
 and commit, changed files, actual tests/results, unresolved blockers/decisions
