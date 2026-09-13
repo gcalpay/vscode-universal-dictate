@@ -62,7 +62,7 @@ warm-worker/fallback foundations and review-before-send behavior.
 
 ## 3. M0: define success in three small steps
 
-**Status: specification documented in this plan. No runtime acceptance tests have
+**Status: M0.1-M0.3 complete as specifications. No runtime acceptance tests have
 been executed as part of M0.** A checked item below means its specification was
 written, not that the extension meets it.
 
@@ -203,35 +203,149 @@ proved, no launcher adopted and Issue #38 remains open.
 
 ### M0.3: define the acceptance matrix and evidence format
 
-- [x] Define tests before implementing another focus redesign.
+**Status: complete as a test specification; all runtime cases are Not run.**
+No new product decision or implementation mechanism is selected here.
 
-| ID | Scenario | Required result | Current result |
-| --- | --- | --- | --- |
-| T01 | Real Codex composer, caret between existing words | Insert exactly there without a corrective click | Not run |
-| T02 | Real Codex composer, selected text | Replace only that range | Not run |
-| T03 | Normal editor and another supported editable VS Code input | Correct insertion in each | Not run |
-| T04 | Deliberate retargeting during recording, including a supported external input | Use the deliberately selected target without forced return | Not run |
-| T05 | Mouse start/finish and keyboard start/finish, across supported visualization modes | Same insertion contract; distinguish literal status-bar and alternative-launcher results | Not run |
-| T06 | Cancel a recording | No transcript insertion or automatic submission | Not run |
-| T07 | Destination closes or becomes unavailable; focus changes during transcription | No guessed target when loss is known; retain recovery and document observable limits | Not run |
-| T08 | Two VS Code windows, minimize/restore and switching windows | No wrong-window insertion or competing launcher ownership | Not run |
-| T09 | Remote-WSL workspace using the Windows UI host | Same applicable results as local Windows | Not run |
-| T10 | Relevant native helper missing or exits | Reachable, accurately described fallback; no silent claim of focus preservation | Not run |
-| T11 | Small/Medium/Large overlay at 100%, 125%, 150% and 200% scaling, including multiple monitors | Readable unclipped controls, aligned hit areas, non-activating interaction | Not run |
+- [x] Define observable results for the latest-target policy, including changes
+  during transcription and caret/selection changes within one input.
+- [x] Enumerate supported start/finish paths and separate issue-fix evidence
+  from alternative-launcher, recovery and sizing evidence.
+- [x] Define reproducible fixtures, execution stages and honest result reporting.
 
-For each test record the commit/artifact, Windows version, VS Code version, Codex
-extension version where relevant, local/Remote-WSL context, display scaling,
-trigger/finish method, target, expected/actual result and supporting observations.
-Use synthetic text, not private messages. Record failures as well as passes.
+#### Test setup and common pass conditions
 
-For focus feasibility, start with fixed test text rather than audio recognition.
-Exercise the candidate's real start/finish interaction and insertion path. Include
-a caret case, a selection case and deliberate retargeting; then repeat successful
-cases with real recording and transcription. Unit tests or a mock text field do
-not substitute for the real Codex composer.
+Use scratch content only: the real Codex composer, a normal untitled editor and
+one named ordinary VS Code input (for example, the Find input). Use a named
+non-executing external text input such as an unsaved Notepad document for external
+retargeting. Do not test by pasting into a terminal, submitting a chat or saving
+private content. Record exact controls and versions rather than claiming that
+one tested input represents every third-party composer.
 
-**Exit evidence:** the matrix and evidence format above. M0 specifies acceptance;
-M1 and M4 execute the applicable tests.
+For the deterministic probe, use the exact transcript `UD_TEST`. The caret
+fixture is `left  right` with the caret between its two spaces; the selection
+fixture is `left old right` with only `old` selected. Both must become
+`left UD_TEST right`. Reset fixtures between trials. For retargeting, keep source
+and destination distinguishable and check that every non-destination is unchanged.
+
+Exercise the candidate's actual start/finish controls and insertion path; replace
+only transcription with fixed text in a later authorized diagnostic probe. The
+transcription-time cases need a controlled pending interval: confirm the user
+change occurred after Stop and before insertion, rather than relying on an
+estimated sleep. Completing that interval must not itself focus another control.
+Do not create that probe in M0.3 or add its delay as a production workaround.
+
+A valid-target pass means exactly one insertion at the latest deliberate caret
+or selection, unchanged surrounding text and no insertion into an older target.
+No corrective click, second confirmation solely for retargeting, automatic send,
+submission or automatic retry of uncertain insertion is allowed. Start/Stop/Insert
+clicks do not count as retargeting. Observe final text, selection replacement,
+other inputs and submission state; caret blinking or an input-API return code
+alone is insufficient evidence. A UI pattern that cannot expose a fact must be
+reported as unverified, not assumed correct.
+
+#### Acceptance cases
+
+Scope codes: **F** = agreed focus/insertion behavior; **R** = M2 recovery/clipboard;
+**S** = M3 sizing; **H** = relevant helper/fallback behavior. Apply **F** cases to
+an alternative launcher in separately labelled runs; their success does not
+convert that launcher into a literal-status-bar fix. Existing IDs T01-T11 are
+retained as families, with subcases where needed. T12-T13 make M2 evidence explicit.
+
+| ID | Scope | Scenario / action | Required observation | Current result |
+| --- | --- | --- | --- | --- |
+| T01 | F | Real Codex composer, caret fixture; no deliberate target change | Exact caret-fixture result without refocusing the composer | Not run |
+| T02 | F | Real Codex composer, selection fixture; no deliberate target change | Replace only `old`, not append or replace the entire input | Not run |
+| T03 | F | Repeat caret and selection fixtures in a normal editor and a named ordinary VS Code input | Correct result in each control; report them separately | Not run |
+| T04a | F | Select a different editable input while recording, including a supported external input | Insert only into the newly selected destination at its latest caret/selection | Not run |
+| T04b | F | Stop, then select a different editable input during the controlled transcription interval; include an external input | Follow the new target, not the target at Start or Stop; no extra confirmation | Not run |
+| T04c | F | Move the caret within the same input; separate recording-time and transcription-time trials | Insert at the updated caret; the original position remains unchanged | Not run |
+| T04d | F | Change the selected range within the same input; separate recording-time and transcription-time trials | Replace only the latest selection; text outside that range remains unchanged | Not run |
+| T04e | F | Deliberately switch A to B during recording, then back to A at a new caret/selection during transcription | Latest A position wins; neither B nor A's earlier position receives text | Not run |
+| T05 | F | Execute the supported start/finish combinations below with caret and selection fixtures | Each combination meets the same contract; start and stop clicks evaluated independently | Not run |
+| T06 | F | Cancel while recording, separately through Esc and visible overlay Discard where available | No insertion or submission, including after returning to idle; M2 must not create a transcript for the cancelled attempt | Not run |
+| T07a | F + R | Close/remove the intended editable target before insertion, with no new deliberately selected valid target | No guessed destination when loss is known; record observability limits; retain the completed transcript once M2 is implemented | Not run |
+| T07b | F | Close the earlier target, then deliberately select another valid input before insertion | Follow the new valid target rather than reverting to the closed target or holding solely because the older one closed | Not run |
+| T08 | F; H if applicable | Two VS Code windows: deliberately retarget to the other window's input; also repeat normal insertion after minimize/restore | Correct target per M0.1; no stale-window insertion; any launcher has correct visibility/ownership | Not run |
+| T09 | F | Repeat the core cases in Windows VS Code with a Remote-WSL workspace | Same applicable results through the Windows UI host; distinguish local and WSL runs | Not run |
+| T10 | H + R as applicable | Relevant helper missing at startup or exits during use; test these separately | Reachable, accurately described controls/fallback; failures do not masquerade as successful insertion; completed text remains recoverable once M2 exists | Not run |
+| T11 | S + F regression | Small, Medium and Large at 100%, 125%, 150% and 200% scaling, including mixed-DPI monitors | Readable unclipped content, correctly aligned button hit areas, non-activating Insert/Discard, unchanged waveform time span and recording semantics | Not run |
+| T12 | R | Retain a completed transcript, provoke insertion failure/uncertainty, then explicitly Copy, Reinsert and Clear; include no-speech, cancellation and reload cases | Recovery uses the accepted insertion policy, no automatic duplicate retry, no spurious new transcript for empty/cancelled attempts; memory-only lifetime and clearing match the documented behavior | Not run |
+| T13 | R | Paste with an existing clipboard value, then repeat with a newer copy during the operation and with non-text clipboard content | Restore only under the agreed ownership/format policy; do not overwrite a newer copy or claim non-text preservation without evidence | Not run |
+
+T07a/T10 have separate insertion-safety and recovery observations. M1 may evaluate
+safety while marking recovery Not run until M2; do not mark the whole row passed.
+T11 includes M3 configuration selection, invalid-value handling, next-session
+application and regression checks for Status bar only/Off. Exact size dimensions
+and the default remain as specified in M3, not decided by this test matrix.
+
+#### Start/finish coverage for T05
+
+The baseline manifest defines the shortcut and visualization modes, and
+`src/extension.ts` exposes a clickable status-bar Stop (see the source map).
+An overlay Insert pass must not conceal a status-bar Stop failure.
+
+| Visualization mode | Start methods, each tested | Finish methods, paired with each start |
+| --- | --- | --- |
+| Enhanced overlay (`enhancedOverlay`) | Genuine status-bar Dictate; Ctrl+Alt+D | Status-bar Stop; Ctrl+Alt+D; overlay Insert |
+| Both (`both`) | Genuine status-bar Dictate; Ctrl+Alt+D | Status-bar Stop; Ctrl+Alt+D; overlay Insert |
+| Status bar only (`statusBar`) | Genuine status-bar Dictate; Ctrl+Alt+D | Status-bar Stop; Ctrl+Alt+D |
+| Off (`off`) | Genuine status-bar Dictate; Ctrl+Alt+D | Status-bar Stop; Ctrl+Alt+D |
+
+These are 20 baseline start/finish/mode combinations. Record caret and selection
+results for each when validating the complete fix. Do not silently remove a
+clickable path to avoid a failure. If a proposed interface changes this inventory,
+report that as a separate product decision under M0.2 before altering acceptance.
+Any native-launcher variant has its own inventory, not a substitute for these runs.
+
+Shortcut trials assume the supported VS Code keyboard context; they are not
+claims of a system-wide hotkey or terminal support. For external retargeting
+during recording, use the non-activating overlay to finish. For external
+retargeting during transcription, finish in VS Code first, then select the
+external input. Do not click back into VS Code merely to issue a shortcut and
+then describe the external target as still being deliberately selected. Esc is
+tested while recording in its supported VS Code context; this does not introduce
+cancellation during transcription. Use Discard for external-target cancellation
+when the recording overlay is visible.
+
+#### Execution stages and evidence
+
+M1 starts with T01, T02, T03 and T04a-T04e in the default visualization, using
+fixed text in the real controls. Start with genuine status-bar Dictate plus
+overlay Insert, then check status-bar Stop and the keyboard path separately.
+A core failure blocks claiming that route works, not documentation of other
+results or independent M2/M3 work. A feasibility pass covers only exercised cases;
+it is not release acceptance or permission to ship a diagnostic patch.
+
+M4 runs the applicable families and all T05 baseline combinations for a claimed
+literal fix, including local/WSL and relevant window/helper checks. Repeat each
+exercised core scenario for at least five consecutive trials on the same candidate
+build, record all attempts and preserve failures rather than reporting only the
+successful retry. This is a regression check, not a statistical reliability claim.
+Then repeat core scenarios with actual recording/transcription. Compare insertion
+with the transcript actually produced, so recognition errors and targeting errors
+remain separate. M2/M3-only releases run their feature tests and affected regression
+paths without claiming the untouched focus defect is fixed.
+
+Record one result per case/variant with: date/tester; branch and commit; artifact
+identity (and probe/base distinction); Windows, VS Code and Codex versions;
+local/Remote-WSL context; named target control; display scaling/monitors; mode;
+start/finish method; initial text/caret/selection; ordered deliberate actions and
+phase; supplied/generated transcript; expected and actual text in all affected
+inputs; submission/duplicate check; attempt counts; outcome; evidence and limits.
+Use synthetic content in logs or captures, not real dictated/private messages.
+
+Allowed outcomes are **Pass**, **Fail**, **Not run**, **Blocked** (missing
+prerequisite) and **Not applicable** (specific reason for that feature scope).
+Never use Not applicable to hide a failing required target, trigger or missing
+implementation. Split variants and mixed-scope observations instead of giving a
+blanket pass. A changed candidate needs new evidence for affected cases; results
+from another build are references, not automatic passes. Without real Windows/
+Codex access, mark those cases Not run or Blocked and identify the missing setup;
+compilation, mocks and a written procedure cannot supply their evidence.
+
+**Exit evidence:** this matrix, coverage inventory and evidence procedure.
+M0.3 and M0 are complete only as specifications. All 18 case rows remain Not run;
+M1-M4 supply runtime evidence later. Choice A and M0.2's closure rules are unchanged.
 
 ## 4. M1: establish focus feasibility before committing to a redesign
 
@@ -355,47 +469,51 @@ record of an unresolved issue or leave a dangling plan link.
 | --- | --- | --- |
 | M0.1 | Complete: requirements specification | User confirmed A on 2026-09-13; latest deliberate input/caret/selection wins through transcription; no runtime validation |
 | M0.2 | Complete: decision criteria | Fix/alternative/safeguard boundaries, evidence and closure rules finalized; no implementation selected or validated |
-| M0.3 | Specification recorded; focused review next | Refine cases for choice A and classify required versus feature-specific evidence; every test is Not run |
+| M0.3 | Complete: test specification | 18 case rows across 13 families, 20 baseline start/finish/mode combinations and evidence rules; all runtime cases Not run |
 | M1 | Not started | No new probe, implementation or live focus result |
 | M2 | Not started | No recovery or clipboard changes |
 | M3 | Not started | No new size setting or renderer changes |
 | M4 | Not started | No integrated acceptance run, merge or release |
 
-Current authorized change: finalize M0.2 on `docs/dictation-reliability-plan`
-and update this handoff. This is a requirements-documentation change only, not
-authorization to implement, adopt a launcher, merge, publish or close Issue #38.
-M0.1 is unchanged; M0.3 awaits its focused review and M1-M4 remain unstarted.
+Current authorized change: finalize M0.3 on `docs/dictation-reliability-plan`
+and update the M0 summary and this handoff. Documentation only; no diagnostic
+probe, runtime implementation, new launcher, merge, release or issue closure.
+M0.1/M0.2 remain unchanged. M0 is now complete as specifications, not as tested
+behavior; M1-M4 remain unstarted.
 
 Completed planning history:
 
 - `50d75cca9d201a96e120850eb33cc016c3fe7dbc`: initial plan and `AGENTS.md` pointer.
 - `139509890a5171de65012910c46d14ca924433ad`: M0.1 finalized after the user
   selected A. Keep following the latest deliberate target through transcription.
+- `ce68d69bc84a6d9bc49091507f6c04e6360d01de`: M0.2 finalized fix/alternative/
+  safeguard classifications and evidence/closure boundaries; no route selected.
 
-Handoff for M0.2 (2026-09-13):
+Handoff for M0.3 (2026-09-13):
 
-- Planning branch tip reviewed: `139509890a5171de65012910c46d14ca924433ad`.
-  The M0.2 commit follows that tip; resolve its SHA from file/branch history.
-- Changed file: `docs/DICTATION_RELIABILITY_PLAN.md`, M0.2 and this handoff only.
-  `AGENTS.md` already points here and needs no change.
-- Decision criteria resolved: an actual status-bar fix, optional alternative
-  launcher and recovery safeguard have distinct evidence and closure scopes.
-  No new clarification is needed now and no implementation mechanism is selected.
-- Validation scope: documentation diff, unchanged M0.1/M0.3/M1-M4 sections,
-  unchanged acceptance results and branch state. No runtime, GUI, build or
-  acceptance tests were run; all matrix results remain Not run.
-- Remaining uncertainty: M1 must demonstrate the actual latest-target behavior
-  and supported delivery route. New interface or scope decisions require that
-  evidence rather than another speculative rewrite.
+- Planning branch tip reviewed: `ce68d69bc84a6d9bc49091507f6c04e6360d01de`.
+  The M0.3 commit follows that tip; resolve its SHA from file/branch history.
+- Changed file: `docs/DICTATION_RELIABILITY_PLAN.md`, M0 summary, M0.3 and this
+  handoff only. `AGENTS.md` already points here and needs no change.
+- Clarifications: no new user decision needed. Choice A remains fixed. Explicit
+  recording/transcription and same-input variants close gaps in the original
+  matrix; actual Start and Stop paths are covered separately. Recovery/sizing
+  results cannot stand in for a literal-status-bar fix.
+- Validation scope: documentation diff, matrix/combination consistency, unchanged
+  M0.1/M0.2/M1-M4 sections and branch state. No runtime, GUI, build or acceptance
+  tests were run; all 18 case rows and their variants remain Not run.
+- Remaining uncertainty: M1 must demonstrate a concrete mechanism on real
+  Windows VS Code/Codex. No feasibility or platform impossibility is established
+  by this document. A future GUI test requires access to that environment.
 
-Next step when asked to continue: read `AGENTS.md` and this plan, verify branch
-state, then finalize M0.3. Explicitly cover deliberate retargeting during both
-recording and transcription, same-input caret/selection changes and the supported
-start/finish combinations. Separate issue-fix evidence from optional-launcher,
-recovery and sizing evidence; keep unexecuted cases marked Not run. Do not reopen
-choice A or start M1 runtime work during that documentation step. After M0.3,
-begin M1 only within the user's authorization. M2 or M3 may proceed independently
-if prioritized. Keep the frozen branch untouched.
+Next step when asked to continue: read `AGENTS.md` and this plan, verify refs,
+then begin M1 with a read-only capability/mechanism assessment and the smallest
+fixed-text experiment justified by it. Do not restart M0 or reopen choice A.
+Before runtime work, follow section 1 to make the plan available on a fresh
+purpose-specific branch from current `main`. Any probe stays within the user's
+current authorization; do not touch the frozen branch or silently adopt its
+launcher. Ask for Windows testing help only when a concrete artifact/procedure
+needs that environment. M2 or M3 can proceed independently if prioritized.
 
 For every continuation update this section with the milestone/substep, branch
 and commit, changed files, actual tests/results, unresolved blockers/decisions
