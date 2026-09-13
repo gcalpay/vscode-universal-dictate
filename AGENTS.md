@@ -14,7 +14,7 @@ step so work can continue across chats and tasks.
 - Update the plan's progress and handoff section with each milestone change.
   Distinguish specified, implemented, tested and blocked work. Record actual
   evidence; compilation alone does not establish GUI focus correctness.
-- Keep runtime changes separate from this documentation-only planning branch.
+- Keep runtime changes off the `docs/dictation-reliability-plan` branch.
 - When the plan is completed or explicitly retired, move enduring behavior,
   tests and known limitations into the regular project documentation. Remove
   the temporary plan and its references here together; preserve unrelated

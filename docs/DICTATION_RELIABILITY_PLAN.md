@@ -17,6 +17,13 @@ implementation roadmap, not a claim that planned behavior already works.
 | Frozen experiment | `fix/preserve-insertion-target` at `5df91c3561ac31bd20f30d829d323347757469bf`, associated with draft [PR #49](https://github.com/gcalpay/vscode-universal-dictate/pull/49) |
 | Current recording visualization | Enhanced native overlay, hardcoded width 740 and height 128; no exposed size setting |
 
+Current work branch: `experiment/m1.2-statusbar-focus-probe`, created directly
+from the release base above. This copy of the plan and `AGENTS.md` were explicitly
+carried from planning commit `63b5eb9669d44f48cf5ee81babf8c6fceb99527a`.
+The original documentation branch is retained as the M1.1 snapshot. Resume M1.2
+from the diagnostic branch and read [the probe procedure](../diagnostics/m1.2/README.md).
+Do not mistake this diagnostic for a release or replace the everyday VS Code.
+
 Keep the old experiment untouched and unmerged. Do not delete it, reset it or
 silently adopt its floating launcher as the new interface. It is reference
 material and a candidate for evaluation, not the implementation base.
@@ -349,8 +356,10 @@ M1-M4 supply runtime evidence later. Choice A and M0.2's closure rules are uncha
 
 ## 4. M1: establish focus feasibility before committing to a redesign
 
-**Status: M1.1 complete as a read-only assessment; M1.2-M1.4 not started.**
-No runtime implementation or Windows/Codex acceptance result is claimed.
+**Status: M1.1 complete; M1.2 diagnostic implemented with build validation in progress.
+M1.3-M1.4 remain unstarted.** No Windows/Codex behavior is yet validated.
+The M1.1 findings below are the historical read-only assessment; see the new M1.2
+record for code, build evidence and the active implementation branch.
 
 | Sub-milestone | Scope | Exit evidence |
 | --- | --- | --- |
@@ -509,6 +518,83 @@ needed after an authorized concrete probe exists.
 [m11-history]: https://github.com/gcalpay/vscode-universal-dictate/blob/327ea19171385d310269fb44a14b8990ac267df7/docs/issue-38-implementation-log.md#L231-L242
 [m11-proposed]: https://code.visualstudio.com/api/advanced-topics/using-proposed-api
 
+### M1.2 diagnostic preparation (2026-09-13)
+
+**Status: implemented; build validation in progress, not ready for GUI acceptance.**
+The user authorized M1.2. No additional product choice was needed. The genuine
+status-bar mechanism is being tested, not replaced by the frozen native launcher.
+
+Implementation commit: `e63ce151aca12af04b532f6fa36e940c62908bfe` (parent is
+extension `main`). Source-integrity correction and regression tests:
+`1a6fbb6f12a249e1ee4df12ec576fe2c778bdd2a`.
+
+The diagnostic lives under `diagnostics/m1.2/`; the root runtime, package/version,
+recorder, paste implementation and production workflows remain unchanged.
+
+- `host-patch.cjs`: validates the exact upstream commit and source Git blob,
+  then adds only the H1 primary-mouse-down default cancellation to the genuine
+  contributed item's renderer. Baseline and H1 use the same upstream snapshot.
+  The transformer allows only exact LF/CRLF checkout conversion; it rejects
+  source edits, extra whitespace, a BOM, mixed endings and missing final newlines.
+- `probe.cjs` and `build-kit.cjs`: stage a guarded development-only bootstrap
+  around the real compiled extension. Only transcription/model prerequisites are
+  substituted. The real microphone, recorder, overlay and Ctrl+V path remain in
+  use, so use silence/synthetic test audio. The sole test transcript is `UD_TEST`.
+- `release-gate.cpp`: controls the pending-transcription interval with a hidden
+  helper registering Ctrl+Alt+Shift+F8 only while pending. It neither focuses a
+  window nor types; physical chord release is required before the real paste.
+  Registration failure, malformed protocol, helper death and disposal fail
+  without returning the test transcript. This is test equipment, not a product
+  confirmation requirement, global product shortcut or mouse hook.
+- `launch.ps1`: requires matching diagnostic manifests and an identified source-
+  built Code OSS host. Baseline/H1 have separate user-data, extension, scratch and
+  CODEX_HOME directories. It does not patch the installed VS Code, share its
+  profile, copy credentials, enable Settings Sync or modify product/gallery data.
+- `.github/workflows/m12-focus-probe.yml`: branch/path-scoped Windows build of
+  the development kit plus baseline/H1 Code OSS archives. It uses disposable
+  immutable upstream checkouts; a hosted fork is unnecessary. Contents permission
+  is read-only and checkout credentials are not persisted. No installer, release,
+  upstream PR or Marketplace publication is created.
+
+The **entire experiment** requires all three outputs from the same diagnostic
+code commit/run. A development kit alone is not a usable host comparison.
+Published Codex/Remote-WSL compatibility with this source build remains unproved.
+Use an official Windows Codex IDE VSIX without redistributing it; if the real
+composer cannot load, mark that case Blocked rather than substitute a mock or
+spoof Code OSS product identity. Local account interaction remains with the user.
+
+#### Build evidence and remaining gate
+
+[Run 1: 34734960107](https://github.com/gcalpay/vscode-universal-dictate/actions/runs/34734960107),
+commit `e63ce151...`: probe-kit passed on Windows, including 11 unit tests,
+unchanged extension compilation, native recorder/paste/release-helper compilation,
+invalid-parent helper check, PowerShell launcher syntax and artifact upload.
+Both host jobs failed before building on the raw working-tree source hash check.
+This is a build-tooling failure, not evidence that H1 preserves or loses focus.
+
+The source check was corrected to verify the immutable Git object separately from
+checkout line endings while retaining the same exact source hash. A synthetic
+clean Git checkout reproduced the LF/CRLF raw-hash difference locally; tests reject
+content changes and malformed endings. Thirteen local Node tests and JavaScript
+syntax checks pass after the correction. No Windows hotkey or Codex behavior can
+be inferred from these tests.
+
+[Run 2: 34735225128](https://github.com/gcalpay/vscode-universal-dictate/actions/runs/34735225128),
+commit `1a6fbb6...`: both pinned-source validation steps now pass. The updated
+Windows kit job also passed, including the 13 unit tests, native compilation and
+PowerShell parsing. Kit artifact `10310587386` is present (795423 bytes, digest
+`sha256:817209264f23edf3a4defeb42e28526a9072869d40b10c847a2891d8081cd5a4`).
+Both Code OSS host builds are still in progress at this handoff; read their actual
+results before advancing. Do not present unbuilt host archives as available or
+combine this kit with hosts from a different code commit. No user installation
+or local GUI action is required until the full host/kit set is verified.
+
+**Exit still pending:** both source-built hosts and the matching kit must build
+and have identifiable artifacts. M1.3 then checks real focus/selection behavior;
+M1.4 determines whether there is a supported delivery route. All 18 M0.3 runtime
+case rows remain Not run, including helper/clipboard/sizing behavior. No claim of
+an Issue #38 fix is made by the diagnostic implementation or a successful build.
+
 ## 5. M2: transcript recovery and clipboard reliability
 
 **Status: not started; independent of the M1 outcome.**
@@ -605,60 +691,59 @@ record of an unresolved issue or leave a dangling plan link.
 | M0.2 | Complete: decision criteria | Fix/alternative/safeguard boundaries, evidence and closure rules finalized; no production implementation selected or validated |
 | M0.3 | Complete: test specification | 18 case rows across 13 families, 20 baseline start/finish/mode combinations and evidence rules; all runtime cases Not run |
 | M1.1 | Complete: read-only mechanism assessment | Source-backed upstream mouse-down hypothesis H1; no sufficient supported extension-only literal fix identified |
-| M1.2 | Not started | Isolated upstream diagnostic proposed; no fork, patch, build or extension probe created |
+| M1.2 | Implemented; build validation in progress | Code at `1a6fbb6...`; run 2 kit/source gates passed, both host builds pending |
 | M1.3 | Not started | H1 and native alternative have no new Windows/Codex test evidence; all runtime cases Not run |
 | M1.4 | Not started | Production route depends on observations and supported delivery; no launcher adopted |
 | M2 | Not started | No recovery or clipboard changes |
 | M3 | Not started | No new size setting or renderer changes |
 | M4 | Not started | No integrated acceptance run, merge or release |
 
-Current authorized change: perform M1.1 read-only investigation and record its
-findings and M1 sub-milestones on `docs/dictation-reliability-plan`. Repository
-writes are limited to this plan. No runtime/upstream patch, fork, build, launcher
-adoption, merge, publication or issue closure is authorized by this record.
-M0 and M2-M4 remain unchanged; M1 overall is in progress, not completed.
+Current authorized work: M1.2 isolated diagnostic preparation and its build
+validation on `experiment/m1.2-statusbar-focus-probe`. No runtime feature is being
+merged into `main`, no native launcher adopted and no release/issue closure is
+authorized. M0 and M2-M4 requirements are unchanged. The planning branch remains
+at the M1.1 record; this diagnostic branch now carries the active handoff.
 
-Completed planning history:
+Completed history:
 
-- `50d75cca9d201a96e120850eb33cc016c3fe7dbc`: initial plan and `AGENTS.md` pointer.
-- `139509890a5171de65012910c46d14ca924433ad`: M0.1 finalized after the user
-  selected A. Keep following the latest deliberate target through transcription.
-- `ce68d69bc84a6d9bc49091507f6c04e6360d01de`: M0.2 finalized fix/alternative/
-  safeguard classifications and evidence/closure boundaries.
-- `77d191401da05aac5e76e29db17661f27d52758b`: M0.3 finalized the matrix,
-  start/finish inventory and evidence procedure; no runtime tests performed.
+- `50d75cca9d201a96e120850eb33cc016c3fe7dbc`: initial plan and AGENTS pointer.
+- `139509890a5171de65012910c46d14ca924433ad`: M0.1, user-selected latest-target policy.
+- `ce68d69bc84a6d9bc49091507f6c04e6360d01de`: M0.2 classification/closure boundaries.
+- `77d191401da05aac5e76e29db17661f27d52758b`: M0.3 test specification.
+- `63b5eb9669d44f48cf5ee81babf8c6fceb99527a`: M1.1 source-backed assessment.
+- `e63ce151aca12af04b532f6fa36e940c62908bfe`: M1.2 diagnostic, directly from main.
+- `1a6fbb6f12a249e1ee4df12ec576fe2c778bdd2a`: pinned-source/EOL verification correction.
 
-Handoff for M1.1 (2026-09-13):
+Handoff for M1.2 (2026-09-13):
 
-- Planning branch tip reviewed: `77d191401da05aac5e76e29db17661f27d52758b`.
-  Resolve this assessment commit's SHA from branch/file history.
-- Changed file: `docs/DICTATION_RELIABILITY_PLAN.md`, M1 and this handoff only.
-  `AGENTS.md` already points here and requires no change.
-- Findings: the stable API and extension bridge lack pointer-focus control;
-  clearFocus is not a composer restore; VS Code's action bar provides an
-  internal mouse-down-cancellation precedent. H1 tests the genuine item in
-  VS Code itself. Neither a new API nor a native-launcher replacement is adopted.
-- Validation scope: source/documentation reads, documentation diff and section/
-  acceptance-result preservation checks. No runtime, GUI, build or acceptance
-  test was run. All 18 case rows remain Not run, not Pass or proven impossible.
-- Main and the frozen experiment are not changed. Older implementation-log
-  claims about then-current main/automation remain historical; do not revive
-  those workflows or treat a 404 repository read as proof no local fork exists.
-- Remaining dependencies: authorization and an isolated upstream development
-  environment for H1; real Windows/Codex access for behavior; supported upstream
-  availability for a shippable literal fix if H1 succeeds. No such outcomes are
-  promised. Recovery and Small/Medium/Large sizing are not blocked by this path.
+- Active branch: `experiment/m1.2-statusbar-focus-probe`. Runtime/tooling evidence
+  must refer to the code commit and run, not a later docs-only commit. Resolve the
+  current documentation revision from branch/file history.
+- Added the scoped diagnostic sources, launcher, tests and branch-only workflow;
+  carried the full plan and AGENTS pointer from the planning branch. No changes
+  to root runtime sources, native production helpers, version or release workflow.
+- Tested: 13 local and Windows Node cases after the correction; Windows kit
+  compilation, native helper invalid-parent check, PowerShell syntax and both
+  source-integrity gates. Build gate and exact
+  run links are recorded above. No actual Windows/Codex input test ran here.
+- No new product decision needed. Choice A is fixed. Baseline and H1 require the
+  same Codex version and the same diagnostic kit; the release hotkey is a
+  test-only completion signal, never a new mandatory product confirmation.
+- All 18 acceptance rows remain Not run. Unit protocol/handler tests are not GUI
+  observations. Failure or absence of a host artifact is not evidence against H1.
+- `main`, the frozen experiment and the documentation planning branch are
+  unchanged by M1.2. No upstream hosted fork or PR, merge, publication or issue
+  closure was performed. M2 recovery and M3 Small/Medium/Large remain unstarted.
 
-Next step when asked to continue: read `AGENTS.md` and this plan, verify refs,
-then establish authorization for M1.2's isolated upstream diagnostic and prepare
-only that probe. Do not pretend an extension-only patch can install a renderer
-mouse-down handler. Do not start with full API plumbing, another launcher or
-broad test infrastructure. No change to the user's installed VS Code is planned.
-Ask for local Windows help once there is a concrete build/procedure requiring it.
-Do not reopen choice A, repeat M0 or silently weaken #38. M2/M3 can proceed
-independently if prioritized, and the old branch remains frozen.
+Next step: inspect run 34735225128 and diagnose any concrete remaining build
+failure before offering a Windows test. If all three matching artifacts are
+verified, M1.2 can be marked complete as preparation, then M1.3 requires real
+Windows/Codex observations using diagnostics/m1.2/README.md and M0.3. Do not change
+the user's installed VS Code. Do not combine artifacts from different code commits
+or call an editor-only test a Codex result. Missing source-build compatibility
+must be reported, not patched around by identity spoofing. Do not restart M0,
+reopen choice A or revive the old launcher. M2/M3 can proceed independently.
 
-For every continuation update this section with the milestone/substep, branch
-and commit, changed files, actual tests/results, unresolved blockers/decisions
-and the next concrete action. Keep status factual: specified is not implemented,
-implemented is not tested, and tested alternatives are not automatically #38 fixes.
+For every continuation update the milestone, branch/commit, changed files,
+actual test results, unresolved blockers and next concrete action. Keep specified,
+implemented, built and GUI-validated states distinct; never mark unrun cases Pass.
