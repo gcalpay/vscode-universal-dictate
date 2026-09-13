@@ -68,36 +68,66 @@ written, not that the extension meets it.
 
 ### M0.1: record the insertion contract
 
+**Status: complete as a requirements specification; not implemented or
+functionally validated.**
+
 - [x] Specify the primary workflow and target semantics.
+- [x] Resolve retargeting during transcription: on 2026-09-13 the user selected
+  **A: Follow your latest target**.
 
 Primary workflow: place the caret, click the existing status-bar Dictate action,
-speak, finish and receive the transcript at the intended insertion point without
-another corrective click.
+speak, finish and receive the transcript at the latest deliberately selected
+insertion point without another corrective click.
 
 Required behavior:
 
+- A target is an editable input together with its caret position or selected
+  range, not merely an application window or the last active editor.
+- Follow the latest deliberate target throughout recording and while
+  transcription is pending, up to insertion. Pressing Stop or Insert does not
+  freeze the destination. Deliberately selecting another supported editable
+  input during transcription directs the result there, without another
+  confirmation solely because the target changed.
+- Moving the caret or changing the selection within the same input also updates
+  the intended insertion point. With no deliberate change, preserve the original
+  point or selection. Replace the selected range as by an ordinary paste; text
+  outside that range is unchanged.
+- Clicking Universal Dictate's Dictate, Stop or Insert controls is not
+  retargeting. Extension-induced focus loss must not replace the intended
+  destination with the status bar, a helper window or an unrelated editor.
 - Correct insertion matters more than uninterrupted caret blinking. A temporary
-  focus change is acceptable only if the intended destination and selection are
-  restored reliably without user intervention.
-- A caret between words remains that insertion point. A selected range is
-  replaced as by an ordinary paste; text outside the range is unchanged.
-- A deliberate selection of another editable target during recording becomes
-  the intended destination. Do not force focus back to an earlier editor.
+  focus change is acceptable only if the latest intended destination and
+  selection are restored reliably without user intervention. Do not force focus
+  back to an earlier target after deliberate retargeting.
 - Preserve the documented ability to deliberately target supported external
   Windows inputs. Do not silently change the product to VS Code-only insertion.
 - Existing keyboard controls remain usable. Never automatically submit or send
   dictated text; cancellation must not insert a transcript.
-- If a destination is known to have become unavailable, retain the transcript
-  for explicit recovery rather than guess a different destination. Do not claim
-  that every opaque composer can be inspected or that a successful input API
-  call proves the intended control accepted text.
+- If the intended destination is known to have become unavailable and no newer
+  valid target was deliberately selected, retain the transcript for explicit
+  recovery rather than guess a different destination. Do not claim that every
+  opaque composer can be inspected or that a successful input API call proves
+  the intended control accepted text.
 
-During M1, explicitly evaluate focus changes while transcription is pending.
-Any target policy must distinguish deliberate retargeting from extension-induced
-focus loss. Inability to distinguish them is a documented limitation, not a
-reason to silently change the contract.
+Examples of the agreed policy:
 
-**Exit evidence:** this written contract. Functional conformance remains untested.
+| User action before insertion | Intended result |
+| --- | --- |
+| Stop recording in Codex, then deliberately select another supported input while transcription runs | Insert into that newly selected input at its latest caret or selection |
+| Move the caret or select a different range within the same composer while transcription runs | Use the updated caret or selection, not the position from Start or Stop |
+| Only click Dictate and Insert, without deliberately changing the text destination | Preserve the original input and selection despite any control-induced focus change |
+
+M1 must establish whether a concrete mechanism can honor this policy, including
+changes during transcription. Distinguishing deliberate retargeting from
+extension-induced focus loss remains a feasibility question. Merely pasting into
+whatever control happens to own focus is not proof of following the latest
+deliberate target. An inability to distinguish them is a documented limitation,
+not permission to freeze the target at Stop or silently substitute a different
+policy.
+
+**Exit evidence:** this written contract and the user's explicit selection of A.
+M0.1 is complete at the specification level only; functional conformance remains
+untested and Issue #38 remains open.
 
 ### M0.2: distinguish a fix, an alternative and a safeguard
 
@@ -275,7 +305,7 @@ record of an unresolved issue or leave a dangling plan link.
 
 | Milestone | Current status | Evidence / remaining work |
 | --- | --- | --- |
-| M0.1 | Specification recorded | Insertion contract in section 3; not functionally validated |
+| M0.1 | Complete: requirements specification | User confirmed A on 2026-09-13; latest deliberate input/caret/selection wins through transcription; no runtime validation |
 | M0.2 | Specification recorded | Fix/alternative/safeguard classifications in section 3 |
 | M0.3 | Specification recorded | Acceptance matrix and evidence format in section 3; every test is Not run |
 | M1 | Not started | No new probe, implementation or live focus result |
@@ -283,15 +313,34 @@ record of an unresolved issue or leave a dangling plan link.
 | M3 | Not started | No new size setting or renderer changes |
 | M4 | Not started | No integrated acceptance run, merge or release |
 
-Current authorized change: create this planning document and its root
-`AGENTS.md` pointer on the planning branch. No runtime implementation is authorized
-by this plan alone; follow the user's next request.
+Current authorized change: finalize M0.1 on `docs/dictation-reliability-plan`
+with the user's explicit choice of A, Follow your latest target. This is a
+requirements-documentation change only, not authorization to implement, merge,
+publish or close Issue #38. M0.2 and M0.3 remain recorded specifications for their
+next focused steps; M1-M4 remain unstarted.
+
+Handoff for this change (2026-09-13):
+
+- Planning branch tip reviewed: `50d75cca9d201a96e120850eb33cc016c3fe7dbc`.
+- Changed file: `docs/DICTATION_RELIABILITY_PLAN.md`, M0.1 and this handoff only.
+  `AGENTS.md` already points here and needs no change.
+- Decision resolved: deliberate changes during transcription, including changes
+  to a caret or selection in the same input, update the destination until
+  insertion. Stop/Insert does not lock the target or require a second
+  confirmation solely for that change.
+- Validation scope: documentation diff, preservation of unrelated plan sections
+  and branch state. No runtime, GUI, build or acceptance tests were run; all
+  matrix results remain Not run.
+- Remaining uncertainty: M1 must prove a mechanism can distinguish deliberate
+  retargeting from extension-induced focus loss. No such proof is claimed here.
 
 Next step when asked to continue: read `AGENTS.md` and this plan, verify branch
-state, then begin M1 with a concrete mechanism and the smallest deterministic
-test plan. Read-only investigation can precede a separately authorized probe.
-If the user prioritizes sizing or recovery, M3 or M2 can proceed independently.
-Do not restart the discussion from scratch or silently choose a floating launcher.
+state, then review M0.2's fix/alternative/safeguard boundaries without reopening
+choice A. During M0.3, refine the acceptance cases to cover the now-agreed
+transcription-time retargeting and same-input caret/selection changes explicitly.
+Only then begin M1 unless the user requests a different order. If the user
+prioritizes sizing or recovery, M3 or M2 can proceed independently. Keep the
+frozen branch untouched and do not silently choose a floating launcher.
 
 For every continuation update this section with the milestone/substep, branch
 and commit, changed files, actual tests/results, unresolved blockers/decisions
