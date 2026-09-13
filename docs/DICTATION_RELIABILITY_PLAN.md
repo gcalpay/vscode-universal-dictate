@@ -349,31 +349,165 @@ M1-M4 supply runtime evidence later. Choice A and M0.2's closure rules are uncha
 
 ## 4. M1: establish focus feasibility before committing to a redesign
 
-**Status: not started.**
+**Status: M1.1 complete as a read-only assessment; M1.2-M1.4 not started.**
+No runtime implementation or Windows/Codex acceptance result is claimed.
 
-First recheck the live VS Code API/implementation and any relevant documented
-composer integration. Identify a concrete mechanism: prevent focus loss before
-it happens, or explicitly identify and address the intended target/selection.
-A command that merely opens a sidebar or focuses an editor is not evidence of
-selection-preserving insertion into the composer.
+| Sub-milestone | Scope | Exit evidence |
+| --- | --- | --- |
+| M1.1: assess concrete mechanisms | Read current source, public contracts and relevant history; distinguish a literal fix from an alternative | A source-backed hypothesis, limitations and a discriminating experiment |
+| M1.2: prepare the smallest justified probe | After authorization, build only the diagnostic needed to test that hypothesis | Reproducible, isolated diagnostic build and procedure; no production redesign |
+| M1.3: execute core Windows tests | Real Codex, editor and ordinary input; fixed text, selections, retargeting and independent Start/Stop checks | Per-build observations using M0.3; alternative results labelled separately |
+| M1.4: decide delivery direction | Compare evidence with M0.1/M0.2 and identify dependencies | Supported production direction, an explicit alternative decision or a specific blocker |
 
-Evaluate the frozen native-launcher candidate without changing its branch. Its
-existence, successful compilation or use of non-activation flags does not by
-itself establish complete product behavior. Check readiness versus actual
-visibility/target attachment, window ownership, positioning and degraded fallback.
-Use its existing artifact if usable; any new diagnostic code belongs on a fresh,
-authorized branch from `main`, not in the frozen branch.
+M1.2 is conditional on a credible mechanism, not an obligation to write code.
+A feasibility pass is not release acceptance or authorization to implement a
+production feature. M2/M3 remain independent of an upstream dependency.
 
-Prefer a minimal deterministic experiment over another broad launcher rewrite.
-Assess a supported literal-status-bar route first; an upstream mechanism or an
-optional native launcher must be reported with its distinct scope and dependency.
-Specify any experimental patch only after identifying the hypothesis it tests.
+### M1.1 findings (2026-09-13)
 
-**Exit:** record one evidence-backed decision: literal workflow passes; only an
-alternative passes and needs a product decision; or the tested mechanisms fail
-or depend on an unavailable capability. An inconclusive/unrun experiment is not
-proof of impossibility. Expand implementation substeps only after this decision.
-A passing feasibility probe does not automatically authorize a production change.
+Assessment baseline: extension `main` remains `f0265bc4398643c3b3a27e6d2ad64183b115b6ba`;
+planning tip inspected was `77d191401da05aac5e76e29db17661f27d52758b`.
+VS Code source inspected at `8e35945bae3f2b0b3d0276963281180f1ce10cb0`
+(the upstream `main` snapshot returned during this assessment, not a claim about
+the user's installed version). Public documentation was checked on the date above.
+
+**Observed source facts:**
+
+- The genuine status-bar label is an anchor with `tabIndex: -1`. Its command
+  listener handles `CLICK`; separate keyboard listeners handle Space/Enter and
+  navigation. The inspected item has no primary-mouse-down cancellation handler.
+  The status-bar parent is focusable too; removing focusability from the label
+  alone is not a justified fix. See [statusbarItem.ts][m11-item] and
+  [statusbarPart.ts][m11-part]. These facts support the reported event-order
+  explanation but are not a new live reproduction of it.
+- Stable [StatusBarItem documentation][m11-api] has no mouse-down callback or
+  focus-preservation option. [extHostStatusBar.ts][m11-bridge] serializes known
+  properties to the workbench; assigning an invented `preserveFocus` property
+  in extension code would not enable that behavior. Extensions have
+  [no supported access to the workbench DOM][m11-dom].
+- [statusbarActions.ts][m11-actions] shows that `workbench.statusBar.clearFocus`
+  first focuses the status-bar container when an entry is focused, otherwise
+  focuses `activeEditorPane` when present. It is not a last-editable-input or
+  composer-selection restore. It cannot justify a generic solution here.
+- The [documented Codex IDE commands][m11-codex] expose sidebar/panel opening
+  and context actions, but no documented contract for restoring the latest
+  composer selection and inserting an arbitrary transcript there. This is an
+  assessment of the published interface, not proof that no internal command
+  exists. Do not guess undocumented arguments or use a new chat/context action
+  as a surrogate for selected-text insertion.
+- The existing [extension controller][m11-extension] makes both idle Dictate
+  and recording Stop invoke `universalDictate.toggle`. Its
+  [paste orchestration][m11-paste] has no destination parameter and sends Ctrl+V
+  to current focus. Preventing our controls from disturbing that focus is a
+  simpler hypothesis for the ordinary valid-target workflow than inventing a
+  global caret tracker. It does not establish target-loss detection or paste
+  acknowledgement; those remain separate acceptance/recovery concerns.
+
+**Relevant internal precedent:** VS Code's
+[action-bar view items][m11-actionbar] already stop mouse-down defaults when
+not draggable, while their click handling remains separate. This is not a
+StatusBarItem extension capability, but it makes mouse-down prevention a
+concrete upstream hypothesis rather than an unexplained focus workaround.
+The [W3C UI Events Algorithms draft][m11-events] describes focusing a click-
+focusable target after uncancelled mouse-down dispatch. It supports the rationale;
+actual Electron/webview behavior still needs measurement, and the draft is not
+proof of a Windows/Codex result.
+
+#### Mechanism decision
+
+| Route | Assessment | Next action |
+| --- | --- | --- |
+| Stable extension API only, retaining the literal item | No sufficient supported mechanism identified in the inspected API/bridge | Do not implement another command-delay, fabricated property or generic editor-focus workaround |
+| VS Code-owned primary mouse-down prevention | Credible candidate for the genuine item; actual Codex behavior and upstream delivery unproved | Preferred hypothesis for an isolated upstream diagnostic |
+| Cooperation from the composer through an explicit insertion/selection interface | Conceptually valid but no sufficient documented Codex interface found | Treat as an external capability dependency, not an available implementation |
+| Frozen Win32 launcher | Non-activation is a documented Windows mechanism, but this is a replacement interaction | Keep frozen; evaluate separately only, never silently adopt as the literal fix |
+
+For the native alternative, [WM_MOUSEACTIVATE documentation][m11-win32] confirms
+what `MA_NOACTIVATE` means. The frozen [placement code][m11-native] anchors to a
+window corner rather than the genuine status-bar item's bounds; it can hide when
+its target is invalid. Its [controller][m11-controller] distinguishes a running
+helper, not an acknowledged visible/attached launcher. These are static
+limitations and test risks, not reproduced failures. Do not merge the experiment
+or treat non-activation flags/green compilation as complete acceptance evidence.
+
+The older [Issue #38 log][m11-history] records an upstream-first direction and
+excludes UI Automation/MSAA tracking, mouse hooks, click replay and focus hacks.
+Its historical `main` and automation statements are not today's branch state.
+Do not restore that old infrastructure or change those branches. A read of the
+historically proposed `gcalpay/vscode` repository returned 404 through the current
+connector; no accessible upstream prototype was established by that read. This
+is not proof that no private/local development checkout exists.
+
+#### Hypothesis and smallest discriminating experiment
+
+**H1:** cancelling the default action of primary mouse-down on the genuine
+Dictate/Stop status-bar item, inside VS Code's own renderer, keeps the current
+editable control and selection intact while the ordinary click still invokes
+its command once. Deliberate later input/caret changes then remain authoritative
+without freezing a destination at Start or Stop.
+
+This is the proposed M1.2 experiment, not code created in M1.1:
+
+1. Use an isolated VS Code development checkout/build and profile, not a patched
+   user installation. Any extension-side fixed-text probe belongs on a fresh,
+   authorized branch from Universal Dictate `main` with the plan and `AGENTS.md`
+   carried in. Because H1 lives in VS Code, that extension branch alone cannot
+   implement the mouse-down change. Creating an upstream fork/build requires
+   explicit authorization; none was created during this assessment.
+2. Add only a source-level diagnostic condition for the actual contributed
+   item and primary mouse button. Cancel the default at mouse-down; keep the
+   existing click handler and keyboard focus/Space/Enter behavior. Do not add
+   a public API, global focus history, hooks, a floating window or clipboard
+   rewrites to test H1. Do not substitute CSS/DevTools injection for this build.
+3. Compare otherwise identical unmodified and modified builds using real pointer
+   clicks in the real Codex composer, first T01/T02, then the core M0.3 paths.
+   Use `UD_TEST`, distinguish status-bar Start and Stop, and verify exactly one
+   command/insertion and preserved selection. Scripted event dispatch alone
+   cannot establish native pointer focus behavior. If the real Codex extension
+   cannot run in the isolated build, mark its test Blocked rather than use a mock.
+4. Exercise the controlled pending-transcription interval, same-input caret/
+   selection changes and deliberate retargeting. Check keyboard navigation,
+   Enter/Space activation and right-click context behavior for regressions.
+   The test completion trigger must not steal focus. Retain all failed trials.
+
+If cancellation takes effect but the real composer still loses its selection,
+or command activation changes, H1 is insufficient: record where it fails before
+expanding the patch. If it works, the next question is upstream design and
+availability, not permission to publish a patched VS Code or declare #38 closed.
+A general status-bar behavior correction and an opt-in API are different possible
+upstream designs; do not choose or implement the larger API before proving H1.
+A future API name such as `preserveFocus` is a proposal, not an existing setting.
+[Proposed APIs cannot ship in Marketplace extensions][m11-proposed].
+
+**Limits:** H1 addresses focus lost to our genuine status-bar controls inside the
+workbench. It does not promise to prevent operating-system window activation
+when clicking between applications, recover a closed input, identify every
+unrelated programmatic focus change or confirm clipboard acceptance. Follow
+M0.3's external-target finish paths and keep unresolved cases explicit. No
+acceptance requirement is weakened by selecting this narrower initial probe.
+
+**M1.1 exit:** complete. A testable upstream mechanism and current delivery boundary
+are identified; no supported extension-only literal fix was established. H1 and
+the native alternative remain untested. M1 overall stays in progress. No new
+product clarification is needed for this assessment; a Windows/Codex test is
+needed after an authorized concrete probe exists.
+
+[m11-item]: https://github.com/microsoft/vscode/blob/8e35945bae3f2b0b3d0276963281180f1ce10cb0/src/vs/workbench/browser/parts/statusbar/statusbarItem.ts#L68-L178
+[m11-part]: https://github.com/microsoft/vscode/blob/8e35945bae3f2b0b3d0276963281180f1ce10cb0/src/vs/workbench/browser/parts/statusbar/statusbarPart.ts#L451-L478
+[m11-api]: https://code.visualstudio.com/api/references/vscode-api#StatusBarItem
+[m11-bridge]: https://github.com/microsoft/vscode/blob/8e35945bae3f2b0b3d0276963281180f1ce10cb0/src/vs/workbench/api/common/extHostStatusBar.ts#L243-L299
+[m11-dom]: https://code.visualstudio.com/api/extension-capabilities/overview#no-dom-access
+[m11-actions]: https://github.com/microsoft/vscode/blob/8e35945bae3f2b0b3d0276963281180f1ce10cb0/src/vs/workbench/browser/parts/statusbar/statusbarActions.ts#L120-L138
+[m11-codex]: https://learn.chatgpt.com/docs/developer-commands?surface=ide
+[m11-extension]: https://github.com/gcalpay/vscode-universal-dictate/blob/f0265bc4398643c3b3a27e6d2ad64183b115b6ba/src/extension.ts#L195-L242
+[m11-paste]: https://github.com/gcalpay/vscode-universal-dictate/blob/f0265bc4398643c3b3a27e6d2ad64183b115b6ba/src/core/paste.ts
+[m11-actionbar]: https://github.com/microsoft/vscode/blob/8e35945bae3f2b0b3d0276963281180f1ce10cb0/src/vs/base/browser/ui/actionbar/actionViewItems.ts#L121-L165
+[m11-events]: https://w3c.github.io/uievents/event-algo.html#handle-native-mouse-down
+[m11-win32]: https://learn.microsoft.com/en-us/windows/win32/inputdev/wm-mouseactivate
+[m11-native]: https://github.com/gcalpay/vscode-universal-dictate/blob/5df91c3561ac31bd20f30d829d323347757469bf/native/status-button.cpp#L179-L260
+[m11-controller]: https://github.com/gcalpay/vscode-universal-dictate/blob/5df91c3561ac31bd20f30d829d323347757469bf/src/controller.ts#L188-L239
+[m11-history]: https://github.com/gcalpay/vscode-universal-dictate/blob/327ea19171385d310269fb44a14b8990ac267df7/docs/issue-38-implementation-log.md#L231-L242
+[m11-proposed]: https://code.visualstudio.com/api/advanced-topics/using-proposed-api
 
 ## 5. M2: transcript recovery and clipboard reliability
 
@@ -468,18 +602,21 @@ record of an unresolved issue or leave a dangling plan link.
 | Milestone | Current status | Evidence / remaining work |
 | --- | --- | --- |
 | M0.1 | Complete: requirements specification | User confirmed A on 2026-09-13; latest deliberate input/caret/selection wins through transcription; no runtime validation |
-| M0.2 | Complete: decision criteria | Fix/alternative/safeguard boundaries, evidence and closure rules finalized; no implementation selected or validated |
+| M0.2 | Complete: decision criteria | Fix/alternative/safeguard boundaries, evidence and closure rules finalized; no production implementation selected or validated |
 | M0.3 | Complete: test specification | 18 case rows across 13 families, 20 baseline start/finish/mode combinations and evidence rules; all runtime cases Not run |
-| M1 | Not started | No new probe, implementation or live focus result |
+| M1.1 | Complete: read-only mechanism assessment | Source-backed upstream mouse-down hypothesis H1; no sufficient supported extension-only literal fix identified |
+| M1.2 | Not started | Isolated upstream diagnostic proposed; no fork, patch, build or extension probe created |
+| M1.3 | Not started | H1 and native alternative have no new Windows/Codex test evidence; all runtime cases Not run |
+| M1.4 | Not started | Production route depends on observations and supported delivery; no launcher adopted |
 | M2 | Not started | No recovery or clipboard changes |
 | M3 | Not started | No new size setting or renderer changes |
 | M4 | Not started | No integrated acceptance run, merge or release |
 
-Current authorized change: finalize M0.3 on `docs/dictation-reliability-plan`
-and update the M0 summary and this handoff. Documentation only; no diagnostic
-probe, runtime implementation, new launcher, merge, release or issue closure.
-M0.1/M0.2 remain unchanged. M0 is now complete as specifications, not as tested
-behavior; M1-M4 remain unstarted.
+Current authorized change: perform M1.1 read-only investigation and record its
+findings and M1 sub-milestones on `docs/dictation-reliability-plan`. Repository
+writes are limited to this plan. No runtime/upstream patch, fork, build, launcher
+adoption, merge, publication or issue closure is authorized by this record.
+M0 and M2-M4 remain unchanged; M1 overall is in progress, not completed.
 
 Completed planning history:
 
@@ -487,33 +624,39 @@ Completed planning history:
 - `139509890a5171de65012910c46d14ca924433ad`: M0.1 finalized after the user
   selected A. Keep following the latest deliberate target through transcription.
 - `ce68d69bc84a6d9bc49091507f6c04e6360d01de`: M0.2 finalized fix/alternative/
-  safeguard classifications and evidence/closure boundaries; no route selected.
+  safeguard classifications and evidence/closure boundaries.
+- `77d191401da05aac5e76e29db17661f27d52758b`: M0.3 finalized the matrix,
+  start/finish inventory and evidence procedure; no runtime tests performed.
 
-Handoff for M0.3 (2026-09-13):
+Handoff for M1.1 (2026-09-13):
 
-- Planning branch tip reviewed: `ce68d69bc84a6d9bc49091507f6c04e6360d01de`.
-  The M0.3 commit follows that tip; resolve its SHA from file/branch history.
-- Changed file: `docs/DICTATION_RELIABILITY_PLAN.md`, M0 summary, M0.3 and this
-  handoff only. `AGENTS.md` already points here and needs no change.
-- Clarifications: no new user decision needed. Choice A remains fixed. Explicit
-  recording/transcription and same-input variants close gaps in the original
-  matrix; actual Start and Stop paths are covered separately. Recovery/sizing
-  results cannot stand in for a literal-status-bar fix.
-- Validation scope: documentation diff, matrix/combination consistency, unchanged
-  M0.1/M0.2/M1-M4 sections and branch state. No runtime, GUI, build or acceptance
-  tests were run; all 18 case rows and their variants remain Not run.
-- Remaining uncertainty: M1 must demonstrate a concrete mechanism on real
-  Windows VS Code/Codex. No feasibility or platform impossibility is established
-  by this document. A future GUI test requires access to that environment.
+- Planning branch tip reviewed: `77d191401da05aac5e76e29db17661f27d52758b`.
+  Resolve this assessment commit's SHA from branch/file history.
+- Changed file: `docs/DICTATION_RELIABILITY_PLAN.md`, M1 and this handoff only.
+  `AGENTS.md` already points here and requires no change.
+- Findings: the stable API and extension bridge lack pointer-focus control;
+  clearFocus is not a composer restore; VS Code's action bar provides an
+  internal mouse-down-cancellation precedent. H1 tests the genuine item in
+  VS Code itself. Neither a new API nor a native-launcher replacement is adopted.
+- Validation scope: source/documentation reads, documentation diff and section/
+  acceptance-result preservation checks. No runtime, GUI, build or acceptance
+  test was run. All 18 case rows remain Not run, not Pass or proven impossible.
+- Main and the frozen experiment are not changed. Older implementation-log
+  claims about then-current main/automation remain historical; do not revive
+  those workflows or treat a 404 repository read as proof no local fork exists.
+- Remaining dependencies: authorization and an isolated upstream development
+  environment for H1; real Windows/Codex access for behavior; supported upstream
+  availability for a shippable literal fix if H1 succeeds. No such outcomes are
+  promised. Recovery and Small/Medium/Large sizing are not blocked by this path.
 
 Next step when asked to continue: read `AGENTS.md` and this plan, verify refs,
-then begin M1 with a read-only capability/mechanism assessment and the smallest
-fixed-text experiment justified by it. Do not restart M0 or reopen choice A.
-Before runtime work, follow section 1 to make the plan available on a fresh
-purpose-specific branch from current `main`. Any probe stays within the user's
-current authorization; do not touch the frozen branch or silently adopt its
-launcher. Ask for Windows testing help only when a concrete artifact/procedure
-needs that environment. M2 or M3 can proceed independently if prioritized.
+then establish authorization for M1.2's isolated upstream diagnostic and prepare
+only that probe. Do not pretend an extension-only patch can install a renderer
+mouse-down handler. Do not start with full API plumbing, another launcher or
+broad test infrastructure. No change to the user's installed VS Code is planned.
+Ask for local Windows help once there is a concrete build/procedure requiring it.
+Do not reopen choice A, repeat M0 or silently weaken #38. M2/M3 can proceed
+independently if prioritized, and the old branch remains frozen.
 
 For every continuation update this section with the milestone/substep, branch
 and commit, changed files, actual tests/results, unresolved blockers/decisions
