@@ -28,6 +28,13 @@ function transform(source) {
   if (source.includes('M1.2 H1 diagnostic:')) throw new Error('Already patched.');
   return source.replace(ANCHOR, HANDLER + ANCHOR);
 }
+function workingTreeEol(canonical, working) {
+  // Git attributes can select native CRLF even when core.autocrlf is false.
+  // Permit only that exact checkout conversion, not arbitrary whitespace changes.
+  if (working === canonical) return 'lf';
+  if (!canonical.includes('\r') && working === canonical.replace(/\n/g, '\r\n')) return 'crlf';
+  throw new Error(`Unexpected working-tree source: Git blob ${blobHash(canonical)}, working bytes ${blobHash(working)}.`);
+}
 function apply(root, variant) {
   if (!['baseline', 'h1'].includes(variant)) throw new Error('Variant must be baseline or h1.');
   const git = (...args) => execFileSync('git', ['-C', root, ...args], { encoding: 'utf8' }).trim();
@@ -35,13 +42,19 @@ function apply(root, variant) {
   if (git('status', '--porcelain')) throw new Error('Upstream checkout must be clean.');
   const file = path.join(root, SOURCE);
   const original = fs.readFileSync(file, 'utf8');
-  if (blobHash(original) !== SOURCE_BLOB) throw new Error('Unexpected statusbarItem source bytes.');
-  const result = variant === 'h1' ? transform(original) : original;
+  // Read the pinned object without trim(): final newlines are part of its hash.
+  const canonical = execFileSync('git', ['-C', root, 'cat-file', 'blob', `${UPSTREAM}:${SOURCE}`], { encoding: 'utf8' });
+  if (blobHash(canonical) !== SOURCE_BLOB) {
+    throw new Error(`Unexpected pinned source blob: expected ${SOURCE_BLOB}, got ${blobHash(canonical)}.`);
+  }
+  const eol = workingTreeEol(canonical, original);
+  const source = variant === 'h1' ? transform(canonical) : canonical;
+  const result = eol === 'crlf' ? source.replace(/\n/g, '\r\n') : source;
   if (variant === 'h1') fs.writeFileSync(file, result, 'utf8');
   return { upstream: UPSTREAM, variant, source: SOURCE, originalBlob: SOURCE_BLOB,
-    testedSourceBlob: blobHash(result), itemId: ITEM_ID };
+    testedSourceBlob: blobHash(source), worktreeSourceBlob: blobHash(result), worktreeEol: eol, itemId: ITEM_ID };
 }
-module.exports = { UPSTREAM, SOURCE, SOURCE_BLOB, ITEM_ID, ANCHOR, HANDLER, blobHash, transform, apply };
+module.exports = { UPSTREAM, SOURCE, SOURCE_BLOB, ITEM_ID, ANCHOR, HANDLER, blobHash, transform, workingTreeEol, apply };
 if (require.main === module) {
   try {
     const [root, variant, manifestPath] = process.argv.slice(2);

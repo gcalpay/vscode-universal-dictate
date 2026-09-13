@@ -103,3 +103,20 @@ test('bootstrap declares explicit development-mode guards (static check)', () =>
   assert.match(source, /context\.extensionMode !== vscode\.ExtensionMode\.Development/);
   assert.match(source, /process\.env\.UD_FOCUS_PROBE !== 'M1\.2'/);
 });
+
+test('pinned source permits only exact LF or CRLF checkout conversion', () => {
+  const canonical = 'first\n\tsecond\n';
+  assert.equal(patch.workingTreeEol(canonical, canonical), 'lf');
+  assert.equal(patch.workingTreeEol(canonical, canonical.replace(/\n/g, '\r\n')), 'crlf');
+  for (const unexpected of ['first\r\n\tsecond\n', '\ufeff' + canonical,
+    canonical.trimEnd(), canonical.replace('second', 'changed')]) {
+    assert.throws(() => patch.workingTreeEol(canonical, unexpected), /Unexpected working-tree source/);
+  }
+});
+test('blob hashing includes UTF-8 byte length and final newline', () => {
+  const { execFileSync } = require('node:child_process');
+  const text = 'Unicode: \u03c1\n';
+  const expected = execFileSync('git', ['hash-object', '--stdin'], { input: text, encoding: 'utf8' }).trim();
+  assert.equal(patch.blobHash(text), expected);
+  assert.notEqual(patch.blobHash(text.trimEnd()), expected);
+});
