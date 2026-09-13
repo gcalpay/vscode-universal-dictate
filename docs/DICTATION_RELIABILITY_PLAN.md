@@ -28,7 +28,7 @@ Keep the old experiment untouched and unmerged. Do not delete it, reset it or
 silently adopt its floating launcher as the new interface. It is reference
 material and a candidate for evaluation, not the implementation base.
 
-This planning branch contains documentation only. Subsequent runtime work should
+The `docs/dictation-reliability-plan` branch contains documentation only. Runtime work should
 use small, purpose-specific branches from the then-current `main`. To make this
 plan discoverable there, first merge the documentation through normal review, or
 explicitly carry these documentation files into an authorized work branch. Do not
@@ -526,7 +526,8 @@ status-bar mechanism is being tested, not replaced by the frozen native launcher
 
 Implementation commit: `e63ce151aca12af04b532f6fa36e940c62908bfe` (parent is
 extension `main`). Source-integrity correction and regression tests:
-`1a6fbb6f12a249e1ee4df12ec576fe2c778bdd2a`.
+`1a6fbb6f12a249e1ee4df12ec576fe2c778bdd2a`. Supported build-toolchain correction:
+`6bef0311f3f6cee9c94941c5bd1456dfbaf01593`.
 
 The diagnostic lives under `diagnostics/m1.2/`; the root runtime, package/version,
 recorder, paste implementation and production workflows remain unchanged.
@@ -584,10 +585,28 @@ commit `1a6fbb6...`: both pinned-source validation steps now pass. The updated
 Windows kit job also passed, including the 13 unit tests, native compilation and
 PowerShell parsing. Kit artifact `10310587386` is present (795423 bytes, digest
 `sha256:817209264f23edf3a4defeb42e28526a9072869d40b10c847a2891d8081cd5a4`).
-Both Code OSS host builds are still in progress at this handoff; read their actual
-results before advancing. Do not present unbuilt host archives as available or
-combine this kit with hosts from a different code commit. No user installation
-or local GUI action is required until the full host/kit set is verified.
+Both host builds then failed during upstream dependency preinstallation because
+`windows-latest` selected Visual Studio 2026. The pinned upstream
+[preinstall source](https://github.com/microsoft/vscode/blob/8e35945bae3f2b0b3d0276963281180f1ce10cb0/build/npm/preinstall.ts)
+accepts VS 2022/2019, not that image. Logs confirm CRLF was the first gate issue;
+the corrected source check passed before the separate compiler prerequisite failed.
+
+Commit `6bef0311...` switches the diagnostic jobs to `windows-2022` and checks
+that an actual VS 2022 C++ toolchain with Spectre libraries is installed before
+running the expensive dependency step. It sets the upstream-documented
+`vs2022_install` path to the detected VS 2022 installation; it does not skip or
+spoof the upstream compiler check. The official
+[runner inventory](https://github.com/actions/runner-images/blob/main/images/windows/Windows2022-Readme.md)
+was checked for those components.
+
+[Run 3: 34735635848](https://github.com/gcalpay/vscode-universal-dictate/actions/runs/34735635848),
+commit `6bef0311...`: the kit job passed again. Both host jobs passed the VS 2022
+prerequisite and pinned-source checks and entered the source-build step. Host
+compilation/packaging is still unverified at this checkpoint. Read this run's
+actual results before advancing and keep failures distinct from focus-test results.
+The run-2 kit above is historical evidence, not a kit to mix with run-3 hosts.
+No user installation or local GUI action is required until a complete matching
+host/kit set is verified.
 
 **Exit still pending:** both source-built hosts and the matching kit must build
 and have identifiable artifacts. M1.3 then checks real focus/selection behavior;
@@ -691,7 +710,7 @@ record of an unresolved issue or leave a dangling plan link.
 | M0.2 | Complete: decision criteria | Fix/alternative/safeguard boundaries, evidence and closure rules finalized; no production implementation selected or validated |
 | M0.3 | Complete: test specification | 18 case rows across 13 families, 20 baseline start/finish/mode combinations and evidence rules; all runtime cases Not run |
 | M1.1 | Complete: read-only mechanism assessment | Source-backed upstream mouse-down hypothesis H1; no sufficient supported extension-only literal fix identified |
-| M1.2 | Implemented; build validation in progress | Code at `1a6fbb6...`; run 2 kit/source gates passed, both host builds pending |
+| M1.2 | Implemented; build validation in progress | Code at `6bef0311...`; run 3 kit/source/toolchain gates passed, both host builds unverified |
 | M1.3 | Not started | H1 and native alternative have no new Windows/Codex test evidence; all runtime cases Not run |
 | M1.4 | Not started | Production route depends on observations and supported delivery; no launcher adopted |
 | M2 | Not started | No recovery or clipboard changes |
@@ -713,6 +732,8 @@ Completed history:
 - `63b5eb9669d44f48cf5ee81babf8c6fceb99527a`: M1.1 source-backed assessment.
 - `e63ce151aca12af04b532f6fa36e940c62908bfe`: M1.2 diagnostic, directly from main.
 - `1a6fbb6f12a249e1ee4df12ec576fe2c778bdd2a`: pinned-source/EOL verification correction.
+- `c24ef71bc119ef4917832482323ef1db4463c56e`: diagnostic implementation/build handoff.
+- `6bef0311f3f6cee9c94941c5bd1456dfbaf01593`: use the supported VS 2022 build image.
 
 Handoff for M1.2 (2026-09-13):
 
@@ -724,7 +745,7 @@ Handoff for M1.2 (2026-09-13):
   to root runtime sources, native production helpers, version or release workflow.
 - Tested: 13 local and Windows Node cases after the correction; Windows kit
   compilation, native helper invalid-parent check, PowerShell syntax and both
-  source-integrity gates. Build gate and exact
+  source-integrity and supported-toolchain gates. Build gate and exact
   run links are recorded above. No actual Windows/Codex input test ran here.
 - No new product decision needed. Choice A is fixed. Baseline and H1 require the
   same Codex version and the same diagnostic kit; the release hotkey is a
@@ -735,7 +756,7 @@ Handoff for M1.2 (2026-09-13):
   unchanged by M1.2. No upstream hosted fork or PR, merge, publication or issue
   closure was performed. M2 recovery and M3 Small/Medium/Large remain unstarted.
 
-Next step: inspect run 34735225128 and diagnose any concrete remaining build
+Next step: inspect run 34735635848 and diagnose any concrete remaining build
 failure before offering a Windows test. If all three matching artifacts are
 verified, M1.2 can be marked complete as preparation, then M1.3 requires real
 Windows/Codex observations using diagnostics/m1.2/README.md and M0.3. Do not change
