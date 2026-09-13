@@ -1,0 +1,132 @@
+name: M1.2 isolated focus probe
+
+on:
+  push:
+    branches: [experiment/m1.2-statusbar-focus-probe]
+    paths: ['diagnostics/m1.2/**', '.github/workflows/m12-focus-probe.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: m12-probe-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  probe-kit:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Preserve pinned source line endings
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Unit tests (not Windows GUI acceptance)
+        run: node --test diagnostics/m1.2/probe.test.cjs
+      - name: Install and compile unchanged extension runtime
+        run: |
+          npm install --no-audit --no-fund
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run compile
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Compile existing recorder/paste and diagnostic release signal
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force .deps/miniaudio, resources/bin | Out-Null
+          Invoke-WebRequest https://raw.githubusercontent.com/mackron/miniaudio/0.11.25/miniaudio.h -OutFile .deps/miniaudio/miniaudio.h
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vsInstall = (& $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath | Select-Object -First 1)
+          if (-not $vsInstall) { throw 'C++ toolchain missing.' }
+          $vcvars = Join-Path $vsInstall 'VC\Auxiliary\Build\vcvars64.bat'
+          $commands = @(
+            "call `"$vcvars`"",
+            "cl /nologo /O2 /std:c++20 /EHsc native\windows-fast-paste.cpp /Fe:resources\bin\windows-fast-paste.exe user32.lib",
+            "cl /nologo /O2 /std:c++20 /EHsc /I .deps\miniaudio native\record-audio.cpp native\miniaudio-impl.cpp /Fe:resources\bin\universal-dictate-recorder.exe user32.lib gdi32.lib",
+            "cl /nologo /O2 /MT /W4 /std:c++20 /EHsc diagnostics\m1.2\release-gate.cpp /Fe:resources\bin\m12-release-gate.exe user32.lib"
+          ) -join ' && '
+          cmd.exe /D /S /C $commands
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & resources/bin/m12-release-gate.exe 0
+          if ($LASTEXITCODE -ne 2) { throw 'Release helper invalid-parent check failed.' }
+          exit 0
+      - name: Validate launcher syntax and stage development-only kit
+        shell: pwsh
+        run: |
+          $tokens = $null; $parseErrors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path diagnostics/m1.2/launch.ps1), [ref]$tokens, [ref]$parseErrors) | Out-Null
+          if ($parseErrors.Count -gt 0) { throw ($parseErrors | Out-String) }
+          node diagnostics/m1.2/build-kit.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Copy-Item package-lock.json .m12-kit/dependency-lock.json
+          Get-FileHash .deps/miniaudio/miniaudio.h -Algorithm SHA256 | Format-List | Out-File .m12-kit/miniaudio-source-hash.txt
+      - uses: actions/upload-artifact@v7
+        with:
+          name: m12-probe-kit
+          path: .m12-kit/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+
+  code-oss-host:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [baseline, h1]
+    steps:
+      - name: Preserve pinned source line endings
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@v7
+        with:
+          path: tooling
+          persist-credentials: false
+      - uses: actions/checkout@v7
+        with:
+          repository: microsoft/vscode
+          ref: 8e35945bae3f2b0b3d0276963281180f1ce10cb0
+          path: vscode
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: vscode/.nvmrc
+          package-manager-cache: false
+      - name: Verify pinned checkout and prepare baseline or scoped H1 source
+        run: node tooling/diagnostics/m1.2/host-patch.cjs vscode ${{ matrix.variant }} m12-host.json
+      - name: Build isolated Code OSS host (no installer or distribution changes)
+        working-directory: vscode
+        shell: pwsh
+        run: |
+          npm ci --no-audit --no-fund
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run gulp vscode-win32-x64
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Stamp and archive the built host
+        shell: pwsh
+        env:
+          PROBE_COMMIT: ${{ github.sha }}
+        run: |
+          $dir = Join-Path $PWD 'VSCode-win32-x64'
+          $exe = Join-Path $dir 'Code - OSS.exe'
+          if (-not (Test-Path -LiteralPath $exe)) { throw 'Expected Code OSS executable is missing.' }
+          $stamp = Get-Content -Raw m12-host.json | ConvertFrom-Json -AsHashtable
+          $stamp.executable = 'Code - OSS.exe'
+          $stamp.executableSha256 = (Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          $stamp.probeCommit = $env:PROBE_COMMIT
+          $stamp.guiAcceptance = 'Not run'
+          $stamp | ConvertTo-Json | Set-Content (Join-Path $dir 'm12-host.json') -Encoding utf8
+          7z a -tzip "m12-code-oss-${{ matrix.variant }}.zip" "$dir\*"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@v7
+        with:
+          name: m12-code-oss-${{ matrix.variant }}
+          path: m12-code-oss-${{ matrix.variant }}.zip
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 14
