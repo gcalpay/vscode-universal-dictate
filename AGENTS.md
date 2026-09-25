@@ -1,32 +1,37 @@
 # Agent guidance
 
-Read [docs/DICTATION_RELIABILITY_PLAN.md](docs/DICTATION_RELIABILITY_PLAN.md)
-before reliability, overlay, live-transcript or translation work. The 2026-09-25
-expanded roadmap is the current work order, replacing experimental handoffs.
+Read [docs/DICTATION_RELIABILITY_PLAN.md](docs/DICTATION_RELIABILITY_PLAN.md) before reliability, overlay, live-preview, translation or focus-preservation work.
 
-- Recommended product order: M3 sizes, M2 recovery/clipboard/lifecycle, M5 live
-  preview, then optional M6 translation. M1 focus research is independent; apply
-  M4 validation to each candidate. Keep IDs; do not restart M0.
-- Next bounded implementation is M3 only unless the user changes priority.
-  Do not fix Code OSS builds or add live decoding during a size-layout change.
-- Product branches start from current main. After review and authorized merge,
-  branch the next feature from updated main. Keep the planning branch docs-only.
-  Carry only this file and the current plan when main lacks them; reconcile any
-  newer local progress rather than overwriting its ledger.
-- Leave `fix/preserve-insertion-target` frozen. Keep the M1.2 diagnostic on its
-  separate experimental branch. Neither belongs in ordinary product packaging.
-- Inspect local changes/refs first. Never reset, clean, stash or overwrite unrelated
-  work. Keep Git writes, installs and build dispatches within session approval.
-  A roadmap is not authorization to implement every milestone, merge or publish.
-- Preserve latest deliberate input/caret/selection through final processing and
-  never auto-submit. Preview v1 is provisional text in the overlay, not repeated
-  pastes into the target. Recovery and alternatives do not prove #38 fixed.
-- Translation is optional: confirm output-language/backend scope before M6.
-  Built-in Whisper translation to English is not arbitrary-language translation.
-  Do not add a cloud dependency or change recording defaults silently.
-- Make bounded testable changes. Record source/build evidence separately from real
-  Windows/Codex observations. Update the plan after each implementation chunk;
-  do not convert unrun acceptance cases into passes from mocks or compilation.
-- After completion or explicit retirement, preserve durable behavior/tests/limits
-  in regular docs/issues and remove the temporary plan and pointer together.
-  Preserve unrelated agent guidance and unresolved evidence.
+## Milestone workflow
+
+- One milestone uses exactly one product branch. All of that milestone's submilestones stay on the same branch.
+- Current sequence: M1 overlay sizes -> M2 transcript reliability -> M3 live preview -> M4 translation -> M5 insertion-target preservation -> M6 integrated validation/release.
+- At the end of each milestone, stop for the user's review. Do not create the next milestone branch until the user has checked the result and decided whether the current branch should merge.
+- After an approved merge, create the next milestone branch from the updated `main`. If a milestone is rejected or blocked, keep/revise that same branch or close it only after the user's decision; do not silently merge it.
+- No merge, Marketplace publication, release, issue closure or version bump without explicit approval.
+
+## Current task
+
+The next implementation is **M1.1 on `feat/overlay-size-presets`**. Create that branch from the then-current `main`, carry only the current plan and this guidance if they are not on main, then implement M1.1 through M1.3 on that one branch.
+
+Do not start M2 while M1 is awaiting review.
+
+## Repository boundaries
+
+- Keep `fix/preserve-insertion-target` frozen as historical alternative-launcher evidence.
+- Keep `experiment/m1.2-statusbar-focus-probe` isolated as historical/upstream diagnostic evidence. Do not merge either branch into M1-M4 product work.
+- Inspect the local working tree and refs before edits. Never reset, clean, stash or overwrite unrelated user work.
+- Keep dependency installation, Git commits/pushes and build dispatches within the user's active authorization.
+- Planned behavior is not shipped behavior. Distinguish specified, implemented, compiled, packaged and real-Windows/real-Codex validated states.
+
+## Product invariants
+
+- Follow the latest deliberately selected editable input plus caret/selection through final insertion.
+- Dictate/Stop/Insert controls do not themselves count as retargeting.
+- Never synthesize Enter or automatically submit.
+- Preserve local/offline inference after model setup and the Windows UI-host/Remote-WSL architecture.
+- Live preview v1 is overlay-only provisional text, not repeated target pastes.
+- Translation v1, if approved, uses the local Whisper source-language-to-English capability; arbitrary target languages require a separate backend decision.
+- Recovery, a native alternative launcher, overlay sizes, live preview or translation do not by themselves prove Issue #38 fixed.
+
+Update the roadmap ledger at each milestone handoff with branch/commit, files changed, checks actually run, user-visible/manual evidence, blockers and the next authorized action.
