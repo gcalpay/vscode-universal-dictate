@@ -75,6 +75,8 @@ A recovery feature, different launcher, smaller overlay, preview or translation 
 
 **Branch:** `feat/overlay-size-presets`.
 
+**Status:** M1.1 implemented at `a32a2ebcc9d9a666e5e11c36c56427f9fc2fbe57`; M1.2/M1.3 not started. Package JSON was parsed successfully and source propagation was reviewed. No dependency install, PR-triggered CI, Windows native build or GUI test was run for this submilestone yet.
+
 Goal: add Small, Medium and Large versions of the current enhanced recording overlay without changing recording/transcription semantics.
 
 Initial logical layout targets:
@@ -300,16 +302,14 @@ Every manual result records commit/artifact, Windows/VS Code/Codex versions, loc
 
 ## 11. Current handoff
 
-Documentation normalization is the active task on `docs/dictation-reliability-plan`.
+Documentation normalization is complete. It was carried to `feat/overlay-size-presets` in docs-only commit `d83783a77ca09822733b8f0813bb40815bdb651e`.
 
-After these docs are internally consistent, the **next authorized implementation is M1.1**:
+M1.1 implementation commit: `a32a2ebcc9d9a666e5e11c36c56427f9fc2fbe57`.
 
-- create `feat/overlay-size-presets` from current `main`
-- carry the normalized documentation changes from this planning branch into that branch as a docs-only base commit
-- implement only M1.1 first
-- remain on the same branch for M1.2/M1.3
-- stop for the user's milestone review before any M1 merge or M2 branch
+M1.1 added the `overlaySize` setting and picker, centralized Small/Medium/Large normalization with Large fallback, propagated the setting through both TypeScript recorder layers, added the native `--overlay-size` parser/state and added focused Node tests for normalization/argument construction. M1.1 deliberately does not change enhanced-overlay geometry yet; all three values still render the current Large geometry until M1.2.
 
-Do not restart historical M0 planning. Do not repair the Code OSS focus experiment during M1. Do not start live preview or translation while M1 is under review.
+Validation performed in this handoff: package JSON parsed successfully; changed source paths and native parser/call wiring were re-read from the committed branch. Not run: `npm run check`, `npm run test:m1`, MSVC native compilation, VSIX packaging or Windows GUI behavior. No dependency install or draft PR was created solely to obtain CI.
+
+**Next action only when the user asks:** continue with M1.2 on this same branch, implement shared native layouts/DPI behavior, then M1.3 validation. Do not create M2 until M1 is reviewed and merged. Do not repair the Code OSS focus experiment or start live preview/translation during M1.
 
 Historical detailed plan before renumbering: commit `3c0c3bc2fd611a3a76835897edc5af3a674bf2df`.
