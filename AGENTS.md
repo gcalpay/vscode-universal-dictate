@@ -12,7 +12,7 @@ Read [docs/DICTATION_RELIABILITY_PLAN.md](docs/DICTATION_RELIABILITY_PLAN.md) be
 
 ## Current task
 
-The next implementation is **M1.1 on `feat/overlay-size-presets`**. Create that branch from the then-current `main`, first carry the normalized documentation set from `docs/dictation-reliability-plan` as a docs-only base commit, then implement M1.1 through M1.3 on that one branch. Do not carry either experimental branch's runtime/diagnostic code.
+**M1.1 is implemented on `feat/overlay-size-presets` at `a32a2ebcc9d9a666e5e11c36c56427f9fc2fbe57`.** The setting, picker, TypeScript propagation, native argument parsing and focused tests are present. Full TypeScript/native/Windows execution has not yet been run in this handoff. Do not start M1.2 unless the user asks to continue; M1.2 and M1.3 stay on this same branch.
 
 Do not start M2 while M1 is awaiting review.
 
