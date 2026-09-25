@@ -1,6 +1,7 @@
 import * as fs from 'node:fs';
 import * as vscode from 'vscode';
 import { DictationEngine, DictationState } from './core/dictation';
+import { normalizeOverlaySize, OVERLAY_SIZES, type OverlaySize } from './core/overlay-size';
 import {
   getWhisperLanguageName,
   normalizeWhisperLanguage,
@@ -28,6 +29,12 @@ const VISUALIZATION_LABELS: Record<VisualizationMode, string> = {
   off: 'Off'
 };
 
+const OVERLAY_SIZE_LABELS: Record<OverlaySize, string> = {
+  small: 'Small',
+  medium: 'Medium',
+  large: 'Large'
+};
+
 const WAVEFORM_TIME_SPANS: readonly WaveformTimeSpanSeconds[] = [1, 3, 5, 10, 20];
 
 function getConfiguredVisualization(): VisualizationMode {
@@ -47,6 +54,12 @@ function getConfiguredVisualization(): VisualizationMode {
     default:
       return 'enhancedOverlay';
   }
+}
+
+function getConfiguredOverlaySize(): OverlaySize {
+  return normalizeOverlaySize(
+    vscode.workspace.getConfiguration('universalDictate').get<string>('overlaySize', 'large')
+  );
 }
 
 function getConfiguredWaveformTimeSpanSeconds(): WaveformTimeSpanSeconds {
@@ -114,7 +127,8 @@ class DictationController implements vscode.Disposable {
           onLevel,
           showsOverlay(this.activeVisualization),
           'enhanced',
-          getConfiguredWaveformTimeSpanSeconds()
+          getConfiguredWaveformTimeSpanSeconds(),
+          getConfiguredOverlaySize()
         );
       },
       transcribe: (audioPath) => transcribe(this.context, audioPath),
@@ -248,9 +262,10 @@ class DictationController implements vscode.Disposable {
 
 type LanguageQuickPickItem = vscode.QuickPickItem & { code: string };
 type SettingsQuickPickItem = vscode.QuickPickItem & {
-  action: 'language' | 'visualization' | 'waveformTimeSpan';
+  action: 'language' | 'visualization' | 'overlaySize' | 'waveformTimeSpan';
 };
 type VisualizationQuickPickItem = vscode.QuickPickItem & { mode: VisualizationMode };
+type OverlaySizeQuickPickItem = vscode.QuickPickItem & { size: OverlaySize };
 type WaveformTimeSpanQuickPickItem = vscode.QuickPickItem & {
   seconds: WaveformTimeSpanSeconds;
 };
@@ -339,6 +354,35 @@ async function selectVisualization(): Promise<void> {
   );
 }
 
+async function selectOverlaySize(): Promise<void> {
+  const configuration = vscode.workspace.getConfiguration('universalDictate');
+  const current = getConfiguredOverlaySize();
+  const items: OverlaySizeQuickPickItem[] = OVERLAY_SIZES.map((size) => ({
+    label: OVERLAY_SIZE_LABELS[size],
+    description: current === size ? 'Current' : undefined,
+    detail:
+      size === 'large'
+        ? 'Use the current large enhanced recording overlay.'
+        : `Use the ${size} enhanced recording overlay.`,
+    size
+  }));
+
+  const selected = await vscode.window.showQuickPick(items, {
+    placeHolder: 'Overlay size · enhanced overlay only · changes apply from next dictation',
+    matchOnDescription: true,
+    matchOnDetail: true
+  });
+
+  if (!selected) {
+    return;
+  }
+
+  await configuration.update('overlaySize', selected.size, vscode.ConfigurationTarget.Global);
+  void vscode.window.showInformationMessage(
+    `Universal Dictate overlay size: ${OVERLAY_SIZE_LABELS[selected.size]}. Applies from the next dictation session.`
+  );
+}
+
 async function selectWaveformTimeSpan(): Promise<void> {
   const configuration = vscode.workspace.getConfiguration('universalDictate');
   const current = getConfiguredWaveformTimeSpanSeconds();
@@ -375,6 +419,7 @@ async function openSettings(): Promise<void> {
     configuration.get<string>('language', 'auto')
   );
   const currentVisualization = getConfiguredVisualization();
+  const currentOverlaySize = getConfiguredOverlaySize();
   const currentWaveformTimeSpan = getConfiguredWaveformTimeSpanSeconds();
 
   const items: SettingsQuickPickItem[] = [
@@ -389,6 +434,12 @@ async function openSettings(): Promise<void> {
       description: VISUALIZATION_LABELS[currentVisualization],
       detail: 'Choose which recording visualizations are shown.',
       action: 'visualization'
+    },
+    {
+      label: '$(screen-full) Overlay size',
+      description: OVERLAY_SIZE_LABELS[currentOverlaySize],
+      detail: 'Choose Small, Medium or Large for the enhanced native recording overlay.',
+      action: 'overlaySize'
     },
     {
       label: '$(graph-line) Waveform time span',
@@ -415,6 +466,11 @@ async function openSettings(): Promise<void> {
 
   if (selected.action === 'visualization') {
     await selectVisualization();
+    return;
+  }
+
+  if (selected.action === 'overlaySize') {
+    await selectOverlaySize();
     return;
   }
 
@@ -462,6 +518,7 @@ export function activate(context: vscode.ExtensionContext): void {
           `remote=${remoteName}`,
           `extensionKind=${extensionKind}`,
           `language=${configuredLanguage}`,
+          `overlaySize=${getConfiguredOverlaySize()}`,
           `nativePaste=${fs.existsSync(getNativePasteHelperPath(context)) ? 'available' : 'missing'}`,
           `recorder=${fs.existsSync(getRecorderPath(context)) ? 'available' : 'missing'}`,
           `whisperCli=${fs.existsSync(getWhisperCliPath(context)) ? 'available' : 'missing'}`,

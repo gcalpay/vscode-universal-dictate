@@ -77,6 +77,12 @@ enum class RecorderCommand : int {
     Cancel = 2,
 };
 
+enum class OverlaySize : int {
+    Small = 0,
+    Medium = 1,
+    Large = 2,
+};
+
 class Encoder {
 public:
     Encoder() = default;
@@ -264,6 +270,7 @@ struct OverlayState {
     std::array<int, kSignalPoints> levelHistory{};
     std::array<int, kEnhancedSignalPoints> enhancedSignalHistory{};
     bool enhanced = false;
+    OverlaySize overlaySize = OverlaySize::Large;
     std::atomic<bool> actionSent{false};
 };
 
@@ -766,7 +773,7 @@ RECT overlayWorkArea(HMONITOR monitor) {
     return RECT{0, 0, GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN)};
 }
 
-bool createOverlay(HMONITOR targetMonitor, bool enhanced) {
+bool createOverlay(HMONITOR targetMonitor, bool enhanced, OverlaySize overlaySize) {
     HINSTANCE instance = GetModuleHandleW(nullptr);
 
     WNDCLASSEXW windowClass{};
@@ -782,6 +789,7 @@ bool createOverlay(HMONITOR targetMonitor, bool enhanced) {
     }
 
     g_overlay.enhanced = enhanced;
+    g_overlay.overlaySize = overlaySize;
     g_overlay.levelMilli = 0;
     g_overlay.levelHistory.fill(0);
     g_overlay.enhancedSignalHistory.fill(0);
@@ -963,6 +971,25 @@ std::string parseOutputPath(int argc, char** argv) {
     return {};
 }
 
+OverlaySize parseOverlaySize(int argc, char** argv) {
+    for (int i = 1; i + 1 < argc; ++i) {
+        if (std::string_view(argv[i]) != "--overlay-size") {
+            continue;
+        }
+
+        const std::string_view value(argv[i + 1]);
+        if (value == "small") {
+            return OverlaySize::Small;
+        }
+        if (value == "medium") {
+            return OverlaySize::Medium;
+        }
+        return OverlaySize::Large;
+    }
+
+    return OverlaySize::Large;
+}
+
 int parseWaveformTimeSpanMs(int argc, char** argv) {
     for (int i = 1; i + 1 < argc; ++i) {
         if (std::string_view(argv[i]) != "--waveform-timespan-ms") {
@@ -1007,6 +1034,7 @@ int main(int argc, char** argv) {
 
     const bool overlayEnabled = !hasFlag(argc, argv, "--no-overlay");
     const bool enhancedOverlay = hasFlag(argc, argv, "--enhanced-overlay");
+    const OverlaySize overlaySize = parseOverlaySize(argc, argv);
     const int waveformTimeSpanMs = parseWaveformTimeSpanMs(argc, argv);
 
     const HMONITOR overlayMonitor = overlayEnabled ? captureOverlayMonitor() : nullptr;
@@ -1070,7 +1098,7 @@ int main(int argc, char** argv) {
 
     bool overlayAvailable = false;
     if (overlayEnabled) {
-        overlayAvailable = createOverlay(overlayMonitor, enhancedOverlay);
+        overlayAvailable = createOverlay(overlayMonitor, enhancedOverlay, overlaySize);
         if (!overlayAvailable) {
             std::cerr << "WARNING recording overlay could not be created; keyboard controls remain available\n";
         }

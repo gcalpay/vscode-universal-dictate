@@ -6,6 +6,7 @@ import {
   RecorderAction,
   RecorderOverlayStyle
 } from './core/recorder';
+import type { OverlaySize } from './core/overlay-size';
 
 const RECORDER_RELATIVE_PATH = ['resources', 'bin', 'universal-dictate-recorder.exe'];
 
@@ -30,7 +31,8 @@ export class RecorderSession {
     onLevel: (level: number) => void,
     showOverlay = true,
     overlayStyle: RecorderOverlayStyle = 'compact',
-    waveformTimeSpanSeconds = 1
+    waveformTimeSpanSeconds = 1,
+    overlaySize: OverlaySize = 'large'
   ): Promise<RecorderSession> {
     const recorderPath = getRecorderPath(context);
     if (!fs.existsSync(recorderPath)) {
@@ -42,7 +44,14 @@ export class RecorderSession {
     const outputPath = path.join(recordingsDir, `dictation-${Date.now()}.wav`);
 
     const core = await CoreRecorderSession.start(
-      { recorderPath, outputPath, showOverlay, overlayStyle, waveformTimeSpanSeconds },
+      {
+        recorderPath,
+        outputPath,
+        showOverlay,
+        overlayStyle,
+        waveformTimeSpanSeconds,
+        overlaySize
+      },
       onLevel
     );
     return new RecorderSession(core);
