@@ -30,7 +30,7 @@ If a milestone is blocked or rejected, do not merge it just to preserve sequence
 
 No milestone plan authorizes a release, version bump, Marketplace publication, issue closure or automatic merge.
 
-The current documentation branch is `docs/dictation-reliability-plan`. Because these docs are not yet on `main`, carry only `AGENTS.md` and this plan into M1's branch. Once M1 is approved and merged, the current roadmap will travel with `main` and later branches naturally.
+The current documentation branch is `docs/dictation-reliability-plan`. Because the normalized durable docs are not yet on `main`, carry the documentation changes from this branch into M1 as a docs-only base commit before runtime work. Do not carry the frozen launcher or Code OSS diagnostic code. Once M1 is approved and merged, the corrected docs and roadmap will travel with `main` and later branches naturally.
 
 ## 2. Verified baseline
 
@@ -305,7 +305,7 @@ Documentation normalization is the active task on `docs/dictation-reliability-pl
 After these docs are internally consistent, the **next authorized implementation is M1.1**:
 
 - create `feat/overlay-size-presets` from current `main`
-- carry the latest `AGENTS.md` and this plan into that branch
+- carry the normalized documentation changes from this planning branch into that branch as a docs-only base commit
 - implement only M1.1 first
 - remain on the same branch for M1.2/M1.3
 - stop for the user's milestone review before any M1 merge or M2 branch
