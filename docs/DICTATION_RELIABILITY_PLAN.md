@@ -1,255 +1,274 @@
-# Dictation reliability and overlay sizing: implementation plan
+# Dictation reliability and overlay sizes: Codex implementation plan
 
-Last updated: 2026-09-13.
+Reassessed: 2026-09-25. Repository: `gcalpay/vscode-universal-dictate`.
+Temporary working document, linked from root `AGENTS.md`.
 
-Temporary working plan for `gcalpay/vscode-universal-dictate`. Read this document
-when switching chats or tasks, then verify the live repository state. It is an
-implementation roadmap, not a claim that planned behavior already works.
+## 1. Start here
 
-## 1. Baseline and branch policy
+**Recommended next implementation: M3, Small/Medium/Large recording overlays.**
+Then implement M2 transcript recovery and clipboard/lifecycle reliability. Apply
+M4 validation to each release candidate. Keep M1's upstream focus experiment a
+separate workstream, not a prerequisite for either product improvement.
+Milestone IDs are retained; their numbers do not impose a dependency chain.
 
-| Item | Baseline at plan creation |
+This revision replaces the older next-step instruction to repair the Code OSS
+build immediately. It does not discard the experiment, weaken Issue #38 or
+reopen the user's latest-target choice. M0 is finished as a specification; do
+not spend another session rewriting it before implementing a bounded feature.
+
+The previous plan already included sizes and recovery. The reassessment changes
+execution order, separates shippable features from platform research and makes
+implementation steps explicit. M1.2 built test equipment, not a production fix.
+Do not expand that equipment merely because work has already been invested in it.
+
+This task changed documentation only. A handoff is not permission to implement
+all milestones, install software, spend on additional build infrastructure,
+merge, publish or close issues. Follow the user's active Codex request and stop
+at its agreed milestone boundary, not after every small code edit.
+
+### Verified repository state
+
+| Ref / item | Snapshot checked on 2026-09-25 |
 | --- | --- |
-| Release base | `main` at `f0265bc4398643c3b3a27e6d2ad64183b115b6ba` |
-| Declared extension version | `0.1.5` |
-| Planning branch | `docs/dictation-reliability-plan`, created directly from that `main` commit |
-| Open target issue | [Issue #38: Preserve insertion target when starting dictation from the status bar](https://github.com/gcalpay/vscode-universal-dictate/issues/38) |
-| Frozen experiment | `fix/preserve-insertion-target` at `5df91c3561ac31bd20f30d829d323347757469bf`, associated with draft [PR #49](https://github.com/gcalpay/vscode-universal-dictate/pull/49) |
-| Current recording visualization | Enhanced native overlay, hardcoded width 740 and height 128; no exposed size setting |
+| Product base `main` | `f0265bc4398643c3b3a27e6d2ad64183b115b6ba`, declared version 0.1.5 |
+| Planning branch | `docs/dictation-reliability-plan`; reassessment follows `63b5eb9669d44f48cf5ee81babf8c6fceb99527a` |
+| Frozen native-launcher experiment | `fix/preserve-insertion-target` at `5df91c3561ac31bd20f30d829d323347757469bf`, draft PR #49; leave untouched |
+| Separate upstream diagnostic branch | `experiment/m1.2-statusbar-focus-probe` at `834a1001ef5ef49da36710eb4d2445d600f89f9a`; leave out of product branches |
+| Diagnostic code tested in CI | `6bef0311f3f6cee9c94941c5bd1456dfbaf01593`, run `34735635848` |
+| That run's actual final result | Probe kit succeeded; baseline and H1 host jobs failed; no complete host/kit set |
+| Real GUI acceptance evidence | All 18 acceptance rows below remain Not run; unit/build results are not GUI results |
 
-Keep the old experiment untouched and unmerged. Do not delete it, reset it or
-silently adopt its floating launcher as the new interface. It is reference
-material and a candidate for evaluation, not the implementation base.
+Recheck refs and the local working tree before edits. Never reset, clean, stash
+or overwrite unrelated user work. Existing historical branches/logs are evidence,
+not instructions to resurrect old automation or merge their changes.
 
-This planning branch contains documentation only. Subsequent runtime work should
-use small, purpose-specific branches from the then-current `main`. To make this
-plan discoverable there, first merge the documentation through normal review, or
-explicitly carry these documentation files into an authorized work branch. Do not
-base runtime work on the frozen experiment merely to obtain a plan.
+**Branch procedure:** product work starts from the then-current `main`, for
+example `feat/overlay-size-presets` for M3. Bring only this updated plan and root
+`AGENTS.md` into that branch if they are not on main yet. Use the latest reviewed
+planning revision, not the stale plan embedded in an experimental branch. Do not
+merge/cherry-pick the entire diagnostic or frozen-launcher branch to get the docs.
+Keep Git writes and dependency installation within explicit session approval.
+Read-only inspection and already-authorized targeted tests need no new product
+decision. The planning branch itself remains documentation-only.
 
-Recheck branch tips before writes. Neither this document nor a green build
-authorizes an automatic merge, release or closure of Issue #38.
+The detailed [pre-reassessment plan][history] preserves the original M0 rationale,
+M1 investigation, source pins, experiment design and build history. It is an
+immutable reference, not the current work order. Its September 13 build checkpoint
+is superseded by the September 25 result above.
 
-### Source map
+## 2. Settled requirements and scope
 
-The following baseline links are immutable. Current code may later differ.
+**M0.1: follow the latest deliberately selected target until insertion.** A target
+is the editable input plus its caret/selection, not merely an application window.
+Changes during recording AND transcription count, including movement or a new
+selection within the same input. Stop/Insert does not lock the destination.
+Without a deliberate change, preserve the original destination and selection.
+Replace the selected range as an ordinary paste would, leaving other text intact.
 
-- [Manifest and available settings](https://github.com/gcalpay/vscode-universal-dictate/blob/f0265bc4398643c3b3a27e6d2ad64183b115b6ba/package.json).
-- [Controller, commands and visualization selection](https://github.com/gcalpay/vscode-universal-dictate/blob/f0265bc4398643c3b3a27e6d2ad64183b115b6ba/src/extension.ts).
-- [Recording overlay dimensions, drawing and hit testing](https://github.com/gcalpay/vscode-universal-dictate/blob/f0265bc4398643c3b3a27e6d2ad64183b115b6ba/native/record-audio.cpp).
-- [Dictation lifecycle](https://github.com/gcalpay/vscode-universal-dictate/blob/f0265bc4398643c3b3a27e6d2ad64183b115b6ba/src/core/dictation.ts), [clipboard orchestration](https://github.com/gcalpay/vscode-universal-dictate/blob/f0265bc4398643c3b3a27e6d2ad64183b115b6ba/src/core/paste.ts) and [native paste helper](https://github.com/gcalpay/vscode-universal-dictate/blob/f0265bc4398643c3b3a27e6d2ad64183b115b6ba/native/windows-fast-paste.cpp).
-- [Documented current behavior](https://github.com/gcalpay/vscode-universal-dictate/blob/f0265bc4398643c3b3a27e6d2ad64183b115b6ba/README.md) and [existing manual test procedure](https://github.com/gcalpay/vscode-universal-dictate/blob/f0265bc4398643c3b3a27e6d2ad64183b115b6ba/docs/TESTING.md).
-- [Frozen native launcher](https://github.com/gcalpay/vscode-universal-dictate/blob/5df91c3561ac31bd20f30d829d323347757469bf/native/status-button.cpp) and [its controller integration](https://github.com/gcalpay/vscode-universal-dictate/blob/5df91c3561ac31bd20f30d829d323347757469bf/src/controller.ts).
+Dictate/Stop/Insert interactions do not themselves retarget. Do not force focus
+back to an older editor after the user deliberately changes destinations. Preserve
+supported external Windows inputs and the local Windows UI host in Remote-WSL.
+Correct insertion matters more than uninterrupted caret blinking. Never synthesize
+Enter or submit/send a message. Cancelling a recording must not insert its text.
 
-## 2. Scope and delivery order
+Known loss of the intended destination, with no newer valid deliberately chosen
+target, requires recovery rather than guessing. Do not claim universal detection
+of opaque input state or that a successful input API call proves text acceptance.
+The generic observability limitation remains unresolved; M2 must not pretend to
+implement a universal focus/selection tracker.
 
-Improve the Windows VS Code extension, including its Remote-WSL workflow:
+**M0.2: keep three outcomes distinct.** A genuine status-bar workflow meeting the
+contract without corrective clicks is a candidate Issue #38 fix. A different
+non-activating launcher is an alternative, even if it looks like a status-bar
+item; adopting it requires an explicit decision and should initially be optional.
+Retaining text for recovery is a safeguard, not a focus fix. Editor-only success
+cannot stand in for Codex success, and a mandatory hotkey-only start is not the
+unchanged mouse workflow. Preventing focus loss or reliable restoration may qualify
+if actually demonstrated. Do not silently remove a failing control or close #38
+with recovery/sizing changes. Keep the issue open until agreed evidence supports
+an explicitly authorized closure on a deliverable implementation.
 
-1. Establish an explicit insertion contract and tests (M0).
-2. Prove a credible focus/insertion mechanism before expanding its implementation (M1).
-3. Make completed transcripts recoverable when insertion fails (M2).
-4. Add Small and Medium visualization layouts while retaining the existing Large option (M3).
-5. Validate, document and release only accepted changes (M4).
+Preserve local/offline transcription after model setup, language selection,
+waveform time span, warm-worker/CLI fallback and review-before-send behavior.
+Do not introduce a standalone app, cloud ASR, LLM rewriting, arbitrary drag-resize,
+new waveform styles, global focus hooks, click replay or injected workbench UI.
+An isolated source build is research equipment, never a required user installation.
 
-M1 gates a focus redesign, not M2 or M3. Smaller overlays and transcript recovery
-can be delivered independently if a literal status-bar fix needs upstream work.
-Do not wait indefinitely on that investigation to improve the usable extension.
+**Backlog, not this implementation order:** microphone selection, elapsed-time or
+signal/clipping feedback, richer latency diagnostics, model-quality presets and
+overlay corner/drag positioning. These earlier suggestions were not promises to
+implement them all. Do not add them to M3 or M2 without a separate request.
 
-Do not expand this plan into a standalone application, cloud transcription,
-LLM rewriting, unrelated refactors or additional visualization styles. Preserve
-local transcription, existing language and waveform-time-span settings, the
-warm-worker/fallback foundations and review-before-send behavior.
+## 3. M3: recording overlay sizes, first product task
 
-## 3. M0: define success in three small steps
+This changes the large recording visualization, not PR #49's idle launcher.
 
-**Status: M0.1-M0.3 complete as specifications. No runtime acceptance tests have
-been executed as part of M0.** A checked item below means its specification was
-written, not that the extension meets it.
+| Setting value | Label | Initial layout target at 100% scaling |
+| --- | --- | --- |
+| `small` | Small | Approximately 380 x 64 logical units |
+| `medium` | Medium | Approximately 520 x 88 logical units |
+| `large` | Large | Current 740 x 128 presentation as the reference |
 
-### M0.1: record the insertion contract
+The dimensions are starting targets, not an obligation to cram the current layout
+into them. Reduce padding and waveform area before readability or usable buttons.
+Keep Large as the default/invalid-setting fallback initially. A smaller default
+is a later explicit choice after evaluation, not a hidden migration in this task.
+The baseline's hardcoded native coordinates are not proof of correct DPI scaling.
 
-**Status: complete as a requirements specification; not implemented or
-functionally validated.**
+### M3.1: configuration and end-to-end propagation
 
-- [x] Specify the primary workflow and target semantics.
-- [x] Resolve retargeting during transcription: on 2026-09-13 the user selected
-  **A: Follow your latest target**.
+Add `universalDictate.overlaySize` with the three enum values to `package.json`,
+VS Code Settings and the existing extension settings menu. Read/validate it at
+session start and pass it through the entire adapter chain:
 
-Primary workflow: place the caret, click the existing status-bar Dictate action,
-speak, finish and receive the transcript at the latest deliberately selected
-insertion point without another corrective click.
+`src/extension.ts` -> `src/recorder.ts` -> `src/core/recorder.ts` -> native recorder.
 
-Required behavior:
+Introduce a validated native argument such as `--overlay-size`. Preserve existing
+callers/defaults and the process protocol. Invalid/missing settings must yield
+Large, not fail microphone startup. Changing size applies to the next session.
+Retain Both, Enhanced overlay, Status bar only and Off semantics; no native
+overlay is created for the latter two just because a size was configured.
 
-- A target is an editable input together with its caret position or selected
-  range, not merely an application window or the last active editor.
-- Follow the latest deliberate target throughout recording and while
-  transcription is pending, up to insertion. Pressing Stop or Insert does not
-  freeze the destination. Deliberately selecting another supported editable
-  input during transcription directs the result there, without another
-  confirmation solely because the target changed.
-- Moving the caret or changing the selection within the same input also updates
-  the intended insertion point. With no deliberate change, preserve the original
-  point or selection. Replace the selected range as by an ordinary paste; text
-  outside that range is unchanged.
-- Clicking Universal Dictate's Dictate, Stop or Insert controls is not
-  retargeting. Extension-induced focus loss must not replace the intended
-  destination with the status bar, a helper window or an unrelated editor.
-- Correct insertion matters more than uninterrupted caret blinking. A temporary
-  focus change is acceptable only if the latest intended destination and
-  selection are restored reliably without user intervention. Do not force focus
-  back to an earlier target after deliberate retargeting.
-- Preserve the documented ability to deliberately target supported external
-  Windows inputs. Do not silently change the product to VS Code-only insertion.
-- Existing keyboard controls remain usable. Never automatically submit or send
-  dictated text; cancellation must not insert a transcript.
-- If the intended destination is known to have become unavailable and no newer
-  valid target was deliberately selected, retain the transcript for explicit
-  recovery rather than guess a different destination. Do not claim that every
-  opaque composer can be inspected or that a successful input API call proves
-  the intended control accepted text.
+### M3.2: one renderer with shared layout metrics
 
-Examples of the agreed policy:
+In `native/record-audio.cpp`, calculate each preset's window dimensions, waveform
+bounds, labels, fonts and Insert/Discard rectangles together. Drawing and hit
+testing must use those same metrics. Do not just change width/height constants,
+scale the final bitmap or revive the unrelated legacy compact renderer.
+A small pure layout helper/file is acceptable when it makes this testable; an
+unrelated UI-framework migration or broad recorder rewrite is not.
 
-| User action before insertion | Intended result |
-| --- | --- |
-| Stop recording in Codex, then deliberately select another supported input while transcription runs | Insert into that newly selected input at its latest caret or selection |
-| Move the caret or select a different range within the same composer while transcription runs | Use the updated caret or selection, not the position from Start or Stop |
-| Only click Dictate and Insert, without deliberately changing the text destination | Preserve the original input and selection despite any control-induced focus change |
+Specify the native process/window DPI behavior before creating windows. Apply one
+consistent logical-to-device transform and recompute where monitor/DPI changes
+require it. Keep the rectangle in the monitor work area, including negative
+monitor coordinates, without clipping controls. Preserve all non-activation flags,
+mouse behavior and font/graphics resource cleanup. Test the actual implementation
+on Windows rather than infer its appearance from arithmetic alone.
 
-M1 must establish whether a concrete mechanism can honor this policy, including
-changes during transcription. Distinguishing deliberate retargeting from
-extension-induced focus loss remains a feasibility question. Merely pasting into
-whatever control happens to own focus is not proof of following the latest
-deliberate target. An inability to distinguish them is a documented limitation,
-not permission to freeze the target at Stop or silently substitute a different
-policy.
+Do not change the audio callback, sampling rate, waveform history/time-span
+meaning, recording duration or transcription quality. Size is presentation only.
 
-**Exit evidence:** this written contract and the user's explicit selection of A.
-M0.1 is complete at the specification level only; functional conformance remains
-untested and Issue #38 remains open.
+### M3.3: tests, documentation and Windows review
 
-### M0.2: distinguish a fix, an alternative and a safeguard
+Add targeted tests for enum/default handling, adapter/native argument propagation,
+layout bounds and matching hit areas. Run existing typecheck/compile and native
+build/package checks relevant to the change. Exercise all three sizes with the
+real extension in an ordinary Windows VS Code test profile and Remote-WSL; capture
+readable examples, verify Insert/Discard and keyboard operation, and run T11.
 
-**Status: complete as decision criteria; no implementation route selected or
-functionally validated.** M0.1's choice A remains unchanged.
+A full Code OSS source build is not required for M3. Record the existing status-bar
+focus defect as a baseline limitation, not a newly solved feature. No regression
+is acceptable, but a pre-existing #38 failure is not a reason to withhold sizes.
+Do not require the entire focus-research matrix to validate a geometry-only change.
 
-- [x] Define what qualifies as a literal-status-bar fix versus an alternative
-  interaction or a recovery safeguard.
-- [x] Define evidence and issue-closure boundaries without choosing a mechanism.
-- [x] Identify which later outcomes require a new user decision.
+Update settings help, README and relevant test notes with actual behavior. Before
+release use M4 below. M3 is not GUI-validated merely because the native build is green.
 
-| Outcome | Classification and consequence |
-| --- | --- |
-| The genuine VS Code-owned status-bar Dictate action and supported finish controls meet M0.1 without corrective clicks | Candidate fix for Issue #38; becomes a validated fix only with the applicable acceptance evidence |
-| A separate native launcher achieves the insertion behavior | Alternative interaction; requires explicit adoption and is not a fix for the unchanged literal-status-bar requirement |
-| A completed transcript remains available for explicit copy/reinsertion after an insertion failure | Recovery safeguard under M2; useful independently, but does not demonstrate a focus fix |
+## 4. M2: recovery and narrowly scoped reliability fixes
 
-**A literal fix is defined by behavior, not one chosen technique.** Preventing
-focus loss or reliably restoring the latest deliberate input/caret/selection can
-both qualify if demonstrated. Uninterrupted caret blinking is not required.
-The user's normal workflow must not acquire an extra corrective click, mandatory
-hotkey-only start or routine recovery step. An editor-only success while the real
-Codex composer fails is a partial result, not a universal fix. A separate control
-positioned to look like a status-bar item remains an alternative if it receives
-the click instead of the genuine VS Code item.
+M2 does not depend on proving H1. Keep its changes separate from M3.
 
-**All candidate routes keep the M0.1 contract.** Follow the latest deliberately
-selected input, caret or selection through transcription until insertion. Do not
-freeze at Stop, return to an older target after deliberate retargeting or silently
-restrict insertion to VS Code. Dictate/Stop/Insert interactions do not themselves
-retarget. Preserve review-before-send, cancellation and existing keyboard
-controls. Known loss of the intended destination invokes the recovery requirement,
-not a guessed destination. Recovery after such an exceptional loss is distinct
-from requiring manual recovery in the ordinary valid-target workflow.
+### M2.1: retain one completed transcript
 
-**A floating launcher is not approved by PR #49's existence.** Keep its branch
-frozen and use it only as reference/evaluation material. Adoption would require
-a later explicit user decision, initially as an optional interaction. Evaluate
-placement/occlusion, visibility, accessibility, window ownership and degraded
-fallback. If a helper becomes unavailable and a fallback restores focus-stealing
-behavior, describe that limitation; do not count the fallback as focus-preserving.
-Do not silently hide or replace the existing launcher to obtain a passing result.
+Save the latest nonempty completed transcript in memory BEFORE attempting paste,
+including when paste later throws or silently misses the intended input. Add
+Copy Last Transcript, Insert Last Transcript and Clear Last Transcript commands.
+Do not automatically copy every result permanently to the clipboard or persist
+transcripts/audio in a database. Do not log dictated contents. Document that
+extension reload/restart ends memory-only recovery.
 
-**Proof and delivery are separate.** M1 records a concrete mechanism, its exact
-control/target scope, dependencies and observations; M0.3 defines the acceptance
-cases and M4 validates the integrated result. A build, input-API return value,
-mock input or one successful trigger path does not prove real Codex insertion or
-all other paths. Record passed, failed and unrun cases separately. An upstream
-proposal or diagnostic patch is feasibility work, not a shipped extension fix.
-Do not ship a solution requiring a custom VS Code installation or injected UI
-modifications. A supported upstream capability can be considered once available;
-acceptance and availability must not be promised. Revisit editor-focus workarounds
-only when new evidence explains how they address the actual composer/selection.
+Empty/no-speech, cancelled or failed transcription attempts must not create a
+new recovery item or erase the previous valid transcript. A later valid transcript
+replaces the previous one. Clear explicitly removes the current saved item.
+With no saved text, commands should behave predictably and without inserting
+placeholder text. Serialize reinsertion with the dictation lifecycle to avoid
+overlapping pastes. No automatic retry of uncertain insertion: that can duplicate
+text. A keyboard-invokable reinsertion path must not first open a focus-stealing
+menu. Document its current target limitations honestly; it is not evidence of a
+new generic selection-restoration API. Copy remains an explicit fallback.
 
-**Issue-closure rule:** keep #38 open until the agreed literal workflow and
-applicable M0.1 acceptance cases pass on an identified, deliverable implementation.
-A passing alternative, recovery feature or smaller overlay cannot close it by
-itself. Do not weaken criteria, omit a failing required target or use automatic
-closure text in an unrelated PR to declare success. Criteria changes, adoption
-of a different launcher and merge/release/closure actions need explicit user
-authorization; this milestone supplies none of those permissions.
+### M2.2: clipboard restoration without clobbering a newer copy
 
-**When to ask again:** no additional product decision is needed for M0.2. Ask
-with concrete M1 evidence if only an alternative passes, a required behavior
-cannot be supported by the tested mechanism or delivery needs an upstream
-capability that is not available. Do not reopen choice A merely because it is
-harder to implement. M2 recovery and M3 sizing remain independent improvements
-and need not wait indefinitely for that decision.
+The baseline reads/writes clipboard strings, sends Ctrl+V and restores the saved
+string after 120 ms. Restore only if the clipboard still belongs to that operation;
+never overwrite a newer copy from the user or another application. Evaluate the
+check-and-restore race, not only a comparison of text values. A longer timeout or
+identical string contents is not proof of ownership or successful insertion.
 
-**Exit evidence:** the classifications, common contract and decision/closure
-rules above. M0.2 is complete at the specification level only; no route has been
-proved, no launcher adopted and Issue #38 remains open.
+Record and test the supported format policy before changing native clipboard
+handling. Prefer preserving an existing native payload when feasible; do not claim
+images, files or rich text are preserved by a string-only implementation. A design
+that can destroy unsupported clipboard content needs an explicit safe fallback or
+user-approved limitation before release. Do not promise universal format support
+without implementing it. Keep any necessary native helper narrowly scoped and
+handle clipboard-busy/error cases without losing the saved transcript.
 
-### M0.3: define the acceptance matrix and evidence format
+Tests: old plain-text value, empty clipboard, newer copy during the operation,
+newer copy with identical text, restore failure and representative non-text content.
+Include Unicode and multiline text, cleanup on helper failure and no duplicate paste.
 
-**Status: complete as a test specification; all runtime cases are Not run.**
-No new product decision or implementation mechanism is selected here.
+### M2.3: concrete asynchronous lifecycle regressions
 
-- [x] Define observable results for the latest-target policy, including changes
-  during transcription and caret/selection changes within one input.
-- [x] Enumerate supported start/finish paths and separate issue-fix evidence
-  from alternative-launcher, recovery and sizing evidence.
-- [x] Define reproducible fixtures, execution stages and honest result reporting.
+Test disposal while preparing/starting the recorder/transcribing, duplicate Stop,
+recorder failure and late callbacks. The baseline `DictationEngine.dispose()` only
+cancels a present recorder session; a transcription already pending has no such
+session. Treat a late insertion after disposal as a source-visible risk to reproduce
+and fix, not as a GUI failure already observed. Prevent obsolete operations from
+inserting or reviving controls after disposal. Preserve WAV cleanup and usable
+idle/error state. Do not turn this into a wholesale engine refactor or add a new
+user-facing cancel-during-transcription feature without a separate decision.
 
-#### Test setup and common pass conditions
+Exit: T12/T13 and applicable cancellation/failure cases pass with focused unit and
+Windows evidence. Retention, clipboard format and lifecycle claims match what was
+tested. Remaining opaque-target limits stay explicit; recovery does not close #38.
 
-Use scratch content only: the real Codex composer, a normal untitled editor and
-one named ordinary VS Code input (for example, the Find input). Use a named
-non-executing external text input such as an unsaved Notepad document for external
-retargeting. Do not test by pasting into a terminal, submitting a chat or saving
-private content. Record exact controls and versions rather than claiming that
-one tested input represents every third-party composer.
+## 5. M1: separate focus investigation, not the product release gate
 
-For the deterministic probe, use the exact transcript `UD_TEST`. The caret
-fixture is `left  right` with the caret between its two spaces; the selection
-fixture is `left old right` with only `old` selected. Both must become
-`left UD_TEST right`. Reset fixtures between trials. For retargeting, keep source
-and destination distinguishable and check that every non-destination is unchanged.
+M1.1 identified H1: cancel primary mouse-down defaults on the genuine item inside
+VS Code's renderer, leaving click execution and keyboard navigation intact.
+No sufficient stable extension-only mechanism was established by that assessment.
+This is not proof that every possible integration is impossible. Recheck current
+supported APIs when investigation resumes; do not repeat the entire M0 discussion.
 
-Exercise the candidate's actual start/finish controls and insertion path; replace
-only transcription with fixed text in a later authorized diagnostic probe. The
-transcription-time cases need a controlled pending interval: confirm the user
-change occurred after Stop and before insertion, rather than relying on an
-estimated sleep. Completing that interval must not itself focus another control.
-Do not create that probe in M0.3 or add its delay as a production workaround.
+M1.2's diagnostic exists on the isolated experiment branch. **It has not met its
+build/artifact completion gate.** On reinspection, [run 34735635848][run] has failed
+baseline/H1 hosts and a successful kit. The [H1 job][h1-job] got through dependency
+installation, bundling and package creation, then ended with
+`Error: spawn signtool.exe ENOENT`. The signing utility was not found by that
+process; this does not prove it is absent from the image. The baseline job is also
+failed, but its terminal log was not independently diagnosed in this reassessment.
+Earlier CRLF-source and VS2022-detection problems had already been corrected.
 
-A valid-target pass means exactly one insertion at the latest deliberate caret
-or selection, unchanged surrounding text and no insertion into an older target.
-No corrective click, second confirmation solely for retargeting, automatic send,
-submission or automatic retry of uncertain insertion is allowed. Start/Stop/Insert
-clicks do not count as retargeting. Observe final text, selection replacement,
-other inputs and submission state; caret blinking or an input-API return code
-alone is insufficient evidence. A UI pattern that cannot expose a fact must be
-reported as unverified, not assumed correct.
+No complete matching three-artifact set exists for that run. These are build
+failures, not observed focus failures. There is no new real Codex acceptance result.
+Retain the source-pinned experiment and its [procedure][probe], but do not rerun or
+repair it during M3/M2 simply because the old handoff said to do so.
 
-#### Acceptance cases
+When the user resumes this workstream:
 
-Scope codes: **F** = agreed focus/insertion behavior; **R** = M2 recovery/clipboard;
-**S** = M3 sizing; **H** = relevant helper/fallback behavior. Apply **F** cases to
-an alternative launcher in separately labelled runs; their success does not
-convert that launcher into a literal-status-bar fix. Existing IDs T01-T11 are
-retained as families, with subcases where needed. T12-T13 make M2 evidence explicit.
+- **M1.2:** diagnose the precise build prerequisite, including executable search
+  paths, without skipping checks or spoofing product/toolchain identity. Establish
+  an operable baseline and real Codex compatibility before more infrastructure.
+  Reuse a suitable isolated checkout where available. Keep baseline/H1 provenance
+  and the same probe version; compare matched builds, not unrelated versions.
+- **M1.3:** run the smallest decisive real-Windows cases, including caret/selection,
+  literal Start versus Stop, latest-target changes and keyboard behavior. Fixed
+  `UD_TEST` first, real recording second. A build, mocked control or synthetic
+  dispatch alone cannot prove native pointer/composer behavior.
+- **M1.4:** choose a delivery direction from observations. An upstream patch/API
+  proposal requires supported availability before it becomes a shipped literal fix.
+  Never require ordinary users to run our Code OSS build. An optional native
+  launcher remains a separate product decision; PR #49 stays frozen.
+
+A specific API/compatibility/build blocker is a valid recorded outcome, not an
+excuse to replace requirements silently. Do not claim that a stronger model can
+supply an unavailable platform capability or substitute for Windows evidence.
+
+## 6. M0.3 acceptance reference (retained IDs, no fabricated passes)
+
+The following 18 rows are retained from the detailed plan. F = focus/insertion,
+R = recovery/clipboard, S = sizing and H = helper/fallback. Run variants separately;
+a successful alternative launcher is never labelled a genuine-status-bar result.
 
 | ID | Scope | Scenario / action | Required observation | Current result |
 | --- | --- | --- | --- | --- |
@@ -272,17 +291,11 @@ retained as families, with subcases where needed. T12-T13 make M2 evidence expli
 | T12 | R | Retain a completed transcript, provoke insertion failure/uncertainty, then explicitly Copy, Reinsert and Clear; include no-speech, cancellation and reload cases | Recovery uses the accepted insertion policy, no automatic duplicate retry, no spurious new transcript for empty/cancelled attempts; memory-only lifetime and clearing match the documented behavior | Not run |
 | T13 | R | Paste with an existing clipboard value, then repeat with a newer copy during the operation and with non-text clipboard content | Restore only under the agreed ownership/format policy; do not overwrite a newer copy or claim non-text preservation without evidence | Not run |
 
-T07a/T10 have separate insertion-safety and recovery observations. M1 may evaluate
-safety while marking recovery Not run until M2; do not mark the whole row passed.
-T11 includes M3 configuration selection, invalid-value handling, next-session
-application and regression checks for Status bar only/Off. Exact size dimensions
-and the default remain as specified in M3, not decided by this test matrix.
+T07a/T10 have separate safety and recovery observations. Do not give mixed-scope
+rows a blanket pass when part is unimplemented. T11 also covers configuration
+selection, invalid values, next-session changes and no-overlay modes.
 
-#### Start/finish coverage for T05
-
-The baseline manifest defines the shortcut and visualization modes, and
-`src/extension.ts` exposes a clickable status-bar Stop (see the source map).
-An overlay Insert pass must not conceal a status-bar Stop failure.
+### Genuine start/finish inventory for T05
 
 | Visualization mode | Start methods, each tested | Finish methods, paired with each start |
 | --- | --- | --- |
@@ -291,374 +304,102 @@ An overlay Insert pass must not conceal a status-bar Stop failure.
 | Status bar only (`statusBar`) | Genuine status-bar Dictate; Ctrl+Alt+D | Status-bar Stop; Ctrl+Alt+D |
 | Off (`off`) | Genuine status-bar Dictate; Ctrl+Alt+D | Status-bar Stop; Ctrl+Alt+D |
 
-These are 20 baseline start/finish/mode combinations. Record caret and selection
-results for each when validating the complete fix. Do not silently remove a
-clickable path to avoid a failure. If a proposed interface changes this inventory,
-report that as a separate product decision under M0.2 before altering acceptance.
-Any native-launcher variant has its own inventory, not a substitute for these runs.
+These are 20 baseline start/finish/mode combinations, each with caret and selection
+variants when claiming the full literal fix. A passing overlay Insert path cannot
+hide a status-bar Stop failure. An alternative has its own separately labelled
+inventory. Do not silently remove a control to eliminate a failing case.
 
-Shortcut trials assume the supported VS Code keyboard context; they are not
-claims of a system-wide hotkey or terminal support. For external retargeting
-during recording, use the non-activating overlay to finish. For external
-retargeting during transcription, finish in VS Code first, then select the
-external input. Do not click back into VS Code merely to issue a shortcut and
-then describe the external target as still being deliberately selected. Esc is
-tested while recording in its supported VS Code context; this does not introduce
-cancellation during transcription. Use Discard for external-target cancellation
-when the recording overlay is visible.
+**Fixtures:** fixed transcript `UD_TEST`; caret fixture `left  right` with the caret
+between the two spaces; selection fixture `left old right` with only `old` selected.
+Both should become `left UD_TEST right`. Reset between trials, distinguish source
+and destination inputs, and check that other inputs remain unchanged. Use the
+real Codex composer, an untitled editor, a named ordinary input such as Find and
+an unsaved external text document. Never use a terminal or submit a chat for testing.
 
-#### Execution stages and evidence
+Retargeting during transcription needs an observed pending interval, not an assumed
+sleep. Completion must not steal focus. The existing diagnostic's special release
+chord is test equipment, not a product confirmation requirement. For an external
+target while recording, finish with the non-activating overlay; for an external
+target during transcription, stop in VS Code first, then select that external
+input. Do not pretend the VS Code shortcut is global. Test Esc in its supported
+recording context; no new transcription-cancellation feature is implied.
 
-M1 starts with T01, T02, T03 and T04a-T04e in the default visualization, using
-fixed text in the real controls. Start with genuine status-bar Dictate plus
-overlay Insert, then check status-bar Stop and the keyboard path separately.
-A core failure blocks claiming that route works, not documentation of other
-results or independent M2/M3 work. A feasibility pass covers only exercised cases;
-it is not release acceptance or permission to ship a diagnostic patch.
+A valid-target pass means exactly one insertion at the intended latest caret or
+selection, unchanged surrounding/non-destination text, no corrective click, no
+extra confirmation solely for retargeting, no submission and no automatic retry.
+Actual text matters; blinking or input-API success alone is not sufficient.
 
-M4 runs the applicable families and all T05 baseline combinations for a claimed
-literal fix, including local/WSL and relevant window/helper checks. Repeat each
-exercised core scenario for at least five consecutive trials on the same candidate
-build, record all attempts and preserve failures rather than reporting only the
-successful retry. This is a regression check, not a statistical reliability claim.
-Then repeat core scenarios with actual recording/transcription. Compare insertion
-with the transcript actually produced, so recognition errors and targeting errors
-remain separate. M2/M3-only releases run their feature tests and affected regression
-paths without claiming the untouched focus defect is fixed.
+**Proportional validation:** M3 runs its configuration/native-layout tests, T11 and
+relevant ordinary recording/control regressions. M2 runs T12/T13 and affected
+lifecycle/cancellation/target cases. A claimed #38 fix requires all applicable F
+cases and T05 paths, local/WSL and relevant window/helper variants. Repeat exercised
+core focus cases for at least five consecutive trials on one build and preserve
+all failures; this is a regression check, not a statistical reliability guarantee.
+Follow fixed-text evidence with real transcription, comparing insertion with the
+actual generated transcript rather than confusing ASR and insertion errors.
 
-Record one result per case/variant with: date/tester; branch and commit; artifact
-identity (and probe/base distinction); Windows, VS Code and Codex versions;
-local/Remote-WSL context; named target control; display scaling/monitors; mode;
-start/finish method; initial text/caret/selection; ordered deliberate actions and
-phase; supplied/generated transcript; expected and actual text in all affected
-inputs; submission/duplicate check; attempt counts; outcome; evidence and limits.
-Use synthetic content in logs or captures, not real dictated/private messages.
+For each result record date/tester, commit/artifact, Windows/VS Code/Codex versions,
+local/WSL context, named control, DPI/monitors, mode/start/finish path, initial
+text/selection, ordered deliberate actions and phase, generated/supplied text,
+expected/actual output, duplicates/submission check, trials and evidence/limits.
+Use synthetic content, never private transcripts. Outcomes: Pass, Fail, Not run,
+Blocked (specific prerequisite) or Not applicable (reason tied to feature scope).
+Never mark a required failing/unimplemented case Not applicable. Without Windows
+or real Codex access, mark the relevant cases Blocked/Not run and provide the
+smallest manual procedure. Do not report Linux/static tests as Windows GUI passes.
 
-Allowed outcomes are **Pass**, **Fail**, **Not run**, **Blocked** (missing
-prerequisite) and **Not applicable** (specific reason for that feature scope).
-Never use Not applicable to hide a failing required target, trigger or missing
-implementation. Split variants and mixed-scope observations instead of giving a
-blanket pass. A changed candidate needs new evidence for affected cases; results
-from another build are references, not automatic passes. Without real Windows/
-Codex access, mark those cases Not run or Blocked and identify the missing setup;
-compilation, mocks and a written procedure cannot supply their evidence.
+## 7. M4: release validation and retirement
 
-**Exit evidence:** this matrix, coverage inventory and evidence procedure.
-M0.3 and M0 are complete only as specifications. All 18 case rows remain Not run;
-M1-M4 supply runtime evidence later. Choice A and M0.2's closure rules are unchanged.
+Use the production branch's normal typecheck/compile/native/package checks and
+its new targeted tests. Inspect the actual VSIX contents and tie manual evidence
+to the tested commit. Keep diagnostics, source patches, test-only shortcuts and
+probe bootstraps out of product packaging. Do not copy the experimental workflow
+into the release merely to make CI look more comprehensive.
 
-## 4. M1: establish focus feasibility before committing to a redesign
+Update durable README/settings help, CHANGELOG and testing notes for the behavior
+actually shipped. A size/recovery release may retain the known #38 limitation;
+it must not advertise a solved focus problem. Versioning, commit/push, merge,
+publishing and issue closure follow the user's explicit approvals.
 
-**Status: M1.1 complete as a read-only assessment; M1.2-M1.4 not started.**
-No runtime implementation or Windows/Codex acceptance result is claimed.
+After each completed implementation chunk, update the ledger below with changed
+files, actual tests and next action. Once work is complete or explicitly retired,
+move lasting behavior/tests/limitations into the regular docs or issue record,
+then remove this temporary plan and its AGENTS pointer together. Preserve unrelated
+agent guidance and never delete the only record of an unresolved issue.
 
-| Sub-milestone | Scope | Exit evidence |
+## 8. Live handoff ledger
+
+| Milestone | Status at this reassessment | Next action |
 | --- | --- | --- |
-| M1.1: assess concrete mechanisms | Read current source, public contracts and relevant history; distinguish a literal fix from an alternative | A source-backed hypothesis, limitations and a discriminating experiment |
-| M1.2: prepare the smallest justified probe | After authorization, build only the diagnostic needed to test that hypothesis | Reproducible, isolated diagnostic build and procedure; no production redesign |
-| M1.3: execute core Windows tests | Real Codex, editor and ordinary input; fixed text, selections, retargeting and independent Start/Stop checks | Per-build observations using M0.3; alternative results labelled separately |
-| M1.4: decide delivery direction | Compare evidence with M0.1/M0.2 and identify dependencies | Supported production direction, an explicit alternative decision or a specific blocker |
+| M0.1-M0.3 | Complete as specifications | Preserve latest-target policy and acceptance criteria; no replanning gate |
+| M3.1-M3.3 | Not started | Recommended next Codex task: overlay sizes, on a product branch from main |
+| M2.1-M2.3 | Not started | Recovery, clipboard policy/implementation and scoped lifecycle tests after sizing |
+| M1.1 | Assessment recorded | Reference the source-backed hypothesis; recheck APIs only when resuming |
+| M1.2 | Diagnostic implemented; host build gate failed; separate workstream paused in this order | Resume only when focus investigation is prioritized; missing signtool lookup is the observed H1 blocker |
+| M1.3-M1.4 | Not started | No real Windows/Codex focus outcome or production route selected |
+| M4 | Not started | Run per product release candidate, not only after upstream work finishes |
 
-M1.2 is conditional on a credible mechanism, not an obligation to write code.
-A feasibility pass is not release acceptance or authorization to implement a
-production feature. M2/M3 remain independent of an upstream dependency.
+Reassessment changed this document and root `AGENTS.md` only. Main, the original
+frozen branch and the diagnostic branch are untouched; no new build was triggered.
+Source snapshot and prior-plan hashes were checked, not functionality. All 18
+runtime rows remain Not run. The next agent must inspect the actual local worktree;
+this document does not certify that the user's machine has a clean checkout or
+all Windows build/test prerequisites.
 
-### M1.1 findings (2026-09-13)
+For continuation append a concise entry with milestone/substep, branch/commit,
+files, tests actually run, blockers and next action. Keep one current next task;
+do not maintain contradictory instructions in several handoff documents.
 
-Assessment baseline: extension `main` remains `f0265bc4398643c3b3a27e6d2ad64183b115b6ba`;
-planning tip inspected was `77d191401da05aac5e76e29db17661f27d52758b`.
-VS Code source inspected at `8e35945bae3f2b0b3d0276963281180f1ce10cb0`
-(the upstream `main` snapshot returned during this assessment, not a claim about
-the user's installed version). Public documentation was checked on the date above.
+### Sources and preserved history
 
-**Observed source facts:**
+[history]: https://github.com/gcalpay/vscode-universal-dictate/blob/834a1001ef5ef49da36710eb4d2445d600f89f9a/docs/DICTATION_RELIABILITY_PLAN.md
+[probe]: https://github.com/gcalpay/vscode-universal-dictate/blob/834a1001ef5ef49da36710eb4d2445d600f89f9a/diagnostics/m1.2/README.md
+[run]: https://github.com/gcalpay/vscode-universal-dictate/actions/runs/34735635848
+[h1-job]: https://github.com/gcalpay/vscode-universal-dictate/actions/runs/34735635848/job/103666447977
 
-- The genuine status-bar label is an anchor with `tabIndex: -1`. Its command
-  listener handles `CLICK`; separate keyboard listeners handle Space/Enter and
-  navigation. The inspected item has no primary-mouse-down cancellation handler.
-  The status-bar parent is focusable too; removing focusability from the label
-  alone is not a justified fix. See [statusbarItem.ts][m11-item] and
-  [statusbarPart.ts][m11-part]. These facts support the reported event-order
-  explanation but are not a new live reproduction of it.
-- Stable [StatusBarItem documentation][m11-api] has no mouse-down callback or
-  focus-preservation option. [extHostStatusBar.ts][m11-bridge] serializes known
-  properties to the workbench; assigning an invented `preserveFocus` property
-  in extension code would not enable that behavior. Extensions have
-  [no supported access to the workbench DOM][m11-dom].
-- [statusbarActions.ts][m11-actions] shows that `workbench.statusBar.clearFocus`
-  first focuses the status-bar container when an entry is focused, otherwise
-  focuses `activeEditorPane` when present. It is not a last-editable-input or
-  composer-selection restore. It cannot justify a generic solution here.
-- The [documented Codex IDE commands][m11-codex] expose sidebar/panel opening
-  and context actions, but no documented contract for restoring the latest
-  composer selection and inserting an arbitrary transcript there. This is an
-  assessment of the published interface, not proof that no internal command
-  exists. Do not guess undocumented arguments or use a new chat/context action
-  as a surrogate for selected-text insertion.
-- The existing [extension controller][m11-extension] makes both idle Dictate
-  and recording Stop invoke `universalDictate.toggle`. Its
-  [paste orchestration][m11-paste] has no destination parameter and sends Ctrl+V
-  to current focus. Preventing our controls from disturbing that focus is a
-  simpler hypothesis for the ordinary valid-target workflow than inventing a
-  global caret tracker. It does not establish target-loss detection or paste
-  acknowledgement; those remain separate acceptance/recovery concerns.
+Baseline source map, pinned to the inspected `main`:
 
-**Relevant internal precedent:** VS Code's
-[action-bar view items][m11-actionbar] already stop mouse-down defaults when
-not draggable, while their click handling remains separate. This is not a
-StatusBarItem extension capability, but it makes mouse-down prevention a
-concrete upstream hypothesis rather than an unexplained focus workaround.
-The [W3C UI Events Algorithms draft][m11-events] describes focusing a click-
-focusable target after uncancelled mouse-down dispatch. It supports the rationale;
-actual Electron/webview behavior still needs measurement, and the draft is not
-proof of a Windows/Codex result.
-
-#### Mechanism decision
-
-| Route | Assessment | Next action |
-| --- | --- | --- |
-| Stable extension API only, retaining the literal item | No sufficient supported mechanism identified in the inspected API/bridge | Do not implement another command-delay, fabricated property or generic editor-focus workaround |
-| VS Code-owned primary mouse-down prevention | Credible candidate for the genuine item; actual Codex behavior and upstream delivery unproved | Preferred hypothesis for an isolated upstream diagnostic |
-| Cooperation from the composer through an explicit insertion/selection interface | Conceptually valid but no sufficient documented Codex interface found | Treat as an external capability dependency, not an available implementation |
-| Frozen Win32 launcher | Non-activation is a documented Windows mechanism, but this is a replacement interaction | Keep frozen; evaluate separately only, never silently adopt as the literal fix |
-
-For the native alternative, [WM_MOUSEACTIVATE documentation][m11-win32] confirms
-what `MA_NOACTIVATE` means. The frozen [placement code][m11-native] anchors to a
-window corner rather than the genuine status-bar item's bounds; it can hide when
-its target is invalid. Its [controller][m11-controller] distinguishes a running
-helper, not an acknowledged visible/attached launcher. These are static
-limitations and test risks, not reproduced failures. Do not merge the experiment
-or treat non-activation flags/green compilation as complete acceptance evidence.
-
-The older [Issue #38 log][m11-history] records an upstream-first direction and
-excludes UI Automation/MSAA tracking, mouse hooks, click replay and focus hacks.
-Its historical `main` and automation statements are not today's branch state.
-Do not restore that old infrastructure or change those branches. A read of the
-historically proposed `gcalpay/vscode` repository returned 404 through the current
-connector; no accessible upstream prototype was established by that read. This
-is not proof that no private/local development checkout exists.
-
-#### Hypothesis and smallest discriminating experiment
-
-**H1:** cancelling the default action of primary mouse-down on the genuine
-Dictate/Stop status-bar item, inside VS Code's own renderer, keeps the current
-editable control and selection intact while the ordinary click still invokes
-its command once. Deliberate later input/caret changes then remain authoritative
-without freezing a destination at Start or Stop.
-
-This is the proposed M1.2 experiment, not code created in M1.1:
-
-1. Use an isolated VS Code development checkout/build and profile, not a patched
-   user installation. Any extension-side fixed-text probe belongs on a fresh,
-   authorized branch from Universal Dictate `main` with the plan and `AGENTS.md`
-   carried in. Because H1 lives in VS Code, that extension branch alone cannot
-   implement the mouse-down change. Creating an upstream fork/build requires
-   explicit authorization; none was created during this assessment.
-2. Add only a source-level diagnostic condition for the actual contributed
-   item and primary mouse button. Cancel the default at mouse-down; keep the
-   existing click handler and keyboard focus/Space/Enter behavior. Do not add
-   a public API, global focus history, hooks, a floating window or clipboard
-   rewrites to test H1. Do not substitute CSS/DevTools injection for this build.
-3. Compare otherwise identical unmodified and modified builds using real pointer
-   clicks in the real Codex composer, first T01/T02, then the core M0.3 paths.
-   Use `UD_TEST`, distinguish status-bar Start and Stop, and verify exactly one
-   command/insertion and preserved selection. Scripted event dispatch alone
-   cannot establish native pointer focus behavior. If the real Codex extension
-   cannot run in the isolated build, mark its test Blocked rather than use a mock.
-4. Exercise the controlled pending-transcription interval, same-input caret/
-   selection changes and deliberate retargeting. Check keyboard navigation,
-   Enter/Space activation and right-click context behavior for regressions.
-   The test completion trigger must not steal focus. Retain all failed trials.
-
-If cancellation takes effect but the real composer still loses its selection,
-or command activation changes, H1 is insufficient: record where it fails before
-expanding the patch. If it works, the next question is upstream design and
-availability, not permission to publish a patched VS Code or declare #38 closed.
-A general status-bar behavior correction and an opt-in API are different possible
-upstream designs; do not choose or implement the larger API before proving H1.
-A future API name such as `preserveFocus` is a proposal, not an existing setting.
-[Proposed APIs cannot ship in Marketplace extensions][m11-proposed].
-
-**Limits:** H1 addresses focus lost to our genuine status-bar controls inside the
-workbench. It does not promise to prevent operating-system window activation
-when clicking between applications, recover a closed input, identify every
-unrelated programmatic focus change or confirm clipboard acceptance. Follow
-M0.3's external-target finish paths and keep unresolved cases explicit. No
-acceptance requirement is weakened by selecting this narrower initial probe.
-
-**M1.1 exit:** complete. A testable upstream mechanism and current delivery boundary
-are identified; no supported extension-only literal fix was established. H1 and
-the native alternative remain untested. M1 overall stays in progress. No new
-product clarification is needed for this assessment; a Windows/Codex test is
-needed after an authorized concrete probe exists.
-
-[m11-item]: https://github.com/microsoft/vscode/blob/8e35945bae3f2b0b3d0276963281180f1ce10cb0/src/vs/workbench/browser/parts/statusbar/statusbarItem.ts#L68-L178
-[m11-part]: https://github.com/microsoft/vscode/blob/8e35945bae3f2b0b3d0276963281180f1ce10cb0/src/vs/workbench/browser/parts/statusbar/statusbarPart.ts#L451-L478
-[m11-api]: https://code.visualstudio.com/api/references/vscode-api#StatusBarItem
-[m11-bridge]: https://github.com/microsoft/vscode/blob/8e35945bae3f2b0b3d0276963281180f1ce10cb0/src/vs/workbench/api/common/extHostStatusBar.ts#L243-L299
-[m11-dom]: https://code.visualstudio.com/api/extension-capabilities/overview#no-dom-access
-[m11-actions]: https://github.com/microsoft/vscode/blob/8e35945bae3f2b0b3d0276963281180f1ce10cb0/src/vs/workbench/browser/parts/statusbar/statusbarActions.ts#L120-L138
-[m11-codex]: https://learn.chatgpt.com/docs/developer-commands?surface=ide
-[m11-extension]: https://github.com/gcalpay/vscode-universal-dictate/blob/f0265bc4398643c3b3a27e6d2ad64183b115b6ba/src/extension.ts#L195-L242
-[m11-paste]: https://github.com/gcalpay/vscode-universal-dictate/blob/f0265bc4398643c3b3a27e6d2ad64183b115b6ba/src/core/paste.ts
-[m11-actionbar]: https://github.com/microsoft/vscode/blob/8e35945bae3f2b0b3d0276963281180f1ce10cb0/src/vs/base/browser/ui/actionbar/actionViewItems.ts#L121-L165
-[m11-events]: https://w3c.github.io/uievents/event-algo.html#handle-native-mouse-down
-[m11-win32]: https://learn.microsoft.com/en-us/windows/win32/inputdev/wm-mouseactivate
-[m11-native]: https://github.com/gcalpay/vscode-universal-dictate/blob/5df91c3561ac31bd20f30d829d323347757469bf/native/status-button.cpp#L179-L260
-[m11-controller]: https://github.com/gcalpay/vscode-universal-dictate/blob/5df91c3561ac31bd20f30d829d323347757469bf/src/controller.ts#L188-L239
-[m11-history]: https://github.com/gcalpay/vscode-universal-dictate/blob/327ea19171385d310269fb44a14b8990ac267df7/docs/issue-38-implementation-log.md#L231-L242
-[m11-proposed]: https://code.visualstudio.com/api/advanced-topics/using-proposed-api
-
-## 5. M2: transcript recovery and clipboard reliability
-
-**Status: not started; independent of the M1 outcome.**
-
-Retain the latest completed nonempty transcript before attempting insertion.
-Initially keep it in memory only, without a transcript database, content logging
-or automatic persistence. Document that extension restart/reload can end recovery.
-Expose Copy Last Transcript, Insert Last Transcript and Clear Last Transcript.
-Reinsertion needs a keyboard-invokable path that does not first open a focus-
-stealing interface; it must use the insertion behavior accepted for the product.
-
-Do not automatically retry an uncertain paste: it may have succeeded, so retrying
-could duplicate text. Handle empty/no-speech and cancellation without creating
-spurious recoverable transcripts. Never send Enter as part of insertion.
-
-Review clipboard restoration as part of this work. The baseline stores text and
-restores it after a fixed delay. Restoration must not overwrite newer clipboard
-content copied during the operation. Define ownership-aware behavior and whether
-preservation covers only text or native non-text formats; do not promise full
-clipboard preservation while retaining only a string. A longer sleep is not
-proof of successful insertion or ownership.
-
-**Exit:** focused tests cover retained transcripts, insertion errors, explicit
-recovery/clearing, cancellation, no-speech and intervening clipboard changes.
-Relevant Windows clipboard and GUI behavior is actually exercised. Claims about
-retention, privacy and clipboard formats match the implementation.
-
-## 6. M3: Small, Medium and Large visualization sizes
-
-**Status: not started; explicitly requested and independent of M1.**
-
-The user's current enhanced recording rectangle is too large for everyday use.
-Add two smaller layouts and keep the current large presentation available.
-This concerns the recording visualization, not PR #49's separate idle launcher.
-
-| Size | Initial layout target at 100% scaling | Intended layout |
-| --- | --- | --- |
-| Small | Approximately 380 x 64 | Reduced waveform area and padding, with readable Insert/Discard controls |
-| Medium | Approximately 520 x 88 | More waveform space without the current large footprint |
-| Large | Current 740 x 128 presentation as the reference | Preserve the spacious existing option |
-
-These are starting design targets, not tested or locked pixel dimensions. The
-baseline numbers are hardcoded native coordinates; define DPI-aware logical
-layout deliberately rather than assuming the current renderer already scales
-correctly. Final dimensions must pass actual readability and hit-testing checks.
-
-Use one enhanced waveform implementation with shared calculated layout metrics
-for drawing and button hit testing. Do not just shrink every font/button or
-revive the legacy compact renderer as an unrelated second visualization style.
-Size must remain independent of waveform time span, audio sampling, recording
-length and transcription quality.
-
-Expose size in settings and the existing settings menu; a proposed key is
-`universalDictate.overlaySize` with `small`, `medium`, `large` values. Apply changes
-from the next recording session, consistent with current visualization settings.
-Preserve Both, Enhanced overlay, Status bar only and Off semantics. Keep the
-existing default until smaller layouts have been evaluated; making Small the
-new default is a later explicit choice, not part of this documentation change.
-
-**Exit:** all three layouts pass T11 and preserve Insert/Discard non-activation,
-keyboard controls and waveform behavior. Configuration selection/validation and
-native argument/layout handling have focused tests. No arbitrary drag-resizing,
-positioning redesign or extra waveform styles are required for this milestone.
-
-## 7. M4: integrated validation, release and plan retirement
-
-**Status: not started.**
-
-Integrate only accepted, narrowly scoped changes. Run the repository's actual
-check, compile and Windows packaging commands, plus functional tests added for
-changed behavior. Record which commands ran and their results. Compilation is
-not a GUI test, and a release artifact must be tied to the tested commit.
-
-Execute applicable acceptance cases with the real Windows VS Code/Codex setup.
-Update README/settings help, CHANGELOG and durable test/architecture notes to
-match shipped behavior and known limitations. Keep issue-fix evidence separate
-from recovery and optional-launcher evidence. Do not automatically close #38 or
-merge PR #49 as a side effect of an unrelated improvement.
-
-Release approval is separate from planning and implementation. M2/M3 may ship
-without a focus fix; clearly retain #38 as unresolved in that case.
-
-Once the work is completed or explicitly retired, transfer enduring tests,
-behavior, limitations and any remaining blockers to regular project docs/issues.
-Then delete this temporary plan and remove its pointer in `AGENTS.md` in the same
-cleanup change. Preserve any unrelated agent guidance. Do not delete the only
-record of an unresolved issue or leave a dangling plan link.
-
-## 8. Progress and handoff
-
-| Milestone | Current status | Evidence / remaining work |
-| --- | --- | --- |
-| M0.1 | Complete: requirements specification | User confirmed A on 2026-09-13; latest deliberate input/caret/selection wins through transcription; no runtime validation |
-| M0.2 | Complete: decision criteria | Fix/alternative/safeguard boundaries, evidence and closure rules finalized; no production implementation selected or validated |
-| M0.3 | Complete: test specification | 18 case rows across 13 families, 20 baseline start/finish/mode combinations and evidence rules; all runtime cases Not run |
-| M1.1 | Complete: read-only mechanism assessment | Source-backed upstream mouse-down hypothesis H1; no sufficient supported extension-only literal fix identified |
-| M1.2 | Not started | Isolated upstream diagnostic proposed; no fork, patch, build or extension probe created |
-| M1.3 | Not started | H1 and native alternative have no new Windows/Codex test evidence; all runtime cases Not run |
-| M1.4 | Not started | Production route depends on observations and supported delivery; no launcher adopted |
-| M2 | Not started | No recovery or clipboard changes |
-| M3 | Not started | No new size setting or renderer changes |
-| M4 | Not started | No integrated acceptance run, merge or release |
-
-Current authorized change: perform M1.1 read-only investigation and record its
-findings and M1 sub-milestones on `docs/dictation-reliability-plan`. Repository
-writes are limited to this plan. No runtime/upstream patch, fork, build, launcher
-adoption, merge, publication or issue closure is authorized by this record.
-M0 and M2-M4 remain unchanged; M1 overall is in progress, not completed.
-
-Completed planning history:
-
-- `50d75cca9d201a96e120850eb33cc016c3fe7dbc`: initial plan and `AGENTS.md` pointer.
-- `139509890a5171de65012910c46d14ca924433ad`: M0.1 finalized after the user
-  selected A. Keep following the latest deliberate target through transcription.
-- `ce68d69bc84a6d9bc49091507f6c04e6360d01de`: M0.2 finalized fix/alternative/
-  safeguard classifications and evidence/closure boundaries.
-- `77d191401da05aac5e76e29db17661f27d52758b`: M0.3 finalized the matrix,
-  start/finish inventory and evidence procedure; no runtime tests performed.
-
-Handoff for M1.1 (2026-09-13):
-
-- Planning branch tip reviewed: `77d191401da05aac5e76e29db17661f27d52758b`.
-  Resolve this assessment commit's SHA from branch/file history.
-- Changed file: `docs/DICTATION_RELIABILITY_PLAN.md`, M1 and this handoff only.
-  `AGENTS.md` already points here and requires no change.
-- Findings: the stable API and extension bridge lack pointer-focus control;
-  clearFocus is not a composer restore; VS Code's action bar provides an
-  internal mouse-down-cancellation precedent. H1 tests the genuine item in
-  VS Code itself. Neither a new API nor a native-launcher replacement is adopted.
-- Validation scope: source/documentation reads, documentation diff and section/
-  acceptance-result preservation checks. No runtime, GUI, build or acceptance
-  test was run. All 18 case rows remain Not run, not Pass or proven impossible.
-- Main and the frozen experiment are not changed. Older implementation-log
-  claims about then-current main/automation remain historical; do not revive
-  those workflows or treat a 404 repository read as proof no local fork exists.
-- Remaining dependencies: authorization and an isolated upstream development
-  environment for H1; real Windows/Codex access for behavior; supported upstream
-  availability for a shippable literal fix if H1 succeeds. No such outcomes are
-  promised. Recovery and Small/Medium/Large sizing are not blocked by this path.
-
-Next step when asked to continue: read `AGENTS.md` and this plan, verify refs,
-then establish authorization for M1.2's isolated upstream diagnostic and prepare
-only that probe. Do not pretend an extension-only patch can install a renderer
-mouse-down handler. Do not start with full API plumbing, another launcher or
-broad test infrastructure. No change to the user's installed VS Code is planned.
-Ask for local Windows help once there is a concrete build/procedure requiring it.
-Do not reopen choice A, repeat M0 or silently weaken #38. M2/M3 can proceed
-independently if prioritized, and the old branch remains frozen.
-
-For every continuation update this section with the milestone/substep, branch
-and commit, changed files, actual tests/results, unresolved blockers/decisions
-and the next concrete action. Keep status factual: specified is not implemented,
-implemented is not tested, and tested alternatives are not automatically #38 fixes.
+- [Manifest/settings](https://github.com/gcalpay/vscode-universal-dictate/blob/f0265bc4398643c3b3a27e6d2ad64183b115b6ba/package.json) and [controller/settings menu](https://github.com/gcalpay/vscode-universal-dictate/blob/f0265bc4398643c3b3a27e6d2ad64183b115b6ba/src/extension.ts).
+- [VS Code recorder adapter](https://github.com/gcalpay/vscode-universal-dictate/blob/f0265bc4398643c3b3a27e6d2ad64183b115b6ba/src/recorder.ts), [core recorder](https://github.com/gcalpay/vscode-universal-dictate/blob/f0265bc4398643c3b3a27e6d2ad64183b115b6ba/src/core/recorder.ts) and [native overlay](https://github.com/gcalpay/vscode-universal-dictate/blob/f0265bc4398643c3b3a27e6d2ad64183b115b6ba/native/record-audio.cpp).
+- [Dictation lifecycle](https://github.com/gcalpay/vscode-universal-dictate/blob/f0265bc4398643c3b3a27e6d2ad64183b115b6ba/src/core/dictation.ts), [clipboard orchestration](https://github.com/gcalpay/vscode-universal-dictate/blob/f0265bc4398643c3b3a27e6d2ad64183b115b6ba/src/core/paste.ts) and [native paste helper](https://github.com/gcalpay/vscode-universal-dictate/blob/f0265bc4398643c3b3a27e6d2ad64183b115b6ba/native/windows-fast-paste.cpp).
+- [Issue #38](https://github.com/gcalpay/vscode-universal-dictate/issues/38) and [frozen PR #49](https://github.com/gcalpay/vscode-universal-dictate/pull/49). Neither is closed or adopted by this handoff.
