@@ -12,7 +12,7 @@ Read [docs/DICTATION_RELIABILITY_PLAN.md](docs/DICTATION_RELIABILITY_PLAN.md) be
 
 ## Current task
 
-The next implementation is **M1.1 on `feat/overlay-size-presets`**. Create that branch from the then-current `main`, carry only the current plan and this guidance if they are not on main, then implement M1.1 through M1.3 on that one branch.
+The next implementation is **M1.1 on `feat/overlay-size-presets`**. Create that branch from the then-current `main`, first carry the normalized documentation set from `docs/dictation-reliability-plan` as a docs-only base commit, then implement M1.1 through M1.3 on that one branch. Do not carry either experimental branch's runtime/diagnostic code.
 
 Do not start M2 while M1 is awaiting review.
 
