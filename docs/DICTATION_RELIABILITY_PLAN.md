@@ -1,274 +1,482 @@
-# Dictation reliability and overlay sizes: Codex implementation plan
+# Universal Dictate: reliability, overlay sizes, live preview and translation
 
-Reassessed: 2026-09-25. Repository: `gcalpay/vscode-universal-dictate`.
-Temporary working document, linked from root `AGENTS.md`.
+Updated: 2026-09-25. Repository: `gcalpay/vscode-universal-dictate`.
+Temporary implementation roadmap, linked from root `AGENTS.md`.
+This revision extends the handoff at `0647906` with live preview and optional
+translation. It preserves the settled insertion contract and test IDs.
 
-## 1. Start here
+## 1. Decision and execution order
 
-**Recommended next implementation: M3, Small/Medium/Large recording overlays.**
-Then implement M2 transcript recovery and clipboard/lifecycle reliability. Apply
-M4 validation to each release candidate. Keep M1's upstream focus experiment a
-separate workstream, not a prerequisite for either product improvement.
-Milestone IDs are retained; their numbers do not impose a dependency chain.
+**Start product implementation with M3: Small/Medium/Large recording overlays.**
+Do not make Issue #38 or its experimental builds a prerequisite for this work.
 
-This revision replaces the older next-step instruction to repair the Code OSS
-build immediately. It does not discard the experiment, weaken Issue #38 or
-reopen the user's latest-target choice. M0 is finished as a specification; do
-not spend another session rewriting it before implementing a bounded feature.
+| Work order | Milestone | Dependency / branch |
+| --- | --- | --- |
+| Already specified | M0: insertion contract and evidence rules | Preserve; do not reopen |
+| First | M3: overlay size presets | New `feat/overlay-size-presets` from current main |
+| Second | M2: transcript, clipboard and lifecycle reliability | New `fix/transcript-recovery` from updated main |
+| Third | M5: optional live transcript preview | New `feat/live-transcript-preview`; build on accepted M3/M2 foundations |
+| Optional subsequent feature | M6: translation | New `feat/translate-to-english` only after its scope is accepted |
+| Separate research track | M1: genuine status-bar focus preservation | Existing isolated diagnostic; not a product branch dependency |
+| At every candidate | M4: validation, review and release | Applies to each accepted feature, not only the last milestone |
 
-The previous plan already included sizes and recovery. The reassessment changes
-execution order, separates shippable features from platform research and makes
-implementation steps explicit. M1.2 built test equipment, not a production fix.
-Do not expand that equipment merely because work has already been invested in it.
+Milestone numbers identify existing work, not chronological dependencies. M5 and
+M6 are new. English-only output translation could be prioritized before M5 after
+an explicit scope/order decision; neither feature requires the other. M5.1's
+feasibility investigation can be evaluated independently, but do not concurrently
+rewrite the same recorder/engine on several product branches.
 
-This task changed documentation only. A handoff is not permission to implement
-all milestones, install software, spend on additional build infrastructure,
-merge, publish or close issues. Follow the user's active Codex request and stop
-at its agreed milestone boundary, not after every small code edit.
+The normal delivery cycle is one focused feature branch, targeted implementation,
+review and authorized merge into main, then the next branch from that updated main.
+A Marketplace release need not accompany every merge. Do not create a single
+long-lived branch containing sizes, live decoding, translation and focus research.
+Do not merge either experiment just to unblock a feature or obtain these docs.
 
-### Verified repository state
+This revision authorizes no runtime work by itself. Continue within the user's
+active Codex request. Do not start builds, install dependencies, change local Git
+state, merge, publish or close issues beyond that session's explicit approval.
+Once a bounded implementation chunk is authorized, do not seek a new product
+choice for every routine edit; report at the agreed milestone boundary.
 
-| Ref / item | Snapshot checked on 2026-09-25 |
+### Verified repository snapshot
+
+| Item | State read on 2026-09-25 |
 | --- | --- |
-| Product base `main` | `f0265bc4398643c3b3a27e6d2ad64183b115b6ba`, declared version 0.1.5 |
-| Planning branch | `docs/dictation-reliability-plan`; reassessment follows `63b5eb9669d44f48cf5ee81babf8c6fceb99527a` |
-| Frozen native-launcher experiment | `fix/preserve-insertion-target` at `5df91c3561ac31bd20f30d829d323347757469bf`, draft PR #49; leave untouched |
-| Separate upstream diagnostic branch | `experiment/m1.2-statusbar-focus-probe` at `834a1001ef5ef49da36710eb4d2445d600f89f9a`; leave out of product branches |
-| Diagnostic code tested in CI | `6bef0311f3f6cee9c94941c5bd1456dfbaf01593`, run `34735635848` |
-| That run's actual final result | Probe kit succeeded; baseline and H1 host jobs failed; no complete host/kit set |
-| Real GUI acceptance evidence | All 18 acceptance rows below remain Not run; unit/build results are not GUI results |
+| Product base | `main` at `f0265bc4398643c3b3a27e6d2ad64183b115b6ba`, declared version 0.1.5 |
+| Planning branch before this revision | `docs/dictation-reliability-plan` at `0647906e0da7c075f32be27ee29f81baad769306` |
+| Frozen native-launcher branch | `fix/preserve-insertion-target` at `5df91c3561ac31bd20f30d829d323347757469bf` |
+| Its PR | #49 is open; the current API reports `draft: false`, unlike older handoffs; no adoption or merge is authorized |
+| Separate diagnostic | `experiment/m1.2-statusbar-focus-probe` at `834a1001ef5ef49da36710eb4d2445d600f89f9a` |
+| Diagnostic build | Run `34735635848`, code `6bef0311f3f6cee9c94941c5bd1456dfbaf01593`: kit passed, both host jobs failed |
+| Product features in this roadmap | Sizes, recovery, live preview and translation have no implementation/acceptance evidence on the inspected main |
 
-Recheck refs and the local working tree before edits. Never reset, clean, stash
-or overwrite unrelated user work. Existing historical branches/logs are evidence,
-not instructions to resurrect old automation or merge their changes.
+Recheck remote refs and the actual local worktree before edits. This snapshot says
+nothing about uncommitted local work. Never reset, clean, stash or overwrite it.
+Do not resurrect historical automation branches or their obsolete next-step rules.
 
-**Branch procedure:** product work starts from the then-current `main`, for
-example `feat/overlay-size-presets` for M3. Bring only this updated plan and root
-`AGENTS.md` into that branch if they are not on main yet. Use the latest reviewed
-planning revision, not the stale plan embedded in an experimental branch. Do not
-merge/cherry-pick the entire diagnostic or frozen-launcher branch to get the docs.
-Keep Git writes and dependency installation within explicit session approval.
-Read-only inspection and already-authorized targeted tests need no new product
-decision. The planning branch itself remains documentation-only.
+**Plan transfer:** if main lacks these files, carry only the latest reviewed
+`AGENTS.md` and `docs/DICTATION_RELIABILITY_PLAN.md` into the authorized feature
+branch. Do not merge or cherry-pick an experimental branch to get documentation.
+If a local branch already contains newer progress, reconcile it rather than
+replacing its ledger with this snapshot. Keep one current work order and update
+it at each handoff. The planning branch remains documentation-only.
 
-The detailed [pre-reassessment plan][history] preserves the original M0 rationale,
-M1 investigation, source pins, experiment design and build history. It is an
-immutable reference, not the current work order. Its September 13 build checkpoint
-is superseded by the September 25 result above.
+## 2. Settled behavior and proposed feature boundaries
 
-## 2. Settled requirements and scope
+### Settled M0 contract
 
-**M0.1: follow the latest deliberately selected target until insertion.** A target
-is the editable input plus its caret/selection, not merely an application window.
-Changes during recording AND transcription count, including movement or a new
-selection within the same input. Stop/Insert does not lock the destination.
-Without a deliberate change, preserve the original destination and selection.
-Replace the selected range as an ordinary paste would, leaving other text intact.
+Follow the latest deliberately selected editable input AND its caret/selection
+until insertion, including changes during recording and transcription. The same
+rule applies through any new final translation step. Stop/Insert does not lock
+the destination. Without a deliberate change, preserve the original point/range.
+Replace only the selected range, as ordinary paste would.
 
-Dictate/Stop/Insert interactions do not themselves retarget. Do not force focus
-back to an older editor after the user deliberately changes destinations. Preserve
-supported external Windows inputs and the local Windows UI host in Remote-WSL.
-Correct insertion matters more than uninterrupted caret blinking. Never synthesize
-Enter or submit/send a message. Cancelling a recording must not insert its text.
+Dictate/Stop/Insert controls do not count as retargeting. Do not force focus back
+to an earlier editor. Preserve supported external Windows inputs and the Windows
+UI extension host in Remote-WSL. Correct insertion, not uninterrupted caret
+blinking, is the acceptance condition. Never synthesize Enter or submit a message.
+Cancellation must not insert text from the cancelled attempt.
 
-Known loss of the intended destination, with no newer valid deliberately chosen
-target, requires recovery rather than guessing. Do not claim universal detection
-of opaque input state or that a successful input API call proves text acceptance.
-The generic observability limitation remains unresolved; M2 must not pretend to
-implement a universal focus/selection tracker.
+Known loss of the intended destination requires explicit recovery rather than a
+guessed target. Detecting every opaque input's state is not currently established;
+do not promise universal detection or treat input-API success as text acceptance.
 
-**M0.2: keep three outcomes distinct.** A genuine status-bar workflow meeting the
-contract without corrective clicks is a candidate Issue #38 fix. A different
-non-activating launcher is an alternative, even if it looks like a status-bar
-item; adopting it requires an explicit decision and should initially be optional.
-Retaining text for recovery is a safeguard, not a focus fix. Editor-only success
-cannot stand in for Codex success, and a mandatory hotkey-only start is not the
-unchanged mouse workflow. Preventing focus loss or reliable restoration may qualify
-if actually demonstrated. Do not silently remove a failing control or close #38
-with recovery/sizing changes. Keep the issue open until agreed evidence supports
-an explicitly authorized closure on a deliverable implementation.
+A genuine status-bar fix, a separate non-activating launcher and transcript
+recovery remain three distinct outcomes. An alternative can be adopted only by
+explicit decision; it cannot silently replace the literal workflow. Sizing,
+preview or recovery alone does not close #38. Preserve failing/unrun observations.
 
-Preserve local/offline transcription after model setup, language selection,
-waveform time span, warm-worker/CLI fallback and review-before-send behavior.
-Do not introduce a standalone app, cloud ASR, LLM rewriting, arbitrary drag-resize,
-new waveform styles, global focus hooks, click replay or injected workbench UI.
-An isolated source build is research equipment, never a required user installation.
+### Proposed defaults for the additions
 
-**Backlog, not this implementation order:** microphone selection, elapsed-time or
-signal/clipping feedback, richer latency diagnostics, model-quality presets and
-overlay corner/drag positioning. These earlier suggestions were not promises to
-implement them all. Do not add them to M3 or M2 without a separate request.
+These are recommended initial scopes, not claims of existing functionality or
+blanket approval to implement all features:
 
-## 3. M3: recording overlay sizes, first product task
+- **Sizes:** Small/Medium/Large; keep current Large default until a later explicit
+  decision after visual testing.
+- **Live transcript:** opt-in, read-only provisional text in the existing recording
+  overlay. Paste one finalized result after Stop. Do NOT type partial hypotheses
+  into the target input. Continuous target insertion is a different feature and
+  would couple this work to selection, undo, revision and focus reliability.
+- **Translation:** optional and off by default. Propose original-language output
+  or English output for the first version. Other target languages need a separate
+  backend decision. Translation was requested tentatively; confirm scope before M6.
 
-This changes the large recording visualization, not PR #49's idle launcher.
+Snapshot configuration at recording start: input-language preference, output task,
+overlay size and preview setting remain consistent for that session. Target choice
+continues to follow deliberate user actions; configuration snapshots do not freeze
+focus. Preserve local/offline operation after required model setup, warm inference,
+CLI fallback for final output and current language/waveform-time-span semantics.
 
-| Setting value | Label | Initial layout target at 100% scaling |
+No cloud ASR, LLM rewriting, standalone app, mouse hooks, click replay, injected
+workbench UI or compulsory custom VS Code installation belongs in these features.
+Additional microphone selection, model presets, drag/corner positioning and extra
+waveform styles remain backlog. Performance measurement needed for live preview
+is in scope; a general telemetry/analytics product is not.
+
+## 3. M3: overlay size presets
+
+**Status: planned; next product task.** Branch: `feat/overlay-size-presets`.
+
+| Setting | Label | Starting layout target at 100% scaling |
 | --- | --- | --- |
 | `small` | Small | Approximately 380 x 64 logical units |
 | `medium` | Medium | Approximately 520 x 88 logical units |
-| `large` | Large | Current 740 x 128 presentation as the reference |
+| `large` | Large | Current 740 x 128 presentation as reference |
 
-The dimensions are starting targets, not an obligation to cram the current layout
-into them. Reduce padding and waveform area before readability or usable buttons.
-Keep Large as the default/invalid-setting fallback initially. A smaller default
-is a later explicit choice after evaluation, not a hidden migration in this task.
-The baseline's hardcoded native coordinates are not proof of correct DPI scaling.
+These are provisional targets, not tested dimensions. Reduce padding and waveform
+area before reducing text/button usability. Missing/invalid values retain Large.
 
-### M3.1: configuration and end-to-end propagation
+### M3.1: settings and adapter propagation
 
-Add `universalDictate.overlaySize` with the three enum values to `package.json`,
-VS Code Settings and the existing extension settings menu. Read/validate it at
-session start and pass it through the entire adapter chain:
-
+Add `universalDictate.overlaySize` to the manifest, VS Code Settings and existing
+extension settings menu. Validate once per session and pass the value through
 `src/extension.ts` -> `src/recorder.ts` -> `src/core/recorder.ts` -> native recorder.
+Use a validated native argument such as `--overlay-size`; preserve existing callers,
+defaults and process messages. Changes take effect next session. Status bar only
+and Off must not create an overlay merely because a size has been configured.
 
-Introduce a validated native argument such as `--overlay-size`. Preserve existing
-callers/defaults and the process protocol. Invalid/missing settings must yield
-Large, not fail microphone startup. Changing size applies to the next session.
-Retain Both, Enhanced overlay, Status bar only and Off semantics; no native
-overlay is created for the latter two just because a size was configured.
+Exit: setting selection/defaults and the entire argument chain have targeted tests.
 
-### M3.2: one renderer with shared layout metrics
+### M3.2: one native renderer and consistent geometry
 
-In `native/record-audio.cpp`, calculate each preset's window dimensions, waveform
-bounds, labels, fonts and Insert/Discard rectangles together. Drawing and hit
-testing must use those same metrics. Do not just change width/height constants,
-scale the final bitmap or revive the unrelated legacy compact renderer.
-A small pure layout helper/file is acceptable when it makes this testable; an
-unrelated UI-framework migration or broad recorder rewrite is not.
+Calculate window size, waveform bounds, labels and Insert/Discard hit areas from
+shared layout metrics in or near `native/record-audio.cpp`. Do not simply change
+two constants, shrink a bitmap or revive the unrelated legacy compact renderer.
+Small pure layout helpers are acceptable; a UI-framework migration is not.
 
-Specify the native process/window DPI behavior before creating windows. Apply one
-consistent logical-to-device transform and recompute where monitor/DPI changes
-require it. Keep the rectangle in the monitor work area, including negative
-monitor coordinates, without clipping controls. Preserve all non-activation flags,
-mouse behavior and font/graphics resource cleanup. Test the actual implementation
-on Windows rather than infer its appearance from arithmetic alone.
+Define native process/window DPI awareness before creating windows. Apply a
+consistent logical-to-device transform, account for relevant monitor/DPI changes
+and keep controls inside the work area, including negative monitor coordinates.
+Preserve non-activation and graphics/font resource cleanup. Do not change audio
+capture, sampling, recording duration, waveform-time-span meaning or ASR quality.
 
-Do not change the audio callback, sampling rate, waveform history/time-span
-meaning, recording duration or transcription quality. Size is presentation only.
+Keep the renderer easy to extend with a text region later, but do not implement
+live inference, reserve a large empty transcript panel or change window size
+automatically in M3 just because M5 is planned.
 
-### M3.3: tests, documentation and Windows review
+Exit: all three layouts render from common metrics and have matching hit areas.
 
-Add targeted tests for enum/default handling, adapter/native argument propagation,
-layout bounds and matching hit areas. Run existing typecheck/compile and native
-build/package checks relevant to the change. Exercise all three sizes with the
-real extension in an ordinary Windows VS Code test profile and Remote-WSL; capture
-readable examples, verify Insert/Discard and keyboard operation, and run T11.
+### M3.3: verification and product acceptance
 
-A full Code OSS source build is not required for M3. Record the existing status-bar
-focus defect as a baseline limitation, not a newly solved feature. No regression
-is acceptable, but a pre-existing #38 failure is not a reason to withhold sizes.
-Do not require the entire focus-research matrix to validate a geometry-only change.
+Test defaults, native argument parsing, layout bounds, hit testing and next-session
+changes. Run relevant TypeScript/native/package checks. Verify all sizes on real
+Windows at 100%, 125%, 150% and 200% scaling and mixed-DPI monitors where available.
+Check normal Windows VS Code and Remote-WSL, both overlay modes, no-overlay modes,
+Insert/Discard, shortcuts and no new focus regression. Capture synthetic examples.
 
-Update settings help, README and relevant test notes with actual behavior. Before
-release use M4 below. M3 is not GUI-validated merely because the native build is green.
+Update help/README/test notes and apply M4. A full Code OSS build is not required.
+Record existing #38 failures as baseline limitations, not as fixed behavior or
+new failures caused by sizing. Never mark GUI checks passed from geometry alone.
 
-## 4. M2: recovery and narrowly scoped reliability fixes
+## 4. M2: recovery, clipboard and lifecycle reliability
 
-M2 does not depend on proving H1. Keep its changes separate from M3.
+**Status: planned, after M3 in the recommended order.**
+Branch: `fix/transcript-recovery`; independent of H1.
 
-### M2.1: retain one completed transcript
+### M2.1: retain the latest completed result
 
-Save the latest nonempty completed transcript in memory BEFORE attempting paste,
-including when paste later throws or silently misses the intended input. Add
-Copy Last Transcript, Insert Last Transcript and Clear Last Transcript commands.
-Do not automatically copy every result permanently to the clipboard or persist
-transcripts/audio in a database. Do not log dictated contents. Document that
-extension reload/restart ends memory-only recovery.
+Save the latest nonempty completed transcript in memory BEFORE insertion. Expose
+Copy Last Transcript, Insert Last Transcript and Clear Last Transcript. A later
+valid result replaces the saved result; successful insertion does not immediately
+erase it because opaque targets cannot reliably acknowledge acceptance.
 
-Empty/no-speech, cancelled or failed transcription attempts must not create a
-new recovery item or erase the previous valid transcript. A later valid transcript
-replaces the previous one. Clear explicitly removes the current saved item.
-With no saved text, commands should behave predictably and without inserting
-placeholder text. Serialize reinsertion with the dictation lifecycle to avoid
-overlapping pastes. No automatic retry of uncertain insertion: that can duplicate
-text. A keyboard-invokable reinsertion path must not first open a focus-stealing
-menu. Document its current target limitations honestly; it is not evidence of a
-new generic selection-restoration API. Copy remains an explicit fallback.
+Empty/no-speech, failed or cancelled attempts do not erase the previous valid
+result. Clear removes it; reload/restart ends memory-only recovery. Do not log
+contents or add persistent audio/transcript history. Copy is explicit, not an
+automatic permanent clipboard replacement.
 
-### M2.2: clipboard restoration without clobbering a newer copy
+Reinsert must have a keyboard-invokable path that does not open a focus-stealing
+menu first. Serialize it with active dictation/paste; do not silently queue a paste
+for an unrelated later target. No automatic retry of an uncertain insertion.
+Document existing target limitations honestly; recovery is not a focus fix.
 
-The baseline reads/writes clipboard strings, sends Ctrl+V and restores the saved
-string after 120 ms. Restore only if the clipboard still belongs to that operation;
-never overwrite a newer copy from the user or another application. Evaluate the
-check-and-restore race, not only a comparison of text values. A longer timeout or
-identical string contents is not proof of ownership or successful insertion.
+Exit: retention, clearing, no-result behavior and exactly-once manual reinsertion
+have unit and targeted Windows evidence.
 
-Record and test the supported format policy before changing native clipboard
-handling. Prefer preserving an existing native payload when feasible; do not claim
-images, files or rich text are preserved by a string-only implementation. A design
-that can destroy unsupported clipboard content needs an explicit safe fallback or
-user-approved limitation before release. Do not promise universal format support
-without implementing it. Keep any necessary native helper narrowly scoped and
-handle clipboard-busy/error cases without losing the saved transcript.
+### M2.2: restore clipboard only when still owned
 
-Tests: old plain-text value, empty clipboard, newer copy during the operation,
-newer copy with identical text, restore failure and representative non-text content.
-Include Unicode and multiline text, cleanup on helper failure and no duplicate paste.
+The baseline saves clipboard text, sends Ctrl+V and restores after 120 ms.
+Prevent restoration from overwriting a newer copy, including an identical-text
+copy. Comparing only string values or increasing a delay is insufficient. Design
+and test the ownership check/restore race using the appropriate native primitives.
+Do not hold the clipboard open across the target's paste operation.
 
-### M2.3: concrete asynchronous lifecycle regressions
+Define supported formats before changing native handling. Prefer preserving an
+existing payload where feasible, but do not promise arbitrary delayed-rendered,
+image, file or rich-text preservation from a saved string. Unsupported content
+needs a safe non-destructive fallback or an explicitly accepted limitation before
+release. Keeping the transcript for explicit recovery is preferable to silently
+clobbering a payload. Keep new native responsibilities small.
 
-Test disposal while preparing/starting the recorder/transcribing, duplicate Stop,
-recorder failure and late callbacks. The baseline `DictationEngine.dispose()` only
-cancels a present recorder session; a transcription already pending has no such
-session. Treat a late insertion after disposal as a source-visible risk to reproduce
-and fix, not as a GUI failure already observed. Prevent obsolete operations from
-inserting or reviving controls after disposal. Preserve WAV cleanup and usable
-idle/error state. Do not turn this into a wholesale engine refactor or add a new
-user-facing cancel-during-transcription feature without a separate decision.
+Tests include empty/text/Unicode/multiline content, a newer different or identical
+copy, clipboard contention, helper/restore failure and representative non-text
+formats. API acceptance is not proof that an application consumed the clipboard.
 
-Exit: T12/T13 and applicable cancellation/failure cases pass with focused unit and
-Windows evidence. Retention, clipboard format and lifecycle claims match what was
-tested. Remaining opaque-target limits stay explicit; recovery does not close #38.
+Exit: ownership/format policy is documented and tested; no blind restoration or
+automatic duplicate insertion is introduced.
 
-## 5. M1: separate focus investigation, not the product release gate
+### M2.3: prevent obsolete asynchronous work
 
-M1.1 identified H1: cancel primary mouse-down defaults on the genuine item inside
-VS Code's renderer, leaving click execution and keyboard navigation intact.
-No sufficient stable extension-only mechanism was established by that assessment.
-This is not proof that every possible integration is impossible. Recheck current
-supported APIs when investigation resumes; do not repeat the entire M0 discussion.
+Reproduce and test disposal during preparation, recorder startup and pending
+transcription; duplicate Stop; recorder errors; late callbacks and cleanup.
+The inspected engine clears its session before awaiting transcription, while
+`dispose()` only cancels a currently stored session. Late insertion is therefore
+a source-visible risk, not a GUI failure already measured.
 
-M1.2's diagnostic exists on the isolated experiment branch. **It has not met its
-build/artifact completion gate.** On reinspection, [run 34735635848][run] has failed
-baseline/H1 hosts and a successful kit. The [H1 job][h1-job] got through dependency
-installation, bundling and package creation, then ended with
-`Error: spawn signtool.exe ENOENT`. The signing utility was not found by that
-process; this does not prove it is absent from the image. The baseline job is also
-failed, but its terminal log was not independently diagnosed in this reassessment.
-Earlier CRLF-source and VS2022-detection problems had already been corrected.
+Invalidate obsolete operations before state updates/insertion; clean temporary
+WAVs and workers, including a recorder acquired after disposal. Avoid an unrelated
+engine rewrite. This does not add user-facing cancel-during-transcription by itself.
+These guards also provide the foundation for rejecting stale preview work in M5.
 
-No complete matching three-artifact set exists for that run. These are build
-failures, not observed focus failures. There is no new real Codex acceptance result.
-Retain the source-pinned experiment and its [procedure][probe], but do not rerun or
-repair it during M3/M2 simply because the old handoff said to do so.
+Exit: stale work cannot insert or revive controls, and error/idle cleanup remains
+usable. Apply T12/T13, affected failure cases and M4.
 
-When the user resumes this workstream:
+## 5. M5: live transcript preview
 
-- **M1.2:** diagnose the precise build prerequisite, including executable search
-  paths, without skipping checks or spoofing product/toolchain identity. Establish
-  an operable baseline and real Codex compatibility before more infrastructure.
-  Reuse a suitable isolated checkout where available. Keep baseline/H1 provenance
-  and the same probe version; compare matched builds, not unrelated versions.
-- **M1.3:** run the smallest decisive real-Windows cases, including caret/selection,
-  literal Start versus Stop, latest-target changes and keyboard behavior. Fixed
-  `UD_TEST` first, real recording second. A build, mocked control or synthetic
-  dispatch alone cannot prove native pointer/composer behavior.
-- **M1.4:** choose a delivery direction from observations. An upstream patch/API
-  proposal requires supported availability before it becomes a shipped literal fix.
-  Never require ordinary users to run our Code OSS build. An optional native
-  launcher remains a separate product decision; PR #49 stays frozen.
+**Status: newly planned; not implemented.** Branch: `feat/live-transcript-preview`.
+Recommended first release: optional preview in the recording overlay, final paste
+once after Stop. M3 supplies layouts; M2 supplies retention/lifecycle safeguards.
 
-A specific API/compatibility/build blocker is a valid recorded outcome, not an
-excuse to replace requirements silently. Do not claim that a stronger model can
-supply an unavailable platform capability or substitute for Windows evidence.
+### M5.1: prove the local preview path and performance
 
-## 6. M0.3 acceptance reference (retained IDs, no fabricated passes)
+Inspect the actual pinned backend before coding. The current adapter posts a
+complete WAV to a warm local server and collects a completed text response; the
+native recorder currently emits readiness, level and action messages, not partial
+transcripts. Adding a text label or a supposed streaming flag is not sufficient.
+The upstream [whisper-stream example][stream] demonstrates repeated microphone
+inference, but it is an example with its own capture path, not a ready integration.
 
-The following 18 rows are retained from the detailed plan. F = focus/insertion,
-R = recovery/clipboard, S = sizing and H = helper/fallback. Run variants separately;
-a successful alternative launcher is never labelled a genuine-status-bar result.
+Test the smallest candidate using the existing recorder plus bounded audio
+snapshots and the existing warm worker. Compare a native streaming worker only
+if measurements justify the additional integration. Do not open a second
+microphone recorder, add Python/CUDA as a requirement or start a fresh CLI/model
+for every preview update. Current inference explicitly disables GPU; benchmark
+the actual deployed CPU/model path, not an assumed accelerated configuration.
+
+Measure warm/cold first-use latency, delay from speech to visible partial text,
+update cadence, CPU/RAM and finalization delay on identified hardware. A useful
+initial goal is updates roughly every 1-2 seconds after warm-up, not a promised
+per-word guarantee. Lock a measured supported operating range before production
+integration. Slow inference must cause reduced preview refresh or a stated
+final-only fallback, not a growing queue or broken recording.
+
+Exit: record the selected mechanism, measurements, bounds and success/failure
+criteria. Do not promote an unmeasured preview to the default or ship fake live text.
+
+### M5.2: bounded capture and decoding lifecycle
+
+Keep one microphone/capture owner and preserve the complete recording for final
+recognition. Transfer bounded PCM/snapshots from the recorder through a worker;
+no ASR, blocking pipe writes or heavy encoding/allocation in the audio callback.
+Do not treat an unfinished WAV as a valid independently finalized audio file.
+If temporary snapshot WAVs are used, finalize each correctly and delete it.
+Waveform history is not the PCM source or the live-recognition window length.
+
+Version/frame new protocol messages and validate lengths, session IDs, sequence
+numbers and UTF-8. A transcript containing newlines, quotes or the words STOP/CANCEL
+must remain text, never a recorder command. Preserve existing control messages.
+Enforce bounds in both producer and consumer; content is not diagnostic logging.
+
+Use at most one active preview decode and one replaceable latest pending snapshot
+initially. Drop superseded work, not original audio. Associate results with session
+and snapshot IDs; ignore old-session, out-of-order and post-Stop results. On Stop,
+stop scheduling preview and give final recognition priority. Closing an HTTP
+request does not necessarily cancel backend computation: define bounded wait,
+backend cancellation or safe restart behavior explicitly.
+
+Do not let a preview error trigger repeated expensive CLI fallbacks or tear down
+a worker used by final recognition without coordination. Degrade preview for the
+session while retaining the recording and ordinary final-output path. Cancellation,
+disposal and helper errors must drain/clean workers and bounded buffers safely.
+
+Exit: slow/stale/failing preview cannot corrupt audio, cause unbounded backlog or
+race another session's final insertion.
+
+### M5.3: non-activating preview UI in all sizes
+
+Proposed setting: `universalDictate.liveTranscript` (boolean, default false),
+applied next session. Show read-only provisional original-language text in the
+existing enhanced overlay; no per-word edits to Codex, the editor or clipboard.
+Hypotheses can revise earlier words. Replace/reconcile preview snapshots rather
+than blindly appending every partial. Do not present a stability heuristic as a
+probability or guarantee that a word cannot change.
+
+Keep the same selected window footprint. In Small, show a short latest-text line;
+Medium/Large can show more wrapped lines. Reallocate waveform/padding space as
+needed, keep controls readable and do not auto-enlarge the window. Exact line
+counts and text bounds must pass layout tests, not become inflexible promises.
+Do not turn preview into an editable field that steals the insertion target.
+
+In Status bar only/Off, leave those visualization semantics unchanged: no transcript
+surface and no needless preview decoding. Explain that live preview requires an
+overlay; never force one on. No screen-reader announcement per token or focus-
+stealing notification loop. Verify Unicode/font fallback and right-to-left samples.
+
+If automatic source-language detection is used, test behavior on short clips and
+mixed-language speech; do not continually reinterpret the user's output language.
+Configuration changes apply next session. Translation interaction is defined in M6.
+
+Exit: real words update visibly, controls stay non-activating and all three sizes
+remain usable with preview on or off.
+
+### M5.4: finalize once, recover and validate
+
+After Stop, finalize the full recording, quiesce obsolete preview jobs and obtain
+one authoritative final transcript. Preserve the existing final ASR fallback.
+The final result may differ from the preview: retain it under M2, then paste once
+at the latest intended target. Never concatenate overlapping partials as the
+unverified final result or use the preview as a second paste.
+
+If final recognition fails, do not silently insert a provisional fragment or
+replace the previous completed recovery item with it. Any later partial-recovery
+feature must be explicit and labelled provisional; it is not part of M5 v1.
+Keep complete audio cleanup and microphone shutdown independent of UI repainting.
+
+Test silence/no-speech, pauses, repeated words, technical vocabulary, Unicode,
+retargeting while previewing/finalizing, fast Stop/Discard, repeated sessions,
+slow/failing workers and at least one multi-minute session. Verify bounded memory
+and queue behavior, no duplicated/missing boundary text and exactly one final
+paste attempt. Record recognition errors separately from UI/targeting errors.
+Run new T14-T16 plus affected existing cases and M4. No #38 closure is implied.
+
+## 6. M6: optional translation
+
+**Status: tentative feature; scope decision before implementation.**
+Proposed branch: `feat/translate-to-english`. This need not wait for M5.
+
+### M6.1: agree output scope and verify backend capability
+
+Keep spoken/input language separate from output task. Recommended v1 choices:
+**Original language** (default) and **Translate to English**. For example, spoken
+German can yield German text or English text. Setting the recognition language
+to English is not a translation implementation.
+
+The pinned [whisper.cpp server documentation][server] exposes translation into
+English. The [Whisper model documentation][whisper] distinguishes translation-
+capable multilingual models from English-only models and turbo. Verify the
+bundled model and both actual runtime paths; a flag's existence is not a quality
+validation. Arbitrary targets such as English-to-German are not provided by
+Whisper's built-in English-translation task.
+
+The user has not chosen translation direction or approved an additional backend.
+Confirm English-only v1 before implementing M6. For another target, first define
+local model/runtime, supported language pairs, quality, size, licensing and
+resource requirements; any cloud/cost/privacy change needs separate approval.
+Do not block M3/M2/M5 on that optional decision.
+
+Exit: target languages and backend are explicitly chosen, without an invented
+multi-language capability or silent online fallback.
+
+### M6.2: consistent final-output mode and recovery
+
+Proposed setting: `universalDictate.outputMode` with `transcribe` and
+`translateEnglish`, default `transcribe`, captured once at session start. Display
+the chosen output mode before recording in the existing settings/status/overlay
+feedback without adding focus-stealing dialogs during insertion.
+
+Propagate the task explicitly through the VS Code adapter, core Whisper runtime,
+server request and CLI fallback. Verify the pinned server's per-request behavior;
+send/reset task state deliberately so one translation cannot affect the next
+ordinary transcription. Final fallback must keep the same input language and
+output task. Test both directions of switching modes without restarting the app.
+
+For v1, live preview remains original-language text, clearly labelled when final
+output will be English. Translate the final recording/result after Stop, not every
+unstable partial. Do not silently start a second expensive full decode just to
+claim that both source and translation are available. Recovery stores the actual
+completed output with its mode/language metadata. Keep the source transcript only
+if actually produced; provisional preview is not a verified final source record.
+
+Follow the latest target until the single final paste, including while translation
+is pending. On translation failure retain the previous valid result and report the
+failure; do not silently paste source text under an English-output label. Any
+explicit source-output fallback must be separately described to the user.
+
+Exit: settings, both backends, preview labels and recovery agree on what language
+will be inserted, with no cross-session task leakage or automatic submission.
+
+### M6.3: quality and regression acceptance
+
+Test original/English output, manual/auto source language, server/CLI paths, mode
+switches, errors, empty/no-speech audio and preview on/off. Use synthetic bilingual
+samples containing numbers, units, names, negation and technical terms. Assess
+meaning, omissions and numerical fidelity; do not require one exact phrasing for
+all valid translations or infer semantic quality from flag/HTTP tests.
+
+Document translation limits of the actual bundled model. Do not download a larger
+model, add an LLM postprocessor or change defaults silently to hide poor quality.
+Run T17/T18, affected recovery/finalization checks and M4. Broader target languages
+and live translated captions remain separate follow-on work.
+
+## 7. M1: focus preservation as a separate evidence-driven track
+
+The last source assessment identified H1: cancel primary mouse-down defaults on
+the genuine item inside VS Code's renderer while keeping click/keyboard handling.
+No sufficient supported extension-only route was established then. Recheck current
+public capabilities when resuming, not on every sizing/preview implementation step.
+
+| Sub-milestone | Current state | Next bounded action |
+| --- | --- | --- |
+| M1.1: capability assessment | Recorded in [prior plan][history] | Reuse the evidence; update only changed capability assumptions |
+| M1.2: smallest isolated diagnostic | Implemented, host-build gate failed | Diagnose build prerequisite and establish a runnable baseline plus real Codex compatibility |
+| M1.3: core Windows comparison | Not run | Compare matched baseline/H1 with real caret/selection and independent Start/Stop paths |
+| M1.4: delivery decision | Not reached | Record passing scope, failures and upstream availability; ask only when an alternative requires a product choice |
+
+[Run 34735635848][run] still reports successful kit and failed baseline/H1 hosts.
+The prior [H1 log][h1-job] ended with `Error: spawn signtool.exe ENOENT` after
+bundling/packaging; it did not establish a focus failure. Executable lookup is the
+observed issue, not proof the tool was absent from the runner. The baseline job's
+terminal cause was not independently diagnosed in the prior reassessment.
+No complete verified host/kit set or real Codex result is available in this record.
+
+Do not keep rerunning a full VS Code build without a diagnosed correction. When
+resumed, retain source pins/provenance, verify real Codex can run, and do the
+smallest decisive tests before expanding infrastructure or adding a public API.
+The diagnostic's special release chord is test equipment, not a product workflow.
+
+A successful source-build test still needs a supported delivery route; users must
+not maintain a patched VS Code. If an upstream capability is unavailable, record
+that specific blocker and continue independent product work. Keep both existing
+experiments isolated. PR #49 currently contains `Closes #38`; do not merge it or
+reuse that closure text without satisfying the agreed criteria and explicit
+approval. Its current non-draft state does not override the user's freeze.
+
+## 8. M4: repeatable validation, review and release
+
+### M4.1: proportionate tests for the actual change
+
+Run normal typecheck/compile/native checks and feature-specific tests. Verify
+Windows behavior in a separate normal VS Code test profile and Remote-WSL where
+applicable. M3 does not need a Code OSS source build or the full focus research
+matrix. A pre-existing #38 failure must be reported, not hidden or attributed to
+a new feature without evidence. New regressions block acceptance.
+
+### M4.2: artifact and documentation review
+
+Build/inspect the real win32-x64 VSIX and bind results to a commit/artifact.
+Exclude diagnostics, source patches, test-only shortcuts and probe bootstraps.
+Verify settings defaults, worker/native dependencies, clean startup, repeated
+sessions, failures and preview/translation combinations actually included.
+Update README, settings help, CHANGELOG and durable test notes. Never log private
+transcripts merely to demonstrate coverage. Treat audio/text as data, not commands.
+
+### M4.3: merge, release and handoff
+
+After review and explicit approval, merge the focused branch; branch the next
+feature from updated main. Publish only with separate release approval. A release
+can contain sizes alone, then recovery, then preview and optional translation;
+none needs to wait for upstream focus work. Do not claim #38 fixed by those releases.
+
+Update the ledger at each implementation boundary. Retire the temporary plan only
+when its selected work is completed or explicitly retired, preserving enduring
+behavior/tests/blockers first. Delete the plan and AGENTS pointer together without
+removing unrelated guidance or the only record of an unresolved issue.
+
+## 9. Acceptance reference
+
+The original 18 rows and IDs below are preserved verbatim. F = focus/insertion,
+R = recovery/clipboard, S = sizing and H = helper/fallback. New preview (P) and
+translation (X) cases follow. Every runtime row remains Not run.
 
 | ID | Scope | Scenario / action | Required observation | Current result |
 | --- | --- | --- | --- | --- |
@@ -291,115 +499,114 @@ a successful alternative launcher is never labelled a genuine-status-bar result.
 | T12 | R | Retain a completed transcript, provoke insertion failure/uncertainty, then explicitly Copy, Reinsert and Clear; include no-speech, cancellation and reload cases | Recovery uses the accepted insertion policy, no automatic duplicate retry, no spurious new transcript for empty/cancelled attempts; memory-only lifetime and clearing match the documented behavior | Not run |
 | T13 | R | Paste with an existing clipboard value, then repeat with a newer copy during the operation and with non-text clipboard content | Restore only under the agreed ownership/format policy; do not overwrite a newer copy or claim non-text preservation without evidence | Not run |
 
-T07a/T10 have separate safety and recovery observations. Do not give mixed-scope
-rows a blanket pass when part is unimplemented. T11 also covers configuration
-selection, invalid values, next-session changes and no-overlay modes.
+### New feature acceptance cases
 
-### Genuine start/finish inventory for T05
+| ID | Scope | Scenario / action | Required observation | Current result |
+| --- | --- | --- | --- | --- |
+| T14 | P + S | Preview on/off in each size and visualization mode; Unicode, RTL and changing hypotheses | Bounded readable provisional text; no forced overlay, focus change, partial target edit or clipboard write | Not run |
+| T15 | P + R | Slow/out-of-order previews, worker death, Stop/Discard/dispose and next-session restart | No stale update, unbounded queue or lost recording; authoritative final result retained and at most one paste attempt; no partial promoted to final | Not run |
+| T16 | P | Warm/cold latency, technical phrases, pauses, silence and multi-minute recording on identified hardware | Report actual text delay, CPU/RAM, finalization time and bounded backlog; recognize quality limits rather than promise instant words | Not run |
+| T17 | X + R | Source/original versus English output; source auto/manual, server/CLI, mode changes and failure | Correct task on both paths, no mode leakage or silent source-language fallback; recovery metadata and output agree | Not run |
+| T18 | P + X + S + F regression | Released combinations of size, preview, output task and mouse/keyboard finish; retarget during final processing | Preview/final language labels agree, no surprise resize and one final output at intended target where supported; known #38 limits explicit | Not run |
 
-| Visualization mode | Start methods, each tested | Finish methods, paired with each start |
+### Coverage and evidence rules
+
+T07a/T10 split safety from recovery. Do not mark an entire mixed-scope row passed
+when one part is unimplemented. T11 includes setting/default validation and
+next-session/no-overlay behavior. M5 requires T14-T16 and affected T01-T13; M6
+requires T17/T18 and affected finalization/recovery cases. Run T18 for feature
+combinations actually shipped; it must not make optional M6 a dependency for M5.
+
+The original genuine start/finish inventory remains:
+
+| Visualization | Start methods, each tested | Finish methods paired with each start |
 | --- | --- | --- |
-| Enhanced overlay (`enhancedOverlay`) | Genuine status-bar Dictate; Ctrl+Alt+D | Status-bar Stop; Ctrl+Alt+D; overlay Insert |
-| Both (`both`) | Genuine status-bar Dictate; Ctrl+Alt+D | Status-bar Stop; Ctrl+Alt+D; overlay Insert |
-| Status bar only (`statusBar`) | Genuine status-bar Dictate; Ctrl+Alt+D | Status-bar Stop; Ctrl+Alt+D |
-| Off (`off`) | Genuine status-bar Dictate; Ctrl+Alt+D | Status-bar Stop; Ctrl+Alt+D |
+| Enhanced overlay | Genuine status-bar Dictate; Ctrl+Alt+D | Status-bar Stop; Ctrl+Alt+D; overlay Insert |
+| Both | Genuine status-bar Dictate; Ctrl+Alt+D | Status-bar Stop; Ctrl+Alt+D; overlay Insert |
+| Status bar only | Genuine status-bar Dictate; Ctrl+Alt+D | Status-bar Stop; Ctrl+Alt+D |
+| Off | Genuine status-bar Dictate; Ctrl+Alt+D | Status-bar Stop; Ctrl+Alt+D |
 
-These are 20 baseline start/finish/mode combinations, each with caret and selection
-variants when claiming the full literal fix. A passing overlay Insert path cannot
-hide a status-bar Stop failure. An alternative has its own separately labelled
-inventory. Do not silently remove a control to eliminate a failing case.
+These are 20 baseline combinations, with caret/selection variants for a claimed
+literal fix. Overlay Insert success cannot conceal status-bar Stop failure. An
+alternative launcher has a separately labelled inventory; do not remove controls
+to hide failing paths. Test unchanged keyboard navigation/activation separately.
 
-**Fixtures:** fixed transcript `UD_TEST`; caret fixture `left  right` with the caret
-between the two spaces; selection fixture `left old right` with only `old` selected.
-Both should become `left UD_TEST right`. Reset between trials, distinguish source
-and destination inputs, and check that other inputs remain unchanged. Use the
-real Codex composer, an untitled editor, a named ordinary input such as Find and
-an unsaved external text document. Never use a terminal or submit a chat for testing.
+Fixed-text fixtures: `UD_TEST`; caret between the two spaces in `left  right`,
+or only `old` selected in `left old right`. Expected result: `left UD_TEST right`.
+Reset between trials and check every non-destination remains unchanged. Use real
+Codex, an untitled editor, a named ordinary input and an unsaved external text
+document. Never submit a chat or paste into a terminal for these tests.
 
-Retargeting during transcription needs an observed pending interval, not an assumed
-sleep. Completion must not steal focus. The existing diagnostic's special release
-chord is test equipment, not a product confirmation requirement. For an external
-target while recording, finish with the non-activating overlay; for an external
-target during transcription, stop in VS Code first, then select that external
-input. Do not pretend the VS Code shortcut is global. Test Esc in its supported
-recording context; no new transcription-cancellation feature is implied.
+Observe a controlled pending interval for retargeting, not an assumed sleep.
+Its completion trigger must not steal focus. For external retargeting during
+recording, finish with the non-activating overlay. During transcription, stop in
+VS Code first and then choose the external input. Do not describe the VS Code
+shortcut as global. Esc is a recording-context test, not a new cancel-processing
+feature. No corrective click or automatic retry may be hidden in a passing run.
 
-A valid-target pass means exactly one insertion at the intended latest caret or
-selection, unchanged surrounding/non-destination text, no corrective click, no
-extra confirmation solely for retargeting, no submission and no automatic retry.
-Actual text matters; blinking or input-API success alone is not sufficient.
+A claimed #38 fix requires applicable F cases and all relevant T05 paths, real
+Windows/Codex plus local/WSL contexts. Repeat exercised core cases for at least
+five trials on the same build and retain failures; this is not a statistical
+reliability guarantee. Follow fixed-text tests with actual transcription.
+For live preview and translation, use synthetic audio and separately assess
+recognition/translation quality versus insertion and UI behavior.
 
-**Proportional validation:** M3 runs its configuration/native-layout tests, T11 and
-relevant ordinary recording/control regressions. M2 runs T12/T13 and affected
-lifecycle/cancellation/target cases. A claimed #38 fix requires all applicable F
-cases and T05 paths, local/WSL and relevant window/helper variants. Repeat exercised
-core focus cases for at least five consecutive trials on one build and preserve
-all failures; this is a regression check, not a statistical reliability guarantee.
-Follow fixed-text evidence with real transcription, comparing insertion with the
-actual generated transcript rather than confusing ASR and insertion errors.
+Record date/tester, branch/commit/artifact, Windows/VS Code/Codex/backend versions,
+CPU/GPU and DPI where relevant, local/WSL context, named inputs, settings, initial
+text/selection, ordered actions, expected/actual result, timing/resource metrics,
+trial counts and evidence/limits. No real private transcript content in public logs.
+Allowed outcomes: Pass, Fail, Not run, Blocked (prerequisite) and Not applicable
+(reason tied to feature scope). Never use Not applicable for a failing required
+case, or compilation/mocks/Linux-only checks as Windows GUI evidence.
 
-For each result record date/tester, commit/artifact, Windows/VS Code/Codex versions,
-local/WSL context, named control, DPI/monitors, mode/start/finish path, initial
-text/selection, ordered deliberate actions and phase, generated/supplied text,
-expected/actual output, duplicates/submission check, trials and evidence/limits.
-Use synthetic content, never private transcripts. Outcomes: Pass, Fail, Not run,
-Blocked (specific prerequisite) or Not applicable (reason tied to feature scope).
-Never mark a required failing/unimplemented case Not applicable. Without Windows
-or real Codex access, mark the relevant cases Blocked/Not run and provide the
-smallest manual procedure. Do not report Linux/static tests as Windows GUI passes.
+## 10. Live handoff ledger and next session
 
-## 7. M4: release validation and retirement
-
-Use the production branch's normal typecheck/compile/native/package checks and
-its new targeted tests. Inspect the actual VSIX contents and tie manual evidence
-to the tested commit. Keep diagnostics, source patches, test-only shortcuts and
-probe bootstraps out of product packaging. Do not copy the experimental workflow
-into the release merely to make CI look more comprehensive.
-
-Update durable README/settings help, CHANGELOG and testing notes for the behavior
-actually shipped. A size/recovery release may retain the known #38 limitation;
-it must not advertise a solved focus problem. Versioning, commit/push, merge,
-publishing and issue closure follow the user's explicit approvals.
-
-After each completed implementation chunk, update the ledger below with changed
-files, actual tests and next action. Once work is complete or explicitly retired,
-move lasting behavior/tests/limitations into the regular docs or issue record,
-then remove this temporary plan and its AGENTS pointer together. Preserve unrelated
-agent guidance and never delete the only record of an unresolved issue.
-
-## 8. Live handoff ledger
-
-| Milestone | Status at this reassessment | Next action |
+| Work | Status | Next action |
 | --- | --- | --- |
-| M0.1-M0.3 | Complete as specifications | Preserve latest-target policy and acceptance criteria; no replanning gate |
-| M3.1-M3.3 | Not started | Recommended next Codex task: overlay sizes, on a product branch from main |
-| M2.1-M2.3 | Not started | Recovery, clipboard policy/implementation and scoped lifecycle tests after sizing |
-| M1.1 | Assessment recorded | Reference the source-backed hypothesis; recheck APIs only when resuming |
-| M1.2 | Diagnostic implemented; host build gate failed; separate workstream paused in this order | Resume only when focus investigation is prioritized; missing signtool lookup is the observed H1 blocker |
-| M1.3-M1.4 | Not started | No real Windows/Codex focus outcome or production route selected |
-| M4 | Not started | Run per product release candidate, not only after upstream work finishes |
+| M0 | Complete as specifications | Preserve latest-target and evidence contract |
+| M3.1-M3.3 | Planned; no implementation recorded | Next Codex task: overlay sizes from main |
+| M2.1-M2.3 | Planned | Recovery/clipboard/lifecycle after sizing |
+| M5.1-M5.4 | Newly planned | Measured live-preview feasibility before streaming integration |
+| M6.1-M6.3 | Tentative | Confirm translation direction and backend scope before implementation |
+| M1.1 | Assessment recorded | Reuse evidence on research resumption |
+| M1.2 | Diagnostic exists; build gate failed; independent track | Resume only when explicitly prioritized |
+| M1.3-M1.4 | Not run / not reached | Actual Windows/Codex comparison and delivery decision |
+| M4.1-M4.3 | Not started for product changes | Apply per accepted product candidate |
 
-Reassessment changed this document and root `AGENTS.md` only. Main, the original
-frozen branch and the diagnostic branch are untouched; no new build was triggered.
-Source snapshot and prior-plan hashes were checked, not functionality. All 18
-runtime rows remain Not run. The next agent must inspect the actual local worktree;
-this document does not certify that the user's machine has a clean checkout or
-all Windows build/test prerequisites.
+This update changes the plan and AGENTS guidance only. No runtime, feature branch,
+merge, release, issue closure or build dispatch occurs as part of planning. The
+original 18 test rows and the five new rows all remain Not run. The target language
+for optional translation and exact live-preview latency/layout are still future
+scope/measurement decisions, not reasons to repeat M0 or defer the size work.
 
-For continuation append a concise entry with milestone/substep, branch/commit,
-files, tests actually run, blockers and next action. Keep one current next task;
-do not maintain contradictory instructions in several handoff documents.
+**Next bounded implementation:** inspect the local checkout and live refs; obtain
+any needed Git/install approval; create `feat/overlay-size-presets` from current
+main with these two docs; implement M3.1-M3.3 only, test and report. Do not repair
+the Code OSS build or begin live decoding/translation in that task. Preview and
+translation have their own later branches; this roadmap is not an instruction to
+build all features in one agent run.
 
-### Sources and preserved history
+At each handoff append milestone/substep, branch/commit, changed files, actual
+checks, blocked decisions and one concrete next action. Keep planned, implemented,
+built and GUI-validated states distinct. The original experiments stay untouched.
+
+## Sources and preserved history
 
 [history]: https://github.com/gcalpay/vscode-universal-dictate/blob/834a1001ef5ef49da36710eb4d2445d600f89f9a/docs/DICTATION_RELIABILITY_PLAN.md
-[probe]: https://github.com/gcalpay/vscode-universal-dictate/blob/834a1001ef5ef49da36710eb4d2445d600f89f9a/diagnostics/m1.2/README.md
 [run]: https://github.com/gcalpay/vscode-universal-dictate/actions/runs/34735635848
 [h1-job]: https://github.com/gcalpay/vscode-universal-dictate/actions/runs/34735635848/job/103666447977
+[stream]: https://github.com/ggml-org/whisper.cpp/blob/v1.9.1/examples/stream/README.md
+[server]: https://github.com/ggml-org/whisper.cpp/blob/v1.9.1/examples/server/README.md
+[whisper]: https://github.com/openai/whisper/blob/main/README.md#command-line-usage
 
-Baseline source map, pinned to the inspected `main`:
+The [earlier product-first handoff](https://github.com/gcalpay/vscode-universal-dictate/blob/0647906e0da7c075f32be27ee29f81baad769306/docs/DICTATION_RELIABILITY_PLAN.md)
+and [M1 diagnostic procedure](https://github.com/gcalpay/vscode-universal-dictate/blob/834a1001ef5ef49da36710eb4d2445d600f89f9a/diagnostics/m1.2/README.md)
+are historical references, not conflicting current work orders.
 
-- [Manifest/settings](https://github.com/gcalpay/vscode-universal-dictate/blob/f0265bc4398643c3b3a27e6d2ad64183b115b6ba/package.json) and [controller/settings menu](https://github.com/gcalpay/vscode-universal-dictate/blob/f0265bc4398643c3b3a27e6d2ad64183b115b6ba/src/extension.ts).
-- [VS Code recorder adapter](https://github.com/gcalpay/vscode-universal-dictate/blob/f0265bc4398643c3b3a27e6d2ad64183b115b6ba/src/recorder.ts), [core recorder](https://github.com/gcalpay/vscode-universal-dictate/blob/f0265bc4398643c3b3a27e6d2ad64183b115b6ba/src/core/recorder.ts) and [native overlay](https://github.com/gcalpay/vscode-universal-dictate/blob/f0265bc4398643c3b3a27e6d2ad64183b115b6ba/native/record-audio.cpp).
-- [Dictation lifecycle](https://github.com/gcalpay/vscode-universal-dictate/blob/f0265bc4398643c3b3a27e6d2ad64183b115b6ba/src/core/dictation.ts), [clipboard orchestration](https://github.com/gcalpay/vscode-universal-dictate/blob/f0265bc4398643c3b3a27e6d2ad64183b115b6ba/src/core/paste.ts) and [native paste helper](https://github.com/gcalpay/vscode-universal-dictate/blob/f0265bc4398643c3b3a27e6d2ad64183b115b6ba/native/windows-fast-paste.cpp).
-- [Issue #38](https://github.com/gcalpay/vscode-universal-dictate/issues/38) and [frozen PR #49](https://github.com/gcalpay/vscode-universal-dictate/pull/49). Neither is closed or adopted by this handoff.
+Baseline source map, pinned to inspected main:
+
+- [Manifest/settings](https://github.com/gcalpay/vscode-universal-dictate/blob/f0265bc4398643c3b3a27e6d2ad64183b115b6ba/package.json) and [controller](https://github.com/gcalpay/vscode-universal-dictate/blob/f0265bc4398643c3b3a27e6d2ad64183b115b6ba/src/extension.ts).
+- [Recorder adapter](https://github.com/gcalpay/vscode-universal-dictate/blob/f0265bc4398643c3b3a27e6d2ad64183b115b6ba/src/recorder.ts), [core recorder](https://github.com/gcalpay/vscode-universal-dictate/blob/f0265bc4398643c3b3a27e6d2ad64183b115b6ba/src/core/recorder.ts) and [native recorder/overlay](https://github.com/gcalpay/vscode-universal-dictate/blob/f0265bc4398643c3b3a27e6d2ad64183b115b6ba/native/record-audio.cpp).
+- [Whisper adapter](https://github.com/gcalpay/vscode-universal-dictate/blob/f0265bc4398643c3b3a27e6d2ad64183b115b6ba/src/whisper.ts) and [warm server / CLI runtime](https://github.com/gcalpay/vscode-universal-dictate/blob/f0265bc4398643c3b3a27e6d2ad64183b115b6ba/src/core/whisper.ts).
+- [Dictation engine](https://github.com/gcalpay/vscode-universal-dictate/blob/f0265bc4398643c3b3a27e6d2ad64183b115b6ba/src/core/dictation.ts), [clipboard orchestration](https://github.com/gcalpay/vscode-universal-dictate/blob/f0265bc4398643c3b3a27e6d2ad64183b115b6ba/src/core/paste.ts) and [native paste](https://github.com/gcalpay/vscode-universal-dictate/blob/f0265bc4398643c3b3a27e6d2ad64183b115b6ba/native/windows-fast-paste.cpp).
+- [Issue #38](https://github.com/gcalpay/vscode-universal-dictate/issues/38) and [PR #49](https://github.com/gcalpay/vscode-universal-dictate/pull/49). Neither is resolved/adopted by this plan.
