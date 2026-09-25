@@ -1,27 +1,32 @@
 # Agent guidance
 
 Read [docs/DICTATION_RELIABILITY_PLAN.md](docs/DICTATION_RELIABILITY_PLAN.md)
-before continuing reliability or overlay work. Its 2026-09-25 reassessment is the
-current implementation order, replacing older experimental-branch handoffs.
+before reliability, overlay, live-transcript or translation work. The 2026-09-25
+expanded roadmap is the current work order, replacing experimental handoffs.
 
-- The next recommended product task is M3 Small/Medium/Large visualization sizes,
-  then M2 transcript/clipboard reliability. M1 focus research is independent and
-  is not a prerequisite. Do not restart M0 or repair Code OSS during sizing work.
-- Product changes start from the current `main` on a focused feature branch. Keep
-  `docs/dictation-reliability-plan` documentation-only. If main lacks these docs,
-  carry only the updated plan and this file into the authorized feature branch.
-- Keep `fix/preserve-insertion-target` frozen. Do not merge its launcher or the
-  `experiment/m1.2-statusbar-focus-probe` diagnostic into product work. Consult
-  the pinned historical links in the plan only when relevant.
-- Inspect local work and refs first; never reset, stash or overwrite unrelated
-  changes. Keep Git writes, installs and build dispatches within session approval.
-  A planned milestone does not authorize all subsequent milestones or a release.
-- Follow the latest deliberately selected input/caret/selection through
-  transcription. No automatic submission. Recovery or a different launcher is
-  not evidence that the genuine status-bar Issue #38 is fixed.
-- Make small testable changes and run proportionate checks. Update the plan's
-  ledger after each implementation chunk, distinguishing specified, implemented,
-  built and GUI-validated. Never claim real Windows/Codex results from mocks.
-- On completion or explicit retirement, preserve lasting behavior/tests/limits
-  in regular project docs/issues; remove the temporary plan and its pointer
-  together, without deleting unrelated agent guidance.
+- Recommended product order: M3 sizes, M2 recovery/clipboard/lifecycle, M5 live
+  preview, then optional M6 translation. M1 focus research is independent; apply
+  M4 validation to each candidate. Keep IDs; do not restart M0.
+- Next bounded implementation is M3 only unless the user changes priority.
+  Do not fix Code OSS builds or add live decoding during a size-layout change.
+- Product branches start from current main. After review and authorized merge,
+  branch the next feature from updated main. Keep the planning branch docs-only.
+  Carry only this file and the current plan when main lacks them; reconcile any
+  newer local progress rather than overwriting its ledger.
+- Leave `fix/preserve-insertion-target` frozen. Keep the M1.2 diagnostic on its
+  separate experimental branch. Neither belongs in ordinary product packaging.
+- Inspect local changes/refs first. Never reset, clean, stash or overwrite unrelated
+  work. Keep Git writes, installs and build dispatches within session approval.
+  A roadmap is not authorization to implement every milestone, merge or publish.
+- Preserve latest deliberate input/caret/selection through final processing and
+  never auto-submit. Preview v1 is provisional text in the overlay, not repeated
+  pastes into the target. Recovery and alternatives do not prove #38 fixed.
+- Translation is optional: confirm output-language/backend scope before M6.
+  Built-in Whisper translation to English is not arbitrary-language translation.
+  Do not add a cloud dependency or change recording defaults silently.
+- Make bounded testable changes. Record source/build evidence separately from real
+  Windows/Codex observations. Update the plan after each implementation chunk;
+  do not convert unrun acceptance cases into passes from mocks or compilation.
+- After completion or explicit retirement, preserve durable behavior/tests/limits
+  in regular docs/issues and remove the temporary plan and pointer together.
+  Preserve unrelated agent guidance and unresolved evidence.
