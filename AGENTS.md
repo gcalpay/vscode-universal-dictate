@@ -12,9 +12,9 @@ Read [docs/DICTATION_RELIABILITY_PLAN.md](docs/DICTATION_RELIABILITY_PLAN.md) be
 
 ## Current task
 
-**M1.1 is implemented on `feat/overlay-size-presets` at `a32a2ebcc9d9a666e5e11c36c56427f9fc2fbe57`.** The setting, picker, TypeScript propagation, native argument parsing and focused tests are present. Full TypeScript/native/Windows execution has not yet been run in this handoff. Do not start M1.2 unless the user asks to continue; M1.2 and M1.3 stay on this same branch.
+**M1 implementation is complete on `feat/overlay-size-presets`; M1.3 is at the user-review gate.** M1.1 added size settings/propagation. M1.2 added shared Small/Medium/Large native layouts and Per-Monitor V2 DPI handling. Linux CI and Windows native/package CI are green on runtime head `35f458d4759165bc4be48802c8877eb7e2188d4f`. Draft PR #50 is open. The tested VSIX was inspected and contains no test binary/source, agent guidance, native source or docs source.
 
-Do not start M2 while M1 is awaiting review.
+Do not start M2 and do not merge PR #50 until the user has installed/tested M1 on Windows and explicitly approves the milestone.
 
 ## Repository boundaries
 
