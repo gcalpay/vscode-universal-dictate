@@ -116,6 +116,21 @@
           "default": "enhancedOverlay",
           "description": "Controls recording visualizations. Default: enhanced overlay. Changes apply from the next dictation session."
         },
+        "universalDictate.overlaySize": {
+          "type": "string",
+          "enum": [
+            "small",
+            "medium",
+            "large"
+          ],
+          "enumDescriptions": [
+            "Use the compact enhanced recording overlay.",
+            "Use the medium enhanced recording overlay.",
+            "Use the current large enhanced recording overlay."
+          ],
+          "default": "large",
+          "description": "Size of the enhanced native recording overlay. Changes apply from the next dictation session."
+        },
         "universalDictate.waveformTimeSpanSeconds": {
           "type": "number",
           "enum": [
@@ -135,6 +150,7 @@
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "check": "tsc --noEmit -p ./",
+    "test:m1": "npm run compile && node --test test/overlay-size.test.cjs",
     "package:vsix": "npm run compile && vsce package --no-dependencies --target win32-x64 --out universal-dictate-win32-x64.vsix"
   },
   "devDependencies": {

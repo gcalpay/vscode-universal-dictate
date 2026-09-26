@@ -3,8 +3,10 @@
 .deps/**
 docs/**
 native/**
+test/**
 src/**
 .gitignore
+AGENTS.md
 tsconfig.json
 **/*.ts
 **/*.map

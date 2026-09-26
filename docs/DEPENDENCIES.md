@@ -65,6 +65,8 @@ The model is downloaded once on first use into VS Code's local extension storage
 - Retained upstream license: `third_party/whisper.cpp-LICENSE.txt`
 - Role: fully local C/C++ inference of OpenAI's Whisper model on Windows.
 
+The current extension keeps a bundled `whisper-server` process warm when available so model loading can overlap with recording and be reused across dictations. Final transcription falls back to the bundled one-shot `whisper-cli` if the warm worker cannot start or fails. Both paths are local and use the same verified model.
+
 whisper.cpp is a separate implementation of Whisper, not the OpenAI Python reference package. The official x64 whisper.cpp runtime is downloaded and checksum-verified in GitHub Actions, then bundled inside the Windows VSIX. End users do not need Python, PyTorch, Conda, FFmpeg, CMake or WSL-side packages.
 
 ## Supported languages
@@ -81,7 +83,7 @@ The project maintains the code that defines the product:
 - dictation state machine
 - current Windows focused-input paste helper, with the OpenWhispr lineage documented above
 - Windows recorder process and native IPC protocol
-- target/focus preservation
+- focused-input insertion behavior and documented target-preservation limitations
 - terminal safety policy
 - recording UI and input-level visualization
 - language-selection UX
