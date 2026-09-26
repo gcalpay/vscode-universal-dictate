@@ -85,7 +85,7 @@ constexpr EnhancedOverlaySpec enhancedOverlaySpec(OverlaySize size) {
                 98, 116, 8, 8,
                 112, 14, 14,
                 48, 24, 6, 6, 20,
-                14, 9, 9, 7};
+                14, 9, 10, 7};
         case OverlaySize::Medium:
             return EnhancedOverlaySpec{
                 520, 88, 18, 20,
