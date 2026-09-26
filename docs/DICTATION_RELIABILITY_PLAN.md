@@ -75,7 +75,7 @@ A recovery feature, different launcher, smaller overlay, preview or translation 
 
 **Branch:** `feat/overlay-size-presets`.
 
-**Status:** M1.1 implemented at `a32a2ebcc9d9a666e5e11c36c56427f9fc2fbe57`; M1.2/M1.3 not started. Package JSON was parsed successfully and source propagation was reviewed. No dependency install, PR-triggered CI, Windows native build or GUI test was run for this submilestone yet.
+**Status:** M1.1 and M1.2 implemented. M1.3 automated validation is green; real Windows visual/DPI/Remote-WSL review by the user remains the merge gate. Draft PR #50 is open. Runtime/package head tested: `35f458d4759165bc4be48802c8877eb7e2188d4f`.
 
 Goal: add Small, Medium and Large versions of the current enhanced recording overlay without changing recording/transcription semantics.
 
@@ -304,12 +304,29 @@ Every manual result records commit/artifact, Windows/VS Code/Codex versions, loc
 
 Documentation normalization is complete. It was carried to `feat/overlay-size-presets` in docs-only commit `d83783a77ca09822733b8f0813bb40815bdb651e`.
 
-M1.1 implementation commit: `a32a2ebcc9d9a666e5e11c36c56427f9fc2fbe57`.
+M1 branch history relevant to the current review:
 
-M1.1 added the `overlaySize` setting and picker, centralized Small/Medium/Large normalization with Large fallback, propagated the setting through both TypeScript recorder layers, added the native `--overlay-size` parser/state and added focused Node tests for normalization/argument construction. M1.1 deliberately does not change enhanced-overlay geometry yet; all three values still render the current Large geometry until M1.2.
+- Docs-only base: `d83783a77ca09822733b8f0813bb40815bdb651e`.
+- M1.1 setting/propagation implementation: `a32a2ebcc9d9a666e5e11c36c56427f9fc2fbe57`.
+- M1.2 shared native layout/DPI implementation began at `a1f4593dbbc9249b5239030013a837238f408a3f`; subsequent fixes kept compact-path DPI handling normal and Small button text readable.
+- Runtime/package head validated by CI: `35f458d4759165bc4be48802c8877eb7e2188d4f`.
+- Draft review surface: PR #50, “Add Small, Medium and Large recording overlay sizes”.
 
-Validation performed in this handoff: package JSON parsed successfully; changed source paths and native parser/call wiring were re-read from the committed branch. Not run: `npm run check`, `npm run test:m1`, MSVC native compilation, VSIX packaging or Windows GUI behavior. No dependency install or draft PR was created solely to obtain CI.
+M1.1 added `overlaySize` to Settings and the existing picker, validates unknown values to Large and propagates the session-start value through both TypeScript recorder layers to native `--overlay-size`. Status-bar-only/Off do not receive enhanced-overlay size arguments.
 
-**Next action only when the user asks:** continue with M1.2 on this same branch, implement shared native layouts/DPI behavior, then M1.3 validation. Do not create M2 until M1 is reviewed and merged. Do not repair the Code OSS focus experiment or start live preview/translation during M1.
+M1.2 added a single pure layout calculation shared by drawing and Insert/Discard hit testing. Logical targets are Small 380x64, Medium 520x88 and Large 740x128. The Large 96-DPI waveform/divider/button geometry is explicitly regression-tested against the previous coordinates. The enhanced overlay opts into Per-Monitor V2 before UI creation, obtains the window DPI, scales geometry/fonts/pens and recalculates cached layout/fonts on `WM_DPICHANGED` while using Windows' suggested resize rectangle. This follows Microsoft's guidance that raw Win32 PMv2 applications must handle DPI-sensitive layout themselves and respond to DPI changes.
+
+M1.3 evidence:
+
+- local pure C++ layout test compiled with g++ and passed;
+- PR run `36204901952` (CI): typecheck, compile, overlay-size TypeScript tests and C++ geometry test all passed;
+- PR run `36204901970` (Windows package): TypeScript checks/tests, pinned miniaudio fetch, MSVC layout test, native helper compilation, pinned whisper.cpp fetch, VSIX packaging and artifact upload all passed;
+- tested artifact ID `10892728545`, workflow digest `sha256:18742ce5232edaeed621f3e670b055b1c9ef2304a4244af60ff9d6f6f8887bea`;
+- extracted VSIX SHA-256 `ec377efbd9d6498479a3fc89bb1ee75d1ae0e5ff0b65c083b310de3039027d86`;
+- VSIX contents were inspected: no layout-test executable, test sources, `AGENTS.md`, native source or docs source are packaged.
+
+Still Not run: actual Small/Medium/Large appearance and button hit testing in the user's Windows VS Code, 100/125/150/200% display scaling, mixed-DPI/multi-monitor behavior and Remote-WSL. These are real GUI evidence and cannot be replaced by CI.
+
+**Current gate:** user installs/tests the exact M1 artifact. Do not merge PR #50 or create M2 until the user approves M1. If the user finds a visual/hit-test/DPI problem, fix it on this same branch and repeat M1.3.
 
 Historical detailed plan before renumbering: commit `3c0c3bc2fd611a3a76835897edc5af3a674bf2df`.
