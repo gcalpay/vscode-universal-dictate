@@ -36,6 +36,7 @@
 #pragma comment(lib, "gdiplus.lib")
 
 #include "miniaudio.h"
+#include "overlay-layout.h"
 
 #include <algorithm>
 #include <array>
@@ -58,8 +59,6 @@ constexpr ma_uint32 kChannels = 1;
 constexpr auto kLevelInterval = std::chrono::milliseconds(50);
 constexpr int kOverlayWidth = 400;
 constexpr int kOverlayHeight = 110;
-constexpr int kEnhancedOverlayWidth = 740;
-constexpr int kEnhancedOverlayHeight = 128;
 constexpr int kOverlayMargin = 18;
 constexpr int kSignalPoints = 64;
 constexpr int kNoiseFloorMilli = 6;
@@ -77,11 +76,12 @@ enum class RecorderCommand : int {
     Cancel = 2,
 };
 
-enum class OverlaySize : int {
-    Small = 0,
-    Medium = 1,
-    Large = 2,
-};
+using universal_dictate::EnhancedOverlayLayout;
+using universal_dictate::OverlayRect;
+using universal_dictate::OverlaySize;
+using universal_dictate::calculateEnhancedOverlayLayout;
+using universal_dictate::kLogicalDpi;
+using universal_dictate::scaleLogical;
 
 class Encoder {
 public:
@@ -271,21 +271,28 @@ struct OverlayState {
     std::array<int, kEnhancedSignalPoints> enhancedSignalHistory{};
     bool enhanced = false;
     OverlaySize overlaySize = OverlaySize::Large;
+    UINT dpi = kLogicalDpi;
+    EnhancedOverlayLayout enhancedLayout =
+        calculateEnhancedOverlayLayout(OverlaySize::Large, kLogicalDpi);
     std::atomic<bool> actionSent{false};
 };
 
 OverlayState g_overlay;
 
+RECT winRect(const OverlayRect& rect) {
+    return RECT{rect.left, rect.top, rect.right, rect.bottom};
+}
+
 RECT confirmRect(const RECT& client) {
     if (g_overlay.enhanced) {
-        return RECT{client.right - 132, 49, client.right - 72, 79};
+        return winRect(g_overlay.enhancedLayout.confirmButton);
     }
     return RECT{client.right - 92, 30, client.right - 52, client.bottom - 30};
 }
 
 RECT cancelRect(const RECT& client) {
     if (g_overlay.enhanced) {
-        return RECT{client.right - 66, 49, client.right - 6, 79};
+        return winRect(g_overlay.enhancedLayout.cancelButton);
     }
     return RECT{client.right - 46, 30, client.right - 6, client.bottom - 30};
 }
@@ -366,7 +373,10 @@ void drawAntialiasedRoundedButton(
     graphics.SetPixelOffsetMode(Gdiplus::PixelOffsetModeHighQuality);
 
     Gdiplus::GraphicsPath path;
-    appendRoundedRectPath(path, rect, 9.0f);
+    appendRoundedRectPath(
+        path,
+        rect,
+        static_cast<Gdiplus::REAL>(g_overlay.enhancedLayout.buttonRadius));
     Gdiplus::SolidBrush fillBrush(gdiplusColor(fill));
     Gdiplus::Pen borderPen(gdiplusColor(border, disabled ? 150 : 225), 1.25f);
     graphics.FillPath(&fillBrush, &path);
@@ -482,14 +492,15 @@ void drawSignalField(HDC dc, const RECT& client) {
     DeleteObject(axisPen);
 }
 
-void drawEnhancedWaveform(HDC dc, const RECT& client) {
-    const int left = 148;
-    const int right = client.right - 144;
-    const int top = 8;
-    const int bottom = client.bottom - 8;
+void drawEnhancedWaveform(HDC dc) {
+    const OverlayRect& waveform = g_overlay.enhancedLayout.waveform;
+    const int left = waveform.left;
+    const int right = waveform.right;
+    const int top = waveform.top;
+    const int bottom = waveform.bottom;
     const int centerY = (top + bottom) / 2;
     const int width = std::max(1, right - left);
-    const int maxAmplitude = std::max(22, (bottom - top) / 2 - 4);
+    const int maxAmplitude = std::max(scaleLogical(6, g_overlay.dpi), (bottom - top) / 2 - scaleLogical(4, g_overlay.dpi));
 
     Gdiplus::Graphics graphics(dc);
     graphics.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
@@ -500,7 +511,9 @@ void drawEnhancedWaveform(HDC dc, const RECT& client) {
     const Gdiplus::Color envelopeInnerColor(85, 45, 145, 88);
     const Gdiplus::Color mainWaveColor(245, 66, 205, 118);
 
-    Gdiplus::Pen axisPen(axisColor, 0.8f);
+    const Gdiplus::REAL dpiScale =
+        static_cast<Gdiplus::REAL>(g_overlay.dpi) / static_cast<Gdiplus::REAL>(kLogicalDpi);
+    Gdiplus::Pen axisPen(axisColor, 0.8f * dpiScale);
     graphics.DrawLine(
         &axisPen,
         Gdiplus::PointF(static_cast<Gdiplus::REAL>(left), static_cast<Gdiplus::REAL>(centerY)),
@@ -539,9 +552,9 @@ void drawEnhancedWaveform(HDC dc, const RECT& client) {
     // All geometry is derived directly from stored visual PCM samples. No
     // neighbor smoothing, rolling normalization, phase animation or per-frame
     // modulation is applied, so old samples never change shape in place.
-    Gdiplus::Pen outerPen(envelopeOuterColor, 0.9f);
-    Gdiplus::Pen innerPen(envelopeInnerColor, 0.8f);
-    Gdiplus::Pen wavePen(mainWaveColor, 1.55f);
+    Gdiplus::Pen outerPen(envelopeOuterColor, 0.9f * dpiScale);
+    Gdiplus::Pen innerPen(envelopeInnerColor, 0.8f * dpiScale);
+    Gdiplus::Pen wavePen(mainWaveColor, 1.55f * dpiScale);
     graphics.DrawLines(&outerPen, upperOuter.data(), static_cast<INT>(upperOuter.size()));
     graphics.DrawLines(&outerPen, lowerOuter.data(), static_cast<INT>(lowerOuter.size()));
     graphics.DrawLines(&innerPen, upperInner.data(), static_cast<INT>(upperInner.size()));
@@ -550,44 +563,76 @@ void drawEnhancedWaveform(HDC dc, const RECT& client) {
 }
 
 void drawEnhancedOverlay(HDC dc, const RECT& client) {
+    const EnhancedOverlayLayout& layout = g_overlay.enhancedLayout;
     const RECT panel{0, 0, client.right - 1, client.bottom - 1};
-    drawRoundedBox(dc, panel, 24, RGB(14, 18, 27), RGB(59, 70, 91), 1);
+    drawRoundedBox(
+        dc,
+        panel,
+        layout.panelRadius,
+        RGB(14, 18, 27),
+        RGB(59, 70, 91),
+        std::max(1, scaleLogical(1, g_overlay.dpi)));
 
     {
         Gdiplus::Graphics graphics(dc);
         graphics.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
         graphics.SetPixelOffsetMode(Gdiplus::PixelOffsetModeHighQuality);
-        const Gdiplus::REAL centerX = 28.0f;
+        const Gdiplus::REAL centerX = static_cast<Gdiplus::REAL>(layout.indicatorCenterX);
         const Gdiplus::REAL centerY = static_cast<Gdiplus::REAL>(client.bottom) / 2.0f;
+        const Gdiplus::REAL outerRadius =
+            static_cast<Gdiplus::REAL>(layout.indicatorOuterRadius);
+        const Gdiplus::REAL innerRadius =
+            static_cast<Gdiplus::REAL>(layout.indicatorInnerRadius);
+        const Gdiplus::REAL dotRadius =
+            static_cast<Gdiplus::REAL>(layout.indicatorDotRadius);
 
         Gdiplus::SolidBrush outerBrush(gdiplusColor(RGB(49, 190, 105), 240));
-        graphics.FillEllipse(&outerBrush, centerX - 16.0f, centerY - 16.0f, 32.0f, 32.0f);
+        graphics.FillEllipse(
+            &outerBrush,
+            centerX - outerRadius,
+            centerY - outerRadius,
+            outerRadius * 2.0f,
+            outerRadius * 2.0f);
 
         Gdiplus::SolidBrush innerBrush(gdiplusColor(RGB(14, 18, 27)));
-        graphics.FillEllipse(&innerBrush, centerX - 13.0f, centerY - 13.0f, 26.0f, 26.0f);
+        graphics.FillEllipse(
+            &innerBrush,
+            centerX - innerRadius,
+            centerY - innerRadius,
+            innerRadius * 2.0f,
+            innerRadius * 2.0f);
 
         Gdiplus::SolidBrush dotBrush(gdiplusColor(RGB(66, 205, 118)));
-        graphics.FillEllipse(&dotBrush, centerX - 4.0f, centerY - 4.0f, 8.0f, 8.0f);
+        graphics.FillEllipse(
+            &dotBrush,
+            centerX - dotRadius,
+            centerY - dotRadius,
+            dotRadius * 2.0f,
+            dotRadius * 2.0f);
     }
 
     SetBkMode(dc, TRANSPARENT);
     SetTextColor(dc, RGB(244, 246, 250));
     HFONT previousFont = reinterpret_cast<HFONT>(SelectObject(dc, g_overlay.enhancedTitleFont));
-    RECT title{50, 39, 143, 63};
+    RECT title = winRect(layout.title);
     DrawTextW(dc, L"Listening", -1, &title, DT_LEFT | DT_SINGLELINE | DT_VCENTER);
 
-    SelectObject(dc, g_overlay.enhancedSubtitleFont);
-    SetTextColor(dc, RGB(151, 164, 184));
-    RECT subtitle{50, 64, 143, 84};
-    DrawTextW(dc, L"Universal Dictate", -1, &subtitle, DT_LEFT | DT_SINGLELINE | DT_VCENTER);
+    if (layout.showSubtitle) {
+        SelectObject(dc, g_overlay.enhancedSubtitleFont);
+        SetTextColor(dc, RGB(151, 164, 184));
+        RECT subtitle = winRect(layout.subtitle);
+        DrawTextW(dc, L"Universal Dictate", -1, &subtitle, DT_LEFT | DT_SINGLELINE | DT_VCENTER);
+    }
 
-    drawEnhancedWaveform(dc, client);
+    drawEnhancedWaveform(dc);
 
-    const int dividerX = client.right - 140;
-    HPEN dividerPen = CreatePen(PS_SOLID, 1, RGB(44, 53, 69));
+    HPEN dividerPen = CreatePen(
+        PS_SOLID,
+        std::max(1, scaleLogical(1, g_overlay.dpi)),
+        RGB(44, 53, 69));
     HGDIOBJ previousPen = SelectObject(dc, dividerPen);
-    MoveToEx(dc, dividerX, 30, nullptr);
-    LineTo(dc, dividerX, client.bottom - 30);
+    MoveToEx(dc, layout.dividerX, layout.dividerTop, nullptr);
+    LineTo(dc, layout.dividerX, layout.dividerBottom);
     SelectObject(dc, previousPen);
     DeleteObject(dividerPen);
 
@@ -667,6 +712,74 @@ void drawOverlay(HWND window, HDC dc) {
     }
 }
 
+void deleteFont(HFONT& font) noexcept {
+    if (font != nullptr) {
+        DeleteObject(font);
+        font = nullptr;
+    }
+}
+
+void createEnhancedFonts() {
+    deleteFont(g_overlay.enhancedTitleFont);
+    deleteFont(g_overlay.enhancedSubtitleFont);
+    deleteFont(g_overlay.enhancedButtonFont);
+
+    const EnhancedOverlayLayout& layout = g_overlay.enhancedLayout;
+    g_overlay.enhancedTitleFont = CreateFontW(
+        -layout.titleFontHeight, 0, 0, 0, FW_SEMIBOLD, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
+        OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
+        DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
+    g_overlay.enhancedSubtitleFont = CreateFontW(
+        -layout.subtitleFontHeight, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
+        OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
+        DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
+    g_overlay.enhancedButtonFont = CreateFontW(
+        -layout.buttonFontHeight, 0, 0, 0, FW_SEMIBOLD, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
+        OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
+        DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
+}
+
+void updateEnhancedRegion() {
+    if (g_overlay.window == nullptr || !g_overlay.enhanced) {
+        return;
+    }
+
+    RECT client{};
+    GetClientRect(g_overlay.window, &client);
+    HRGN region = CreateRoundRectRgn(
+        0,
+        0,
+        client.right + 1,
+        client.bottom + 1,
+        g_overlay.enhancedLayout.regionRadius,
+        g_overlay.enhancedLayout.regionRadius);
+    if (region != nullptr && SetWindowRgn(g_overlay.window, region, FALSE) == 0) {
+        DeleteObject(region);
+    }
+}
+
+void applyEnhancedDpi(UINT dpi) {
+    g_overlay.dpi = dpi == 0 ? kLogicalDpi : dpi;
+    g_overlay.enhancedLayout =
+        calculateEnhancedOverlayLayout(g_overlay.overlaySize, g_overlay.dpi);
+    createEnhancedFonts();
+}
+
+void enableEnhancedOverlayDpiAwareness() noexcept {
+    HMODULE user32 = GetModuleHandleW(L"user32.dll");
+    if (user32 == nullptr) {
+        return;
+    }
+
+    using SetProcessDpiAwarenessContextFn = BOOL(WINAPI*)(DPI_AWARENESS_CONTEXT);
+    const auto setProcessDpiAwarenessContext =
+        reinterpret_cast<SetProcessDpiAwarenessContextFn>(
+            GetProcAddress(user32, "SetProcessDpiAwarenessContext"));
+    if (setProcessDpiAwarenessContext != nullptr) {
+        setProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+    }
+}
+
 LRESULT CALLBACK overlayWindowProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
     switch (message) {
         case WM_MOUSEACTIVATE:
@@ -675,6 +788,29 @@ LRESULT CALLBACK overlayWindowProc(HWND window, UINT message, WPARAM wParam, LPA
             return HTCLIENT;
         case WM_ERASEBKGND:
             return 1;
+        case WM_DPICHANGED: {
+            if (!g_overlay.enhanced) {
+                break;
+            }
+
+            const UINT dpi = HIWORD(wParam) == 0 ? LOWORD(wParam) : HIWORD(wParam);
+            applyEnhancedDpi(dpi);
+
+            const RECT* suggested = reinterpret_cast<const RECT*>(lParam);
+            if (suggested != nullptr) {
+                SetWindowPos(
+                    window,
+                    nullptr,
+                    suggested->left,
+                    suggested->top,
+                    suggested->right - suggested->left,
+                    suggested->bottom - suggested->top,
+                    SWP_NOZORDER | SWP_NOACTIVATE);
+            }
+            updateEnhancedRegion();
+            InvalidateRect(window, nullptr, FALSE);
+            return 0;
+        }
         case WM_LBUTTONUP: {
             if (g_overlay.actionSent.load(std::memory_order_acquire)) {
                 return 0;
@@ -803,11 +939,15 @@ bool createOverlay(HMONITOR targetMonitor, bool enhanced, OverlaySize overlaySiz
         }
     }
 
-    const int overlayWidth = enhanced ? kEnhancedOverlayWidth : kOverlayWidth;
-    const int overlayHeight = enhanced ? kEnhancedOverlayHeight : kOverlayHeight;
-    const RECT workArea = overlayWorkArea(targetMonitor);
-    const int x = std::max(workArea.left, workArea.right - overlayWidth - kOverlayMargin);
-    const int y = std::max(workArea.top, workArea.bottom - overlayHeight - kOverlayMargin);
+    const RECT initialWorkArea = overlayWorkArea(targetMonitor);
+    const int initialWidth = enhanced ? universal_dictate::enhancedOverlaySpec(overlaySize).width : kOverlayWidth;
+    const int initialHeight = enhanced ? universal_dictate::enhancedOverlaySpec(overlaySize).height : kOverlayHeight;
+    int x = std::max(
+        initialWorkArea.left,
+        initialWorkArea.right - initialWidth - kOverlayMargin);
+    int y = std::max(
+        initialWorkArea.top,
+        initialWorkArea.bottom - initialHeight - kOverlayMargin);
 
     g_overlay.textFont = CreateFontW(
         -15, 0, 0, 0, FW_SEMIBOLD, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
@@ -818,21 +958,6 @@ bool createOverlay(HMONITOR targetMonitor, bool enhanced, OverlaySize overlaySiz
         OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
         DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI Symbol");
 
-    if (enhanced) {
-        g_overlay.enhancedTitleFont = CreateFontW(
-            -17, 0, 0, 0, FW_SEMIBOLD, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
-            OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
-            DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
-        g_overlay.enhancedSubtitleFont = CreateFontW(
-            -11, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
-            OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
-            DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
-        g_overlay.enhancedButtonFont = CreateFontW(
-            -11, 0, 0, 0, FW_SEMIBOLD, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
-            OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
-            DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
-    }
-
     g_overlay.window = CreateWindowExW(
         WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE,
         kOverlayClassName,
@@ -840,8 +965,8 @@ bool createOverlay(HMONITOR targetMonitor, bool enhanced, OverlaySize overlaySiz
         WS_POPUP,
         x,
         y,
-        overlayWidth,
-        overlayHeight,
+        initialWidth,
+        initialHeight,
         nullptr,
         nullptr,
         instance,
@@ -855,11 +980,33 @@ bool createOverlay(HMONITOR targetMonitor, bool enhanced, OverlaySize overlaySiz
         return false;
     }
 
+    int overlayWidth = initialWidth;
+    int overlayHeight = initialHeight;
     if (enhanced) {
-        HRGN region = CreateRoundRectRgn(0, 0, overlayWidth + 1, overlayHeight + 1, 26, 26);
-        if (region != nullptr && SetWindowRgn(g_overlay.window, region, FALSE) == 0) {
-            DeleteObject(region);
+        UINT dpi = GetDpiForWindow(g_overlay.window);
+        if (dpi == 0) {
+            dpi = kLogicalDpi;
         }
+        applyEnhancedDpi(dpi);
+        overlayWidth = g_overlay.enhancedLayout.width;
+        overlayHeight = g_overlay.enhancedLayout.height;
+
+        const RECT workArea = overlayWorkArea(targetMonitor);
+        const int scaledMargin = scaleLogical(kOverlayMargin, g_overlay.dpi);
+        x = std::max(workArea.left, workArea.right - overlayWidth - scaledMargin);
+        y = std::max(workArea.top, workArea.bottom - overlayHeight - scaledMargin);
+    }
+
+    SetWindowPos(
+        g_overlay.window,
+        HWND_TOPMOST,
+        x,
+        y,
+        overlayWidth,
+        overlayHeight,
+        SWP_NOACTIVATE);
+    if (enhanced) {
+        updateEnhancedRegion();
     }
 
     ShowWindow(g_overlay.window, SW_SHOWNOACTIVATE);
@@ -888,23 +1035,17 @@ void destroyOverlay() noexcept {
         DeleteObject(g_overlay.symbolFont);
         g_overlay.symbolFont = nullptr;
     }
-    if (g_overlay.enhancedTitleFont != nullptr) {
-        DeleteObject(g_overlay.enhancedTitleFont);
-        g_overlay.enhancedTitleFont = nullptr;
-    }
-    if (g_overlay.enhancedSubtitleFont != nullptr) {
-        DeleteObject(g_overlay.enhancedSubtitleFont);
-        g_overlay.enhancedSubtitleFont = nullptr;
-    }
-    if (g_overlay.enhancedButtonFont != nullptr) {
-        DeleteObject(g_overlay.enhancedButtonFont);
-        g_overlay.enhancedButtonFont = nullptr;
-    }
+    deleteFont(g_overlay.enhancedTitleFont);
+    deleteFont(g_overlay.enhancedSubtitleFont);
+    deleteFont(g_overlay.enhancedButtonFont);
     if (g_overlay.gdiplusToken != 0) {
         Gdiplus::GdiplusShutdown(g_overlay.gdiplusToken);
         g_overlay.gdiplusToken = 0;
     }
     g_overlay.enhanced = false;
+    g_overlay.dpi = kLogicalDpi;
+    g_overlay.enhancedLayout =
+        calculateEnhancedOverlayLayout(OverlaySize::Large, kLogicalDpi);
     UnregisterClassW(kOverlayClassName, GetModuleHandleW(nullptr));
 }
 
@@ -1036,6 +1177,10 @@ int main(int argc, char** argv) {
     const bool enhancedOverlay = hasFlag(argc, argv, "--enhanced-overlay");
     const OverlaySize overlaySize = parseOverlaySize(argc, argv);
     const int waveformTimeSpanMs = parseWaveformTimeSpanMs(argc, argv);
+
+    if (overlayEnabled && enhancedOverlay) {
+        enableEnhancedOverlayDpiAwareness();
+    }
 
     const HMONITOR overlayMonitor = overlayEnabled ? captureOverlayMonitor() : nullptr;
 
