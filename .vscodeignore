@@ -3,6 +3,7 @@
 .deps/**
 docs/**
 native/**
+test/**
 src/**
 .gitignore
 tsconfig.json
