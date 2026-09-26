@@ -28,6 +28,9 @@ jobs:
       - name: Type-check
         run: npm run check
 
+      - name: Overlay-size TypeScript tests
+        run: npm run test:m1
+
       - name: Fetch pinned miniaudio header
         shell: pwsh
         run: |
@@ -55,6 +58,8 @@ jobs:
           $commands = @(
             "call `"$vcvars`"",
             "if not exist resources\bin mkdir resources\bin",
+            "cl /nologo /O2 /std:c++20 /EHsc test\native\overlay-layout-test.cpp /Fe:overlay-layout-test.exe",
+            "overlay-layout-test.exe",
             "cl /nologo /O2 /std:c++20 /EHsc native\windows-fast-paste.cpp /Fe:resources\bin\windows-fast-paste.exe user32.lib",
             "cl /nologo /O2 /std:c++20 /EHsc /I .deps\miniaudio native\record-audio.cpp native\miniaudio-impl.cpp /Fe:resources\bin\universal-dictate-recorder.exe user32.lib gdi32.lib"
           ) -join ' && '
