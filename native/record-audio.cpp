@@ -790,10 +790,10 @@ LRESULT CALLBACK overlayWindowProc(HWND window, UINT message, WPARAM wParam, LPA
             return 1;
         case WM_DPICHANGED: {
             if (!g_overlay.enhanced) {
-                break;
+                return DefWindowProcW(window, message, wParam, lParam);
             }
 
-            const UINT dpi = HIWORD(wParam) == 0 ? LOWORD(wParam) : HIWORD(wParam);
+            const UINT dpi = LOWORD(wParam);
             applyEnhancedDpi(dpi);
 
             const RECT* suggested = reinterpret_cast<const RECT*>(lParam);
