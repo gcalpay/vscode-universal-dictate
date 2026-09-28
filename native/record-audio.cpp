@@ -270,10 +270,10 @@ struct OverlayState {
     std::array<int, kSignalPoints> levelHistory{};
     std::array<int, kEnhancedSignalPoints> enhancedSignalHistory{};
     bool enhanced = false;
-    OverlaySize overlaySize = OverlaySize::Large;
+    OverlaySize overlaySize = OverlaySize::Medium;
     UINT dpi = kLogicalDpi;
     EnhancedOverlayLayout enhancedLayout =
-        calculateEnhancedOverlayLayout(OverlaySize::Large, kLogicalDpi);
+        calculateEnhancedOverlayLayout(OverlaySize::Medium, kLogicalDpi);
     std::atomic<bool> actionSent{false};
 };
 
@@ -1045,7 +1045,7 @@ void destroyOverlay() noexcept {
     g_overlay.enhanced = false;
     g_overlay.dpi = kLogicalDpi;
     g_overlay.enhancedLayout =
-        calculateEnhancedOverlayLayout(OverlaySize::Large, kLogicalDpi);
+        calculateEnhancedOverlayLayout(OverlaySize::Medium, kLogicalDpi);
     UnregisterClassW(kOverlayClassName, GetModuleHandleW(nullptr));
 }
 
@@ -1125,10 +1125,13 @@ OverlaySize parseOverlaySize(int argc, char** argv) {
         if (value == "medium") {
             return OverlaySize::Medium;
         }
-        return OverlaySize::Large;
+        if (value == "large") {
+            return OverlaySize::Large;
+        }
+        return OverlaySize::Medium;
     }
 
-    return OverlaySize::Large;
+    return OverlaySize::Medium;
 }
 
 int parseWaveformTimeSpanMs(int argc, char** argv) {

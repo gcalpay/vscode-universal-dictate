@@ -58,7 +58,7 @@ function getConfiguredVisualization(): VisualizationMode {
 
 function getConfiguredOverlaySize(): OverlaySize {
   return normalizeOverlaySize(
-    vscode.workspace.getConfiguration('universalDictate').get<string>('overlaySize', 'large')
+    vscode.workspace.getConfiguration('universalDictate').get<string>('overlaySize', 'medium')
   );
 }
 

@@ -13,11 +13,11 @@ test('overlay size normalization keeps supported values', () => {
   assert.equal(normalizeOverlaySize('large'), 'large');
 });
 
-test('overlay size normalization falls back to large', () => {
-  assert.equal(DEFAULT_OVERLAY_SIZE, 'large');
-  assert.equal(normalizeOverlaySize(undefined), 'large');
-  assert.equal(normalizeOverlaySize('unexpected'), 'large');
-  assert.equal(normalizeOverlaySize(1), 'large');
+test('overlay size normalization falls back to medium', () => {
+  assert.equal(DEFAULT_OVERLAY_SIZE, 'medium');
+  assert.equal(normalizeOverlaySize(undefined), 'medium');
+  assert.equal(normalizeOverlaySize('unexpected'), 'medium');
+  assert.equal(normalizeOverlaySize(1), 'medium');
 });
 
 test('enhanced recorder arguments propagate overlay size', () => {
@@ -59,7 +59,7 @@ test('enhanced recorder arguments validate invalid size and span', () => {
       '--waveform-timespan-ms',
       '1000',
       '--overlay-size',
-      'large'
+      'medium'
     ]
   );
 });

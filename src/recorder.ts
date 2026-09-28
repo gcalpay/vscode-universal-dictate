@@ -32,7 +32,7 @@ export class RecorderSession {
     showOverlay = true,
     overlayStyle: RecorderOverlayStyle = 'compact',
     waveformTimeSpanSeconds = 1,
-    overlaySize: OverlaySize = 'large'
+    overlaySize: OverlaySize = 'medium'
   ): Promise<RecorderSession> {
     const recorderPath = getRecorderPath(context);
     if (!fs.existsSync(recorderPath)) {

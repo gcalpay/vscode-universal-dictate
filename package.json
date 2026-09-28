@@ -128,8 +128,8 @@
             "Use the medium enhanced recording overlay.",
             "Use the current large enhanced recording overlay."
           ],
-          "default": "large",
-          "description": "Size of the enhanced native recording overlay. Changes apply from the next dictation session."
+          "default": "medium",
+          "description": "Size of the enhanced native recording overlay. Default: medium. Changes apply from the next dictation session."
         },
         "universalDictate.waveformTimeSpanSeconds": {
           "type": "number",
