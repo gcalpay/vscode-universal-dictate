@@ -1,6 +1,6 @@
 # Universal Dictate implementation roadmap
 
-Updated: 2026-09-25. Repository: `gcalpay/vscode-universal-dictate`.
+Updated: 2026-09-28. Repository: `gcalpay/vscode-universal-dictate`.
 
 This is the current implementation handoff. It replaces the earlier out-of-order milestone numbering. Historical planning and focus-diagnostic evidence remain available through pinned commits/branches, but the active milestone numbers below are chronological.
 
@@ -30,23 +30,25 @@ If a milestone is blocked or rejected, do not merge it just to preserve sequence
 
 No milestone plan authorizes a release, version bump, Marketplace publication, issue closure or automatic merge.
 
-The current documentation branch is `docs/dictation-reliability-plan`. Because the normalized durable docs are not yet on `main`, carry the documentation changes from this branch into M1 as a docs-only base commit before runtime work. Do not carry the frozen launcher or Code OSS diagnostic code. Once M1 is approved and merged, the corrected docs and roadmap will travel with `main` and later branches naturally.
+The normalized roadmap is now on `main`. M1 was accepted and merged through PR #50, and M2 was created from that updated `main`. Keep the frozen launcher and Code OSS diagnostic branches isolated from ordinary product work.
 
 ## 2. Verified baseline
 
-Snapshot checked 2026-09-25:
+Snapshot checked 2026-09-28:
 
-- `main`: `f0265bc4398643c3b3a27e6d2ad64183b115b6ba`, extension 0.1.5.
-- Shipped dictation: Windows UI extension host, including Remote - WSL.
+- `main`: `481913feb88ad16aca00da744dd2fe72cd90ef98`, extension 0.1.5.
+- M1 PR #50 is merged into `main`; this does not by itself imply a new Marketplace release.
+- Windows UI extension host, including Remote - WSL.
 - Recorder: native miniaudio/WASAPI, 16 kHz mono PCM16 WAV.
 - Enhanced overlay: native non-activating recording panel with waveform, Insert and Discard.
+- Enhanced-overlay sizes: Small ~380 x 64, Medium ~520 x 88, Large 740 x 128; Medium is the default/fallback after user review.
 - Visualization modes: Both, Enhanced overlay, Status bar only and Off.
 - Enhanced waveform history: 1, 3, 5, 10 or 20 seconds.
 - ASR: multilingual Whisper `base`, warm local `whisper-server`, one-shot `whisper-cli` fallback.
-- Insertion: clipboard plus native Win32 Ctrl+V helper.
+- Insertion baseline: clipboard plus native Win32 Ctrl+V helper.
 - Genuine status-bar Dictate and recording Stop are clickable.
 - Issue #38 remains unresolved for the genuine status-bar mouse workflow.
-- Small/Medium/Large sizing, transcript recovery, live preview and translation are not shipped on this baseline.
+- Transcript recovery, full clipboard preservation, live preview and translation are not yet implemented on the M2 branch baseline.
 
 Historical branches that must not be merged into ordinary feature work:
 
@@ -64,6 +66,8 @@ These requirements remain settled across every milestone:
 - Selected text is replaced with ordinary paste semantics.
 - Never synthesize Enter or automatically submit/send.
 - Cancellation inserts nothing.
+- Retain a successful non-empty final transcript before insertion so an insertion or clipboard failure cannot destroy the only recoverable copy.
+- Preserve the complete pre-insertion Windows clipboard when Universal Dictate still owns the temporary clipboard state; if the user or another application changes the clipboard meanwhile, preserve that newer clipboard instead.
 - Preserve supported external Windows text inputs and Remote - WSL.
 - If target loss is known and there is no newer deliberate valid target, retain/recover text instead of guessing.
 - Local/offline transcription remains the product default after model setup.
@@ -75,7 +79,7 @@ A recovery feature, different launcher, smaller overlay, preview or translation 
 
 **Branch:** `feat/overlay-size-presets`.
 
-**Status:** M1.1 and M1.2 implemented. M1.3 automated validation is green; real Windows visual/DPI/Remote-WSL review by the user remains the merge gate. Draft PR #50 is open. Runtime/package head tested: `35f458d4759165bc4be48802c8877eb7e2188d4f`.
+**Status:** accepted and merged through PR #50. Merge commit: `481913feb88ad16aca00da744dd2fe72cd90ef98`. The user tested the Windows VSIX and confirmed the three sizes behaved as intended; Medium was then selected as the default/fallback.
 
 Goal: add Small, Medium and Large versions of the current enhanced recording overlay without changing recording/transcription semantics.
 
@@ -87,13 +91,13 @@ Initial logical layout targets:
 | `medium` | Medium | about 520 x 88 |
 | `large` | Large | current 740 x 128 reference |
 
-These are design targets, not permission to make text/buttons unreadable. Keep Large as the default until the user evaluates the smaller variants.
+These are design targets, not permission to make text/buttons unreadable. The user evaluated the three variants on Windows and selected Medium as the default/fallback.
 
 ### M1.1 — Setting and propagation
 
 - Add `universalDictate.overlaySize` with `small`, `medium`, `large`.
 - Expose it in VS Code Settings and the existing Universal Dictate settings picker.
-- Validate missing/invalid values to `large`.
+- Validate missing/invalid values to `medium`.
 - Snapshot the size at recording-session start.
 - Pass it through `src/extension.ts` -> `src/recorder.ts` -> `src/core/recorder.ts` -> native recorder, using a validated native argument such as `--overlay-size`.
 - Preserve existing callers/defaults, visualization modes and waveform time-span behavior.
@@ -119,32 +123,111 @@ Produce a concrete artifact/screenshots for the user. **Stop for review.** Do no
 
 ## 5. M2 — Transcript, clipboard and lifecycle reliability
 
-**Branch:** `fix/transcript-recovery`, created from main only after M1 review/merge.
+**Branch:** `fix/transcript-recovery`, created from `main` at `481913feb88ad16aca00da744dd2fe72cd90ef98` after the accepted M1 merge.
 
-### M2.1 — Retain one completed transcript
+**Status:** active planning/implementation milestone. Do not create M3 until M2 is implemented, tested, reviewed and explicitly approved for merge.
 
-- Save the latest non-empty completed transcript in memory before insertion is attempted.
-- Add Copy Last Transcript, Insert Last Transcript and Clear Last Transcript commands.
-- No automatic retry of uncertain paste; duplication is worse than requiring explicit recovery.
-- Empty/no-speech/cancelled/failed transcription does not replace the previous valid retained transcript.
-- A later valid transcript replaces it.
-- Extension reload/restart may clear the memory-only value; document that.
-- Reinsertion must be keyboard-invokable without opening a focus-stealing menu.
+### M2.1 — Retain one completed transcript and expose recovery actions
 
-### M2.2 — Clipboard ownership/preservation
+- Save the latest successful non-empty completed transcript in memory **before insertion is attempted**.
+- A later successful non-empty transcript replaces the previous retained transcript.
+- Empty/no-speech/cancelled/failed transcription does not replace the previous retained transcript.
+- Insertion or clipboard failure must not remove the retained transcript.
+- Extension reload/restart may clear this memory-only recovery state; document that honestly.
+- Add normal VS Code commands:
+  - **Universal Dictate: Insert Last Transcript**
+  - **Universal Dictate: Copy Last Transcript**
+  - **Universal Dictate: Clear Last Transcript**
+- Add **Last transcript** as the fifth entry in the existing Universal Dictate gear Quick Pick. Its submenu contains:
+  - Insert last transcript
+  - Copy last transcript
+  - Clear last transcript
+- Show the parent entry as Available/Empty rather than exposing the transcript text in the menu.
+- Insert Last Transcript must remain directly keyboard-invokable through the Command Palette/keybinding system so recovery does not require opening a focus-changing menu.
+- Insert does not clear the retained transcript.
+- Copy deliberately writes the retained transcript to the clipboard because that command explicitly asks for a copy.
+- Clear changes only the retained in-memory recovery state.
+- Do not automatically retry an uncertain paste; duplicate insertion is worse than explicit recovery.
 
-The baseline restores a saved text string after a fixed delay. Improve it so a newer user/application clipboard change is not overwritten.
+### M2.2 — Preserve the user's complete clipboard and respect newer ownership
 
-- Define an ownership strategy rather than merely increasing the timeout.
-- Test old text, empty clipboard, newer copy, identical newer text and restore failure.
-- Define the supported non-text policy honestly. Do not claim images/files/rich formats are preserved if only text is retained.
-- Keep transcript recovery available even when clipboard restoration fails.
+The baseline uses VS Code's text clipboard API, writes the transcript, synthesizes Ctrl+V, waits a fixed delay and blindly restores the saved text. That is insufficient because it can destroy non-text clipboard data and overwrite a newer user/application copy.
 
-### M2.3 — Lifecycle regression fixes and gate
+Product requirement:
 
-Test duplicate Stop, disposal while preparing/recording/transcribing, recorder failure, late callbacks and WAV cleanup. Prevent obsolete operations from inserting or reviving controls after disposal without turning this into an unrelated engine rewrite.
+> Dictation insertion must not leave the user's clipboard changed as a normal side effect. Preserve the complete pre-insertion Windows clipboard, not only text. Restore it only while Universal Dictate still owns the temporary clipboard state. If the user or another application changes the clipboard meanwhile, preserve that newer clipboard instead.
 
-Run unit, Windows and package tests. Stop for user review before merge and before M3 exists.
+Implementation direction:
+
+- Move preservation/ownership logic to the native Windows side as needed; `vscode.env.clipboard.readText()` alone cannot preserve images, files, HTML/rich text, Excel-style data or other registered clipboard formats.
+- Snapshot the complete pre-insertion clipboard sufficiently to restore its formats/data.
+- Temporarily place the final transcript on the clipboard for ordinary Ctrl+V paste semantics.
+- Track Windows clipboard change/sequence state so ownership is explicit rather than inferred from string equality or a timeout.
+- After paste, restore the pre-insertion clipboard only if the clipboard still corresponds to Universal Dictate's temporary write.
+- If a newer clipboard change occurred, do not restore stale content over it.
+- Treat identical newer text as a newer clipboard change as well; content comparison alone is not sufficient.
+- If complete preservation of a clipboard format fails, fail safely and report the limitation/error rather than silently claiming preservation.
+- Keep Last Transcript recovery available even if paste or clipboard restoration fails.
+
+Test at least:
+
+- previous clipboard contains plain text;
+- previous clipboard is empty;
+- previous clipboard contains an image;
+- previous clipboard contains copied files;
+- previous clipboard contains HTML/rich text or another multi-format payload;
+- user/app copies newer text during insertion;
+- user/app copies newer non-text content during insertion;
+- newer clipboard content is text identical to the transcript;
+- native paste failure;
+- clipboard snapshot failure;
+- clipboard restore failure;
+- clipboard ownership/sequence query failure.
+
+### M2.3 — Lifecycle/session-generation hardening
+
+The current engine primarily relies on one `session` reference plus a `busy` boolean. Add the minimum explicit operation/session identity needed to reject stale asynchronous work.
+
+Test/fix:
+
+- duplicate Stop;
+- duplicate native-overlay Stop;
+- disposal while preparing;
+- disposal while recording;
+- disposal while transcribing;
+- recorder start/stop failure;
+- transcription failure;
+- late callbacks from an obsolete recorder session;
+- an old transcription completing after a newer session exists;
+- stale operations must never insert;
+- stale operations must never resurrect obsolete UI/control state;
+- temporary WAV cleanup on all relevant paths.
+
+Avoid an unnecessary engine rewrite.
+
+### M2.4 — VS Code integration and automated validation
+
+- Update `package.json` command contributions/activation wiring as needed.
+- Extend the existing settings gear Quick Pick with Last transcript; do not add permanent status-bar buttons.
+- Add focused recovery, clipboard-ownership and lifecycle tests instead of overloading the M1 overlay-size tests.
+- Preserve M1 tests as regressions.
+- Run TypeScript checks/compile, focused unit tests, Windows native compilation, Windows packaging and VSIX content inspection.
+
+### M2.5 — User review gate
+
+Produce a concrete Windows VSIX and stop for review. Manual checks should include:
+
+- normal dictation/insertion still works;
+- the original clipboard is restored after normal insertion;
+- images/files/rich clipboard content survive normal insertion;
+- a newer clipboard change made during insertion survives;
+- failed/misdirected insertion still leaves Last Transcript available;
+- Insert / Copy / Clear Last Transcript;
+- Command Palette access to the recovery commands;
+- Remote - WSL;
+- Small/Medium/Large overlay regression.
+
+Do not merge M2 or create M3 until the user explicitly approves the tested result.
 
 ## 6. M3 — Live transcript preview
 
@@ -302,31 +385,23 @@ Every manual result records commit/artifact, Windows/VS Code/Codex versions, loc
 
 ## 11. Current handoff
 
-Documentation normalization is complete. It was carried to `feat/overlay-size-presets` in docs-only commit `d83783a77ca09822733b8f0813bb40815bdb651e`.
+M1 is complete and accepted.
 
-M1 branch history relevant to the current review:
+- M1 branch: `feat/overlay-size-presets`
+- PR #50 merged into `main`
+- M1 merge commit: `481913feb88ad16aca00da744dd2fe72cd90ef98`
+- user Windows review: Small/Medium/Large behaved as intended
+- selected product default/fallback: Medium
+- Issue #38 remains unresolved and was not claimed fixed by M1
 
-- Docs-only base: `d83783a77ca09822733b8f0813bb40815bdb651e`.
-- M1.1 setting/propagation implementation: `a32a2ebcc9d9a666e5e11c36c56427f9fc2fbe57`.
-- M1.2 shared native layout/DPI implementation began at `a1f4593dbbc9249b5239030013a837238f408a3f`; subsequent fixes kept compact-path DPI handling normal and Small button text readable.
-- Runtime/package head validated by CI: `35f458d4759165bc4be48802c8877eb7e2188d4f`.
-- Draft review surface: PR #50, “Add Small, Medium and Large recording overlay sizes”.
+M2 is now the active milestone.
 
-M1.1 added `overlaySize` to Settings and the existing picker, validates unknown values to Large and propagates the session-start value through both TypeScript recorder layers to native `--overlay-size`. Status-bar-only/Off do not receive enhanced-overlay size arguments.
+- M2 branch: `fix/transcript-recovery`
+- branch base: `481913feb88ad16aca00da744dd2fe72cd90ef98`
+- first implementation target: retain Last Transcript before insertion, expose Insert/Copy/Clear recovery actions, then implement complete clipboard preservation/ownership protection and lifecycle hardening
+- no M2 runtime implementation has been accepted yet
+- no M3 branch may be created until M2 passes its user gate and is merged
 
-M1.2 added a single pure layout calculation shared by drawing and Insert/Discard hit testing. Logical targets are Small 380x64, Medium 520x88 and Large 740x128. The Large 96-DPI waveform/divider/button geometry is explicitly regression-tested against the previous coordinates. The enhanced overlay opts into Per-Monitor V2 before UI creation, obtains the window DPI, scales geometry/fonts/pens and recalculates cached layout/fonts on `WM_DPICHANGED` while using Windows' suggested resize rectangle. This follows Microsoft's guidance that raw Win32 PMv2 applications must handle DPI-sensitive layout themselves and respond to DPI changes.
-
-M1.3 evidence:
-
-- local pure C++ layout test compiled with g++ and passed;
-- PR run `36204901952` (CI): typecheck, compile, overlay-size TypeScript tests and C++ geometry test all passed;
-- PR run `36204901970` (Windows package): TypeScript checks/tests, pinned miniaudio fetch, MSVC layout test, native helper compilation, pinned whisper.cpp fetch, VSIX packaging and artifact upload all passed;
-- tested artifact ID `10892728545`, workflow digest `sha256:18742ce5232edaeed621f3e670b055b1c9ef2304a4244af60ff9d6f6f8887bea`;
-- extracted VSIX SHA-256 `ec377efbd9d6498479a3fc89bb1ee75d1ae0e5ff0b65c083b310de3039027d86`;
-- VSIX contents were inspected: no layout-test executable, test sources, `AGENTS.md`, native source or docs source are packaged.
-
-Still Not run: actual Small/Medium/Large appearance and button hit testing in the user's Windows VS Code, 100/125/150/200% display scaling, mixed-DPI/multi-monitor behavior and Remote-WSL. These are real GUI evidence and cannot be replaced by CI.
-
-**Current gate:** user installs/tests the exact M1 artifact. Do not merge PR #50 or create M2 until the user approves M1. If the user finds a visual/hit-test/DPI problem, fix it on this same branch and repeat M1.3.
+The clipboard requirement is now explicit: preserve whatever the user had on the Windows clipboard before normal dictation insertion, across formats, and restore it only if no newer clipboard change has occurred.
 
 Historical detailed plan before renumbering: commit `3c0c3bc2fd611a3a76835897edc5af3a674bf2df`.

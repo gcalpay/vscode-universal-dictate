@@ -12,9 +12,18 @@ Read [docs/DICTATION_RELIABILITY_PLAN.md](docs/DICTATION_RELIABILITY_PLAN.md) be
 
 ## Current task
 
-**M1 implementation is complete on `feat/overlay-size-presets`; M1.3 is at the user-review gate.** M1.1 added size settings/propagation. M1.2 added shared Small/Medium/Large native layouts and Per-Monitor V2 DPI handling. Linux CI and Windows native/package CI are green on runtime head `35f458d4759165bc4be48802c8877eb7e2188d4f`. Draft PR #50 is open. The tested VSIX was inspected and contains no test binary/source, agent guidance, native source or docs source.
+**M1 is accepted and merged. M2 transcript/clipboard/lifecycle reliability is now active on `fix/transcript-recovery`.**
 
-Do not start M2 and do not merge PR #50 until the user has installed/tested M1 on Windows and explicitly approves the milestone.
+M1 PR #50 merged into `main` at `481913feb88ad16aca00da744dd2fe72cd90ef98`. Small/Medium/Large enhanced-overlay sizes are merged, and Medium is the default/fallback selected after the user's Windows review.
+
+M2 must stay on `fix/transcript-recovery`. Its scope is:
+- retain the latest successful non-empty final transcript in memory before insertion is attempted;
+- expose Last transcript as the fifth Universal Dictate gear-menu entry, with Insert / Copy / Clear actions, and expose those actions as normal VS Code commands;
+- preserve the user's complete pre-insertion Windows clipboard contents across normal dictation insertion;
+- if the user or another application changes the clipboard while insertion is in progress, preserve that newer clipboard instead of restoring stale content;
+- harden stale-session/disposal/lifecycle behavior without an unrelated engine rewrite.
+
+Do not create M3 until M2 has passed automated/Windows review and the user explicitly approves the M2 merge.
 
 ## Repository boundaries
 
@@ -29,6 +38,8 @@ Do not start M2 and do not merge PR #50 until the user has installed/tested M1 o
 - Follow the latest deliberately selected editable input plus caret/selection through final insertion.
 - Dictate/Stop/Insert controls do not themselves count as retargeting.
 - Never synthesize Enter or automatically submit.
+- Retain a successful non-empty final transcript before insertion so insertion/clipboard failure cannot destroy the only recoverable copy.
+- Treat clipboard preservation as a product invariant: restore the complete pre-insertion Windows clipboard when Universal Dictate still owns the temporary clipboard state; if a newer clipboard change occurs, preserve the newer content instead.
 - Preserve local/offline inference after model setup and the Windows UI-host/Remote-WSL architecture.
 - Live preview v1 is overlay-only provisional text, not repeated target pastes.
 - Translation v1, if approved, uses the local Whisper source-language-to-English capability; arbitrary target languages require a separate backend decision.
