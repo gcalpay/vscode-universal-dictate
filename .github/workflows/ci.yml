@@ -33,6 +33,9 @@ jobs:
       - name: Overlay-size TypeScript tests
         run: node --test test/overlay-size.test.cjs
 
+      - name: Transcript recovery and UI tests
+        run: node --test test/transcript-recovery.test.cjs test/transcript-recovery-ui.test.cjs
+
       - name: Overlay layout geometry test
         run: |
           g++ -std=c++20 -Wall -Wextra -pedantic test/native/overlay-layout-test.cpp -o overlay-layout-test

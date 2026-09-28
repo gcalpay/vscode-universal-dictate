@@ -1,6 +1,7 @@
 import * as fs from 'node:fs';
 import * as vscode from 'vscode';
 import { DictationEngine, DictationState } from './core/dictation';
+import { TranscriptRecoveryController } from './transcript-recovery';
 import { normalizeOverlaySize, OVERLAY_SIZES, type OverlaySize } from './core/overlay-size';
 import {
   getWhisperLanguageName,
@@ -89,6 +90,7 @@ class DictationController implements vscode.Disposable {
   private readonly settingsStatusBar: vscode.StatusBarItem;
   private readonly levelHistory = Array<number>(9).fill(0);
   private readonly engine: DictationEngine;
+  readonly recovery: TranscriptRecoveryController;
   private activeVisualization: VisualizationMode = 'enhancedOverlay';
 
   constructor(private readonly context: vscode.ExtensionContext) {
@@ -148,6 +150,7 @@ class DictationController implements vscode.Disposable {
       onError: (error) => this.showError(error)
     });
 
+    this.recovery = new TranscriptRecoveryController(this.engine);
     this.context.subscriptions.push(this.statusBar, this.settingsStatusBar);
   }
 
@@ -171,6 +174,7 @@ class DictationController implements vscode.Disposable {
   }
 
   dispose(): void {
+    this.recovery.dispose();
     this.engine.dispose();
     this.statusBar.dispose();
     this.settingsStatusBar.dispose();
@@ -209,6 +213,7 @@ class DictationController implements vscode.Disposable {
         this.statusBar.tooltip = 'Speech recognition is running locally with whisper.cpp.';
         return;
       case 'inserting':
+        this.statusBar.command = undefined;
         this.statusBar.text = '$(check) Universal Dictate: inserting';
         return;
     }
@@ -262,7 +267,7 @@ class DictationController implements vscode.Disposable {
 
 type LanguageQuickPickItem = vscode.QuickPickItem & { code: string };
 type SettingsQuickPickItem = vscode.QuickPickItem & {
-  action: 'language' | 'visualization' | 'overlaySize' | 'waveformTimeSpan';
+  action: 'language' | 'visualization' | 'overlaySize' | 'waveformTimeSpan' | 'lastTranscript';
 };
 type VisualizationQuickPickItem = vscode.QuickPickItem & { mode: VisualizationMode };
 type OverlaySizeQuickPickItem = vscode.QuickPickItem & { size: OverlaySize };
@@ -413,7 +418,7 @@ async function selectWaveformTimeSpan(): Promise<void> {
   );
 }
 
-async function openSettings(): Promise<void> {
+async function openSettings(recovery: TranscriptRecoveryController): Promise<void> {
   const configuration = vscode.workspace.getConfiguration('universalDictate');
   const currentLanguage = normalizeWhisperLanguage(
     configuration.get<string>('language', 'auto')
@@ -446,6 +451,12 @@ async function openSettings(): Promise<void> {
       description: waveformTimeSpanLabel(currentWaveformTimeSpan),
       detail: 'Choose how much recent audio is visible across the enhanced native waveform.',
       action: 'waveformTimeSpan'
+    },
+    {
+      label: '$(history) Last transcript',
+      description: recovery.availability,
+      detail: 'Insert, copy or clear the last completed transcript. Memory only.',
+      action: 'lastTranscript'
     }
   ];
 
@@ -474,6 +485,11 @@ async function openSettings(): Promise<void> {
     return;
   }
 
+  if (selected.action === 'lastTranscript') {
+    await recovery.showMenu();
+    return;
+  }
+
   await selectWaveformTimeSpan();
 }
 
@@ -495,7 +511,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
   const openSettingsCommand = vscode.commands.registerCommand(
     'universalDictate.openSettings',
-    openSettings
+    () => openSettings(controller.recovery)
   );
 
   const showDiagnostics = vscode.commands.registerCommand(

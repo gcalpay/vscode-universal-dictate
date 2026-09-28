@@ -31,6 +31,9 @@ jobs:
       - name: Overlay-size TypeScript tests
         run: npm run test:m1
 
+      - name: Transcript recovery and UI tests
+        run: node --test test/transcript-recovery.test.cjs test/transcript-recovery-ui.test.cjs
+
       - name: Fetch pinned miniaudio header
         shell: pwsh
         run: |
