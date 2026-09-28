@@ -5,9 +5,10 @@ import { pasteIntoFocusedControl as pasteIntoFocusedControlCore } from './core/p
 /** Clipboard preservation is native; the VS Code adapter only resolves its path. */
 export async function pasteIntoFocusedControl(
   context: vscode.ExtensionContext,
-  text: string
+  text: string,
+  signal?: AbortSignal
 ): Promise<void> {
-  await pasteIntoFocusedControlCore({ helperPath: getNativePasteHelperPath(context) }, text);
+  await pasteIntoFocusedControlCore({ helperPath: getNativePasteHelperPath(context), signal }, text);
 }
 
 export function getNativePasteHelperPath(context: vscode.ExtensionContext): string {

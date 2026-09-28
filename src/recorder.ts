@@ -1,4 +1,5 @@
 import * as fs from 'node:fs';
+import { randomUUID } from 'node:crypto';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 import {
@@ -32,8 +33,10 @@ export class RecorderSession {
     showOverlay = true,
     overlayStyle: RecorderOverlayStyle = 'compact',
     waveformTimeSpanSeconds = 1,
-    overlaySize: OverlaySize = 'medium'
+    overlaySize: OverlaySize = 'medium',
+    signal?: AbortSignal
   ): Promise<RecorderSession> {
+    signal?.throwIfAborted();
     const recorderPath = getRecorderPath(context);
     if (!fs.existsSync(recorderPath)) {
       throw new Error(`Native microphone recorder is missing: ${recorderPath}`);
@@ -41,7 +44,8 @@ export class RecorderSession {
 
     const recordingsDir = vscode.Uri.joinPath(context.globalStorageUri, 'recordings').fsPath;
     await fs.promises.mkdir(recordingsDir, { recursive: true });
-    const outputPath = path.join(recordingsDir, `dictation-${Date.now()}.wav`);
+    signal?.throwIfAborted();
+    const outputPath = path.join(recordingsDir, `dictation-${randomUUID()}.wav`);
 
     const core = await CoreRecorderSession.start(
       {
@@ -50,7 +54,8 @@ export class RecorderSession {
         showOverlay,
         overlayStyle,
         waveformTimeSpanSeconds,
-        overlaySize
+        overlaySize,
+        signal
       },
       onLevel
     );
@@ -59,6 +64,10 @@ export class RecorderSession {
 
   onAction(listener: (action: RecorderAction) => void): void {
     this.core.onAction(listener);
+  }
+
+  onFailure(listener: (error: Error) => void): void {
+    this.core.onFailure(listener);
   }
 
   async stop(): Promise<string> {

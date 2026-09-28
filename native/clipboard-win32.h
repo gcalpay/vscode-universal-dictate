@@ -265,8 +265,9 @@ public:
 class NativeHost final : public Host {
 public:
     explicit NativeHost(std::wstring_view text, bool (*send)() noexcept,
-                        std::chrono::milliseconds grace = std::chrono::milliseconds(120))
-        : send_(send), grace_(grace) {
+                        std::chrono::milliseconds grace = std::chrono::milliseconds(120),
+                        bool (*cancelled)() noexcept = nullptr)
+        : send_(send), grace_(grace), cancelled_(cancelled) {
         std::wstring terminated(text);
         temporary_ = memoryData(CF_UNICODETEXT, terminated.c_str(), (terminated.size() + 1) * sizeof(wchar_t));
         const UINT format = RegisterClipboardFormatW(L"ExcludeClipboardContentFromMonitorProcessing");
@@ -277,6 +278,7 @@ public:
         if (!mutex_) throw std::runtime_error("clipboard transaction mutex unavailable");
     }
     ~NativeHost() override { if (mutex_) CloseHandle(mutex_); }
+    bool cancelled() noexcept override { return cancelled_ && cancelled_(); }
     bool claim() noexcept override {
         const DWORD wait = WaitForSingleObject(mutex_, 0);
         if (wait == WAIT_ABANDONED) {
@@ -319,5 +321,6 @@ private:
     HANDLE mutex_ = nullptr;
     bool (*send_)() noexcept;
     std::chrono::milliseconds grace_;
+    bool (*cancelled_)() noexcept;
 };
 }  // namespace universal_dictate::clipboard

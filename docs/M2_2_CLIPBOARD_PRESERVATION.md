@@ -8,10 +8,17 @@ Branch: `fix/transcript-recovery`.
 Baseline: `a21d6825354448c2709613ad7ae693817400a797`
 (`feat: add last transcript recovery`, committed after user approval).
 
-M2.2 source is prepared as an **uncommitted change set** against that baseline.
-No M2.2 commit, PR, workflow dispatch, merge, version bump or release is included.
-This is not a finished/Windows-validated M2 milestone. M2.3 lifecycle work,
-M2.4 integrated validation and the M2.5 user-review gate remain outstanding.
+The exact approved M2.2 change set was committed as
+`174883bd0ccf96b27e4727f40cf915d038e11836`, with message
+`fix: preserve clipboard state during transcript insertion`. The remote branch
+was advanced without force. No PR, workflow dispatch, merge, version bump or
+release accompanied this checkpoint. This is not a Windows-validated or accepted
+M2 milestone; M2.4 integrated validation and M2.5 user review remain outstanding.
+
+This ledger describes the M2.2 checkpoint. The subsequent, currently uncommitted
+[M2.3 change set](M2_3_LIFECYCLE.md) adds cooperative cancellation and upgrades the
+request/response transport to v2. The v1 framing/EOF description below is historical,
+not instructions for running the M2.3 host/helper.
 
 The requirement has not been reduced to text-only preservation: preserve the
 entire original clipboard or refuse before replacing it. Never quietly drop
@@ -159,11 +166,11 @@ ask the user to run it against valuable desktop clipboard contents.
 
 ## Next authorized gate
 
-Proposed M2.2 commit: `fix: preserve clipboard state during transcript insertion`.
-Stop for approval before committing/pushing this change set. Keep all subsequent
-work on `fix/transcript-recovery`. Proceed to M2.3 after the approved checkpoint,
-then M2.4 integration. Only M2.5 supplies the integrated user-test VSIX; M3 must
-not begin before M2 is accepted and merged.
+M2.2 is committed at `174883bd0ccf96b27e4727f40cf915d038e11836`.
+M2.3 source/tests are now prepared on the same branch baseline and await their own
+commit approval. See [M2_3_LIFECYCLE.md](M2_3_LIFECYCLE.md). M2.4 is the integrated
+validation phase; only M2.5 supplies the user-test VSIX. M3 must not begin before
+M2 is accepted and merged.
 
 ## Primary API references
 

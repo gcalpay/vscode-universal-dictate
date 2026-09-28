@@ -122,7 +122,7 @@ class DictationController implements vscode.Disposable {
         await ensureModel(this.context);
       },
       warm: () => warmWhisper(this.context),
-      startRecorder: (onLevel) => {
+      startRecorder: (onLevel, signal) => {
         this.activeVisualization = getConfiguredVisualization();
         return RecorderSession.start(
           this.context,
@@ -130,11 +130,12 @@ class DictationController implements vscode.Disposable {
           showsOverlay(this.activeVisualization),
           'enhanced',
           getConfiguredWaveformTimeSpanSeconds(),
-          getConfiguredOverlaySize()
+          getConfiguredOverlaySize(),
+          signal
         );
       },
       transcribe: (audioPath) => transcribe(this.context, audioPath),
-      insert: (transcript) => pasteIntoFocusedControl(this.context, transcript),
+      insert: (transcript, signal) => pasteIntoFocusedControl(this.context, transcript, signal),
       onStateChanged: (state) => this.renderState(state),
       onLevel: (level) => {
         if (showsStatusBarWaveform(this.activeVisualization)) {

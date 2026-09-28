@@ -17,6 +17,8 @@ struct FakeHost final : Host {
     bool allowClaim = true, restoreOK = true, sendOK = true;
     int opens = 0, closes = 0, queries = 0, snapshots = 0, publishes = 0, restores = 0, sends = 0;
     int releases = 0;
+    int cancelQueries = 0, cancelAt = 0;
+    bool cancellationRequested = false;
     Code snapshotCode = Code::ok;
     Publish publishResult = Publish::ready;
     std::uint32_t serial = 42;
@@ -28,6 +30,10 @@ struct FakeHost final : Host {
         return false;
     }
     void needsOpen() noexcept { if (!opened) violated = true; }
+    bool cancelled() noexcept override {
+        ++cancelQueries;
+        return cancellationRequested || (cancelAt != 0 && cancelQueries >= cancelAt);
+    }
     bool claim() noexcept override {
         if (claimed) violated = true;
         return claimed = allowClaim;
@@ -287,5 +293,35 @@ int main() {
         check(std::string(pasteName(Paste::notAttempted)) == "not_attempted", "paste name");
         check(std::string(clipboardName(Clipboard::partial)) == "partial", "clipboard name");
     });
-    std::cout << passed << " clipboard transaction/policy tests passed\n";
+    for (int point = 1; point <= 6; ++point) {
+        test("cooperative cancellation at each pre-paste boundary", [point] {
+            FakeHost h; h.cancelAt = point; const auto r = run(h);
+            check(r.code == Code::cancelled && r.paste == Paste::notAttempted && h.sends == 0, "cancelled operation pasted");
+            check(h.data == "original image / all formats", "cancellation damaged original clipboard");
+            check((point <= 3 && r.clipboard == Clipboard::unchanged && h.publishes == 0) ||
+                  (point > 3 && r.clipboard == Clipboard::restored && h.restores == 1), "cancellation did not restore exactly once");
+        });
+    }
+    test("cancel between unlock and dispatch respects a newer copy", [] {
+        FakeHost h; h.cancelAt = 6;
+        h.onFirstClose = [](auto& f) { ++f.serial; f.owner = false; f.data = "newer copy"; };
+        const auto r = run(h);
+        check(r.clipboard == Clipboard::newer && h.restores == 0 && h.sends == 0 && h.data == "newer copy", "cancel overwrote newer copy");
+    });
+    test("cancel rollback failure remains partial, not cancelled-success", [] {
+        FakeHost h; h.cancelAt = 4; h.restoreOK = false;
+        const auto r = run(h);
+        check(r.code == Code::restoreFailed && r.clipboard == Clipboard::partial && h.sends == 0, "cancel masked failed restore");
+    });
+    test("cancel after input still completes restoration without repeating input", [] {
+        FakeHost h; h.onSettle = [](auto& f) { f.cancellationRequested = true; };
+        const auto r = run(h);
+        check(r.code == Code::ok && r.clipboard == Clipboard::restored && h.sends == 1 && h.restores == 1, "post-input cancellation abandoned restore");
+    });
+    test("cancel during settlement preserves newer content", [] {
+        FakeHost h; h.onSettle = [](auto& f) { f.cancellationRequested = true; ++f.serial; f.owner = false; f.data = "new image"; };
+        const auto r = run(h);
+        check(r.clipboard == Clipboard::newer && h.data == "new image" && h.restores == 0 && h.sends == 1, "late cancellation overwrote newer clipboard");
+    });
+        std::cout << passed << " clipboard transaction/policy tests passed\n";
 }

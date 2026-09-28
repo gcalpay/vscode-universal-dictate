@@ -51,7 +51,7 @@ constexpr FormatKind formatKind(std::uint32_t id, std::wstring_view name = {}) n
 enum class Code {
     ok, busy, clipboardBusy, snapshotUnsupported, snapshotFailed,
     ownershipUnknown, clipboardChanged, writeFailed, pasteFailed,
-    restoreFailed, invalidRequest, internalError
+    restoreFailed, invalidRequest, internalError, cancelled
 };
 enum class Paste { notAttempted, submitted, uncertain };
 enum class Clipboard { unchanged, restored, newer, unknown, partial };
@@ -65,6 +65,7 @@ struct Result {
 class Host {
 public:
     virtual ~Host() = default;
+    virtual bool cancelled() noexcept { return false; }
     virtual bool claim() noexcept = 0;
     virtual void releaseClaim() noexcept = 0;
     virtual bool open() noexcept = 0;
@@ -103,11 +104,14 @@ public:
 private:
     Result runOnce() noexcept {
         Result result;
+        if (host_.cancelled()) return {Code::cancelled};
         if (!(claimed_ = host_.claim())) return {Code::busy};
         if (!open()) return {Code::clipboardBusy};
+        if (host_.cancelled()) return {Code::cancelled};
         if (host_.sequence() == 0) return {Code::ownershipUnknown};
         result.code = host_.snapshot();
         if (result.code != Code::ok) return result;
+        if (host_.cancelled()) return {Code::cancelled};
         const auto published = host_.publish();
         if (published == Publish::unchangedFailure) return {Code::writeFailed};
         // From here on, any error must explicitly account for the changed data.
@@ -115,6 +119,7 @@ private:
         token_ = host_.sequence();
         if (token_ == 0) return rollback(Code::ownershipUnknown);
         if (!host_.isOwner()) return {Code::ownershipUnknown, Paste::notAttempted, Clipboard::unknown};
+        if (host_.cancelled()) return rollback(Code::cancelled);
         if (!close()) return rollback(Code::clipboardBusy);
 
         // Refuse to paste if a copy overtook our temporary write before dispatch.
@@ -124,10 +129,12 @@ private:
             return {beforePaste == Clipboard::newer ? Code::clipboardChanged : Code::ownershipUnknown,
                     Paste::notAttempted, beforePaste};
         }
+        if (host_.cancelled()) return rollback(Code::cancelled);
         if (!close()) return rollback(Code::clipboardBusy);
+        if (host_.cancelled()) return finish({Code::cancelled});
         result.paste = Paste::uncertain;
         if (host_.sendPaste()) result.paste = Paste::submitted;
-        else result.code = Code::pasteFailed;
+        else result.code = host_.cancelled() ? Code::cancelled : Code::pasteFailed;
         // A bounded grace period is not an acknowledgement from the target.
         // Do not automatically retry even if input submission was uncertain.
         host_.settlePaste();
@@ -189,6 +196,7 @@ constexpr const char* codeName(Code value) noexcept {
         case Code::pasteFailed: return "paste_failed";
         case Code::restoreFailed: return "restore_failed";
         case Code::invalidRequest: return "invalid_request";
+        case Code::cancelled: return "cancelled";
         default: return "internal_error";
     }
 }

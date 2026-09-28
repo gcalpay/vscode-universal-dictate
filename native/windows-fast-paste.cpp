@@ -11,8 +11,6 @@
 #include <array>
 #include <charconv>
 #include <cstdio>
-#include <fcntl.h>
-#include <io.h>
 #include <string>
 
 namespace {
@@ -54,12 +52,22 @@ private:
     UINT count_ = 0;
 };
 
+bool requestCancelled() noexcept {
+    DWORD available = 0;
+    // EOF/broken pipe means the operation or host has ended. No second request
+    // is accepted. Unexpected extra bytes also fail closed, never trigger paste.
+    return !PeekNamedPipe(GetStdHandle(STD_INPUT_HANDLE), nullptr, 0, nullptr, &available, nullptr)
+        || available != 0;
+}
+
 bool sendPaste() noexcept {
+    if (requestCancelled()) return false;
     if (!GetForegroundWindow()) return false;
     ReleasedModifiers modifiers;
     if (!modifiers.release()) return false;
     // Retain the existing shortcut-release grace; this is not focus restoration.
     Sleep(10);
+    if (requestCancelled()) return false;
     std::array<INPUT, 4> input = {
         key(VK_LCONTROL), key('V'), key('V', KEYEVENTF_KEYUP), key(VK_LCONTROL, KEYEVENTF_KEYUP)
     };
@@ -73,32 +81,46 @@ bool sendPaste() noexcept {
     return true;
 }
 
-bool readTranscript(std::wstring& result) {
-    if (_setmode(_fileno(stdin), _O_BINARY) == -1) return false;
-    // A length-prefixed frame prevents a truncated pipe/parent failure from
-    // turning a valid prefix of the transcript into an unintended short paste.
-    std::string header;
-    for (int c; (c = std::fgetc(stdin)) != '\n';) {
-        if (c == EOF || header.size() >= 32) return false;
-        header.push_back(static_cast<char>(c));
+// Read only the declared bytes; buffered stdio could hide a lifetime-pipe
+// disconnect or unexpected trailing control data from PeekNamedPipe.
+bool readExact(HANDLE pipe, char* target, std::size_t size, ULONGLONG deadline) noexcept {
+    std::size_t read = 0;
+    while (read < size) {
+        DWORD available = 0;
+        if (!PeekNamedPipe(pipe, nullptr, 0, nullptr, &available, nullptr)) return false;
+        if (available == 0) {
+            if (GetTickCount64() >= deadline) return false;
+            Sleep(5);
+            continue;
+        }
+        const auto wanted = static_cast<DWORD>(std::min<std::size_t>(size - read, available));
+        DWORD received = 0;
+        if (!ReadFile(pipe, target + read, wanted, &received, nullptr) || received == 0) return false;
+        read += received;
     }
-    constexpr std::string_view prefix = "UDCP1 ";
-    if (!header.starts_with(prefix)) return false;
+    return true;
+}
+
+bool readTranscript(std::wstring& result) {
+    const HANDLE pipe = GetStdHandle(STD_INPUT_HANDLE);
+    if (pipe == INVALID_HANDLE_VALUE || GetFileType(pipe) != FILE_TYPE_PIPE) return false;
+    const ULONGLONG deadline = GetTickCount64() + 10000;
+    std::string header;
+    char c = 0;
+    while (readExact(pipe, &c, 1, deadline) && c != '\n') {
+        if (header.size() >= 32) return false;
+        header.push_back(c);
+    }
+    constexpr std::string_view prefix = "UDCP2 ";
+    if (c != '\n' || !header.starts_with(prefix)) return false;
     std::size_t expected = 0;
     const char* begin = header.data() + prefix.size();
     const char* end = header.data() + header.size();
     const auto parsed = std::from_chars(begin, end, expected);
-    if (parsed.ec != std::errc{} || parsed.ptr != end || expected == 0 ||
-        expected > kMaxTranscriptBytes) return false;
+    if (parsed.ec != std::errc{} || parsed.ptr != end || expected == 0 || expected > kMaxTranscriptBytes)
+        return false;
     std::string bytes(expected, '\0');
-    std::size_t read = 0;
-    while (read < expected) {
-        const auto count = std::fread(bytes.data() + read, 1, expected - read, stdin);
-        if (count == 0) return false;
-        read += count;
-    }
-    // No extra data, truncated frame, nulls, or invalid UTF-8 is accepted.
-    if (std::fgetc(stdin) != EOF || std::ferror(stdin) || bytes.find('\0') != std::string::npos)
+    if (!readExact(pipe, bytes.data(), expected, deadline) || bytes.find('\0') != std::string::npos)
         return false;
     const int length = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, bytes.data(),
                                          static_cast<int>(bytes.size()), nullptr, 0);
@@ -109,7 +131,7 @@ bool readTranscript(std::wstring& result) {
 }
 
 int report(Result result) noexcept {
-    std::printf("{\"protocol\":1,\"code\":\"%s\",\"paste\":\"%s\",\"clipboard\":\"%s\"}\n",
+    std::printf("{\"protocol\":2,\"code\":\"%s\",\"paste\":\"%s\",\"clipboard\":\"%s\"}\n",
                 codeName(result.code), pasteName(result.paste), clipboardName(result.clipboard));
     return result.code == Code::ok ? 0 : 1;
 }
@@ -118,12 +140,13 @@ int report(Result result) noexcept {
 int main(int argc, char** argv) {
     // A different output binary name prevents old helpers (which ignore argv)
     // from pasting the user's clipboard when asked to speak the new protocol.
-    if (argc != 2 || std::string_view(argv[1]) != "--clipboard-transaction-v1")
+    if (argc != 2 || std::string_view(argv[1]) != "--clipboard-transaction-v2")
         return report({Code::invalidRequest});
     try {
         std::wstring text;
         if (!readTranscript(text)) return report({Code::invalidRequest});
-        NativeHost host(text, sendPaste);
+        if (requestCancelled()) return report({Code::cancelled});
+        NativeHost host(text, sendPaste, std::chrono::milliseconds(120), requestCancelled);
         Result result;
         {
             Transaction transaction(host);

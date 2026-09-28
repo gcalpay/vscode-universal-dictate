@@ -6,25 +6,33 @@ export type TranscriptRecoveryResult = 'completed' | 'empty' | 'busy' | 'dispose
 export interface DictationSession {
   readonly outputPath: string;
   onAction(listener: (action: DictationRecorderAction) => void): void;
+  onFailure?(listener: (error: Error) => void): void;
   stop(): Promise<string>;
   cancel(): Promise<void>;
 }
 
 export type DictationState =
-  | 'idle'
-  | 'preparing'
-  | 'opening-microphone'
-  | 'recording'
-  | 'cancelling'
-  | 'transcribing'
-  | 'inserting';
+  | 'idle' | 'preparing' | 'opening-microphone' | 'recording'
+  | 'cancelling' | 'transcribing' | 'inserting';
+
+type Phase = 'preparing' | 'opening-microphone' | 'recording' | 'stopping'
+  | 'transcribing' | 'inserting' | 'copying' | 'cancelling' | 'cleaning';
+interface Operation {
+  readonly id: number;
+  readonly abort: AbortController;
+  phase: Phase;
+  session?: DictationSession;
+  pendingAction?: DictationRecorderAction;
+  cancellation?: Promise<void>;
+  terminal?: Promise<void>;
+}
 
 export interface DictationEngineOptions {
   readonly prepare: () => Promise<void>;
   readonly warm: () => Promise<void>;
-  readonly startRecorder: (onLevel: (level: number) => void) => Promise<DictationSession>;
+  readonly startRecorder: (onLevel: (level: number) => void, signal: AbortSignal) => Promise<DictationSession>;
   readonly transcribe: (audioPath: string) => Promise<string>;
-  readonly insert: (transcript: string) => Promise<void>;
+  readonly insert: (transcript: string, signal: AbortSignal) => Promise<void>;
   readonly onStateChanged?: (state: DictationState) => void;
   readonly onLevel?: (level: number) => void;
   readonly onRecordingChanged?: (recording: boolean) => PromiseLike<void> | void;
@@ -32,237 +40,254 @@ export interface DictationEngineOptions {
   readonly onError?: (error: unknown) => void;
 }
 
-/**
- * Host-neutral dictation workflow shared by editor and standalone frontends.
- *
- * UI rendering, command registration, storage paths and transcription settings
- * remain host-owned. Completed transcripts are retained only in this engine's
- * memory, independently of whether automatic or explicit insertion succeeds.
- */
+/** One operation owns its recorder, pending work and cleanup until it settles. */
 export class DictationEngine {
-  private session: DictationSession | undefined;
-  private busy = false;
+  private operation: Operation | undefined;
+  private generation = 0;
   private disposed = false;
   private lastTranscript: string | undefined;
+  private recordingNotice = 0;
+  private recordingNotifications: Promise<void> = Promise.resolve();
 
   constructor(private readonly options: DictationEngineOptions) {}
 
-  getLastTranscript(): string | undefined {
-    return this.lastTranscript;
-  }
-
-  clearLastTranscript(): void {
-    this.lastTranscript = undefined;
-  }
+  getLastTranscript(): string | undefined { return this.lastTranscript; }
+  clearLastTranscript(): void { this.lastTranscript = undefined; }
 
   insertLastTranscript(): Promise<TranscriptRecoveryResult> {
-    return this.useLastTranscript((text) => this.options.insert(text), true);
+    return this.useLastTranscript((text, signal) => this.options.insert(text, signal), true);
   }
 
-  copyLastTranscript(
-    copy: (text: string) => PromiseLike<void>
-  ): Promise<TranscriptRecoveryResult> {
+  copyLastTranscript(copy: (text: string) => PromiseLike<void>): Promise<TranscriptRecoveryResult> {
     return this.useLastTranscript(copy, false);
   }
 
   async toggle(): Promise<void> {
-    if (this.disposed) {
-      return;
+    if (this.disposed) return;
+    const op = this.operation;
+    if (op) {
+      if (this.current(op) && op.phase === 'recording') await this.stopAndTranscribe(op);
+      return; // No queued restart or recovery paste behind an old operation.
     }
-    if (this.session) {
-      await this.stopAndTranscribe();
-      return;
-    }
-
-    if (this.busy) {
-      return;
-    }
-
-    await this.startRecording();
+    await this.startRecording(this.begin('preparing'));
   }
 
   async cancel(): Promise<void> {
-    const session = this.session;
-    if (this.disposed || !session || this.busy) {
-      return;
-    }
-
-    this.busy = true;
-    this.session = undefined;
-    try {
-      await this.notifyRecordingChanged(false);
-      this.emitState('cancelling');
-      await session.cancel();
-    } catch (error) {
-      this.reportError(error);
-    } finally {
-      this.busy = false;
-      this.emitState('idle');
-    }
+    const op = this.operation;
+    if (this.disposed || !op) return;
+    const wasRecording = op.phase === 'recording';
+    op.abort.abort();
+    this.notifyRecordingChanged(false);
+    this.emitSafely(op, 'cancelling');
+    if (wasRecording) await this.cancelRecording(op);
+    // A pending prepare/decode/copy must settle before its slot can be reused.
+    // Do not unlink a WAV while an old transcription is still reading it.
   }
 
   dispose(): void {
-    if (this.disposed) {
-      return;
-    }
+    if (this.disposed) return;
     this.disposed = true;
     this.clearLastTranscript();
-    if (this.session) {
-      void this.session.cancel().catch(() => undefined);
-      this.session = undefined;
+    const op = this.operation;
+    if (op) {
+      op.abort.abort();
+      if (op.phase === 'recording') void this.cancelRecording(op);
+      else if (op.phase === 'stopping') void this.cancelSession(op).catch(() => undefined);
+    }
+    // Serialized after an already-started true notification, even on disposal.
+    this.notifyRecordingChanged(false);
+  }
+
+  private begin(phase: Phase): Operation {
+    const op: Operation = { id: ++this.generation, abort: new AbortController(), phase };
+    this.operation = op;
+    return op;
+  }
+
+  private owns(op: Operation): boolean { return this.operation === op && op.id === this.generation; }
+  private current(op: Operation): boolean { return this.owns(op) && !this.disposed && !op.abort.signal.aborted; }
+
+  private finish(op: Operation, renderIdle = true): void {
+    if (!this.owns(op)) return;
+    this.operation = undefined;
+    if (!this.disposed && renderIdle) {
+      try { this.options.onStateChanged?.('idle'); } catch (error) { this.reportError(error); }
     }
   }
 
   private async useLastTranscript(
-    action: (text: string) => PromiseLike<void>,
-    inserting: boolean
+    action: (text: string, signal: AbortSignal) => PromiseLike<void>, inserting: boolean
   ): Promise<TranscriptRecoveryResult> {
-    if (this.disposed) {
-      return 'disposed';
-    }
-    // Do not queue a paste/copy that might run later at an unintended target.
-    if (this.busy || this.session) {
-      return 'busy';
-    }
+    if (this.disposed) return 'disposed';
+    if (this.operation) return 'busy';
     const transcript = this.lastTranscript;
-    if (transcript === undefined) {
-      return 'empty';
-    }
-
-    // Use the same lock as normal dictation, including while Copy writes.
-    this.busy = true;
+    if (transcript === undefined) return 'empty';
+    const op = this.begin(inserting ? 'inserting' : 'copying');
     try {
-      if (inserting) {
-        this.emitState('inserting');
-      }
-      if (this.disposed) {
-        return 'disposed';
-      }
-      await action(transcript);
+      if (inserting) this.emitState(op, 'inserting');
+      if (!this.current(op)) return 'disposed';
+      await action(transcript, op.abort.signal);
       return this.disposed ? 'disposed' : 'completed';
     } finally {
-      this.busy = false;
-      if (inserting) {
-        this.emitState('idle');
-      }
+      this.finish(op, inserting);
     }
   }
 
-  private async startRecording(): Promise<void> {
-    this.busy = true;
-    this.emitState('preparing');
-
+  private async startRecording(op: Operation): Promise<void> {
     try {
+      this.emitState(op, 'preparing');
+      if (!this.current(op)) return;
       await this.options.prepare();
-      if (this.disposed) {
-        return;
-      }
-
-      // Warm inference in parallel with recording. A warm-up failure is not
-      // fatal because transcription retains its one-shot fallback path.
-      void this.options.warm().catch(() => undefined);
-
-      this.emitState('opening-microphone');
+      if (!this.current(op)) return;
+      // A synchronous warm-up exception, like a rejection, is non-fatal.
+      try { void this.options.warm().catch(() => undefined); } catch { /* CLI fallback remains. */ }
+      if (!this.current(op)) return;
+      op.phase = 'opening-microphone';
+      this.emitState(op, 'opening-microphone');
+      if (!this.current(op)) return;
       const session = await this.options.startRecorder((level) => {
-        if (!this.disposed) {
-          this.options.onLevel?.(level);
+        if (this.current(op) && op.phase === 'recording') {
+          try { this.options.onLevel?.(level); } catch (error) { this.reportError(error); }
         }
-      });
-      if (this.disposed) {
-        await session.cancel();
-        return;
-      }
-      this.session = session;
-      session.onAction((action) => this.handleRecorderAction(session, action));
-
-      await this.notifyRecordingChanged(true);
-      this.emitState('recording');
+      }, op.abort.signal);
+      op.session = session;
+      if (!this.current(op)) return;
+      session.onAction((action) => this.handleRecorderAction(op, action));
+      session.onFailure?.((error) => this.handleRecorderFailure(op, error));
+      if (!this.current(op)) return;
+      this.notifyRecordingChanged(true);
+      // Initialization completes before the single retained early action runs.
+      this.emitState(op, 'recording');
+      if (!this.current(op)) return;
+      op.phase = 'recording';
+      const pending = op.pendingAction;
+      op.pendingAction = undefined;
+      if (pending) this.handleRecorderAction(op, pending);
     } catch (error) {
-      this.session = undefined;
-      await this.notifyRecordingChanged(false);
-      this.reportError(error);
-      this.emitState('idle');
+      if (this.current(op)) this.reportError(error);
+      op.abort.abort();
     } finally {
-      this.busy = false;
+      if (op.phase === 'opening-microphone' || op.phase === 'preparing') {
+        this.notifyRecordingChanged(false);
+        if (op.session) await this.cancelSession(op).catch((error) => this.reportError(error));
+        this.finish(op);
+      }
     }
   }
 
-  private handleRecorderAction(session: DictationSession, action: DictationRecorderAction): void {
-    if (this.disposed || this.session !== session) {
+  private handleRecorderAction(op: Operation, action: DictationRecorderAction): void {
+    if (!this.current(op)) return;
+    if (op.phase === 'opening-microphone') {
+      op.pendingAction ??= action; // Bounded; no retry timers or repeated accepts.
       return;
     }
-
-    // READY can be followed by an extremely fast overlay click while startup
-    // is still finishing. Preserve that action rather than silently dropping it.
-    if (this.busy) {
-      setTimeout(() => this.handleRecorderAction(session, action), 25);
-      return;
-    }
-
-    if (action === 'stop') {
-      void this.stopAndTranscribe();
-    } else {
-      void this.cancel();
-    }
+    if (op.phase !== 'recording') return;
+    if (action === 'stop') void this.stopAndTranscribe(op);
+    else void this.cancel();
   }
 
-  private async stopAndTranscribe(): Promise<void> {
-    const session = this.session;
-    if (this.disposed || !session || this.busy) {
-      return;
-    }
+  private handleRecorderFailure(op: Operation, error: Error): void {
+    if (!this.current(op) || !['opening-microphone', 'recording'].includes(op.phase)) return;
+    this.reportError(error);
+    op.abort.abort();
+    this.notifyRecordingChanged(false);
+    if (op.phase === 'recording') void this.cancelRecording(op);
+  }
 
-    this.busy = true;
-    this.session = undefined;
+  private cancelSession(op: Operation): Promise<void> {
+    if (!op.cancellation) {
+      // Invoke synchronously within a protected promise: observer errors cannot
+      // stop physical shutdown, and every caller joins the same cleanup.
+      op.cancellation = (async () => { await op.session?.cancel(); })();
+    }
+    return op.cancellation;
+  }
+
+  private cancelRecording(op: Operation): Promise<void> {
+    if (op.terminal) return op.terminal;
+    op.phase = 'cancelling';
+    this.notifyRecordingChanged(false);
+    op.terminal = (async () => {
+      try { await this.cancelSession(op); }
+      catch (error) { this.reportError(error); }
+      finally { this.finish(op); }
+    })();
+    return op.terminal;
+  }
+
+  private stopAndTranscribe(op: Operation): Promise<void> {
+    if (op.terminal) return op.terminal;
+    if (!this.current(op) || !op.session || op.phase !== 'recording') return Promise.resolve();
+    op.phase = 'stopping';
+    this.notifyRecordingChanged(false);
+    op.terminal = this.finalizeRecording(op, op.session);
+    return op.terminal;
+  }
+
+  private async finalizeRecording(op: Operation, session: DictationSession): Promise<void> {
     let audioPath = session.outputPath;
+    let writerClosed = false;
     try {
-      await this.notifyRecordingChanged(false);
-      this.emitState('transcribing');
-      audioPath = await session.stop();
-      if (this.disposed) {
-        return;
-      }
+      // Invoke physical Stop before anything that could throw in the UI.
+      const stopping = session.stop();
+      this.emitSafely(op, 'transcribing');
+      audioPath = await stopping;
+      writerClosed = true;
+      if (!this.current(op)) return;
+      op.phase = 'transcribing';
       const transcript = await this.options.transcribe(audioPath);
-      if (this.disposed) {
-        return;
-      }
-
+      if (!this.current(op)) return;
       if (transcript.trim().length === 0) {
         this.options.onNoSpeech?.();
         return;
       }
-
-      // Preserve the exact text, including whitespace/newlines, before any
-      // insertion callback can fail. Silence never erases the previous value.
       this.lastTranscript = transcript;
-      this.emitState('inserting');
-      if (!this.disposed) {
-        await this.options.insert(transcript);
-      }
+      op.phase = 'inserting';
+      this.emitState(op, 'inserting');
+      if (this.current(op)) await this.options.insert(transcript, op.abort.signal);
     } catch (error) {
-      this.reportError(error);
+      if (this.current(op)) this.reportError(error);
     } finally {
-      await fs.promises.rm(audioPath, { force: true }).catch(() => undefined);
-      this.busy = false;
-      this.emitState('idle');
+      op.phase = 'cleaning';
+      if (!writerClosed) {
+        try { await this.cancelSession(op); writerClosed = true; }
+        catch (error) { this.reportError(error); }
+      } else if (op.cancellation) {
+        await op.cancellation.catch((error) => this.reportError(error));
+      }
+      // A failed/unknown shutdown is NOT permission to unlink a live writer's
+      // output. The concrete recorder retains its own late-close cleanup hook.
+      if (writerClosed) {
+        for (const ownedPath of new Set([session.outputPath, audioPath])) {
+          try { await fs.promises.rm(ownedPath, { force: true }); }
+          catch (error) { this.reportError(error); }
+        }
+      }
+      this.finish(op);
     }
   }
 
-  private emitState(state: DictationState): void {
-    if (!this.disposed) {
-      this.options.onStateChanged?.(state);
-    }
+  private emitState(op: Operation, state: DictationState): void {
+    if (this.current(op)) this.options.onStateChanged?.(state);
+  }
+
+  private emitSafely(op: Operation, state: DictationState): void {
+    if (this.disposed || !this.owns(op)) return;
+    try { this.options.onStateChanged?.(state); } catch (error) { this.reportError(error); }
   }
 
   private reportError(error: unknown): void {
     if (!this.disposed) {
-      this.options.onError?.(error);
+      try { this.options.onError?.(error); } catch { /* Diagnostics must not break cleanup. */ }
     }
   }
 
-  private async notifyRecordingChanged(recording: boolean): Promise<void> {
-    if (!this.disposed) {
-      await this.options.onRecordingChanged?.(recording);
-    }
+  private notifyRecordingChanged(recording: boolean): void {
+    const revision = ++this.recordingNotice;
+    this.recordingNotifications = this.recordingNotifications.then(async () => {
+      if (revision !== this.recordingNotice || (recording && this.disposed)) return;
+      try { await this.options.onRecordingChanged?.(recording); }
+      catch (error) { this.reportError(error); }
+    });
   }
 }
