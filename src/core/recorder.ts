@@ -1,6 +1,7 @@
 import * as childProcess from 'node:child_process';
 import * as fs from 'node:fs';
 import * as readline from 'node:readline';
+import { normalizeOverlaySize, type OverlaySize } from './overlay-size';
 
 const START_TIMEOUT_MS = 10000;
 const DEFAULT_WAVEFORM_TIME_SPAN_SECONDS = 1;
@@ -16,6 +17,7 @@ export interface RecorderStartOptions {
   readonly showOverlay?: boolean;
   readonly overlayStyle?: RecorderOverlayStyle;
   readonly waveformTimeSpanSeconds?: number;
+  readonly overlaySize?: OverlaySize | string;
 }
 
 /**
@@ -25,6 +27,32 @@ export interface RecorderStartOptions {
  * recorder process protocol, microphone level events, native overlay actions,
  * and the lifetime of the WAV file supplied in `outputPath`.
  */
+export function buildRecorderArguments(options: RecorderStartOptions): string[] {
+  const args = ['--output', options.outputPath];
+
+  if (options.showOverlay === false) {
+    args.push('--no-overlay');
+    return args;
+  }
+
+  if (options.overlayStyle === 'enhanced') {
+    args.push('--enhanced-overlay');
+
+    const configuredSpan = options.waveformTimeSpanSeconds ?? DEFAULT_WAVEFORM_TIME_SPAN_SECONDS;
+    const waveformTimeSpanSeconds = Number.isFinite(configuredSpan)
+      ? Math.min(
+          MAX_WAVEFORM_TIME_SPAN_SECONDS,
+          Math.max(MIN_WAVEFORM_TIME_SPAN_SECONDS, configuredSpan)
+        )
+      : DEFAULT_WAVEFORM_TIME_SPAN_SECONDS;
+
+    args.push('--waveform-timespan-ms', String(Math.round(waveformTimeSpanSeconds * 1000)));
+    args.push('--overlay-size', normalizeOverlaySize(options.overlaySize));
+  }
+
+  return args;
+}
+
 export class CoreRecorderSession {
   private readonly child: childProcess.ChildProcessWithoutNullStreams;
   private readonly ready: Promise<void>;
@@ -128,22 +156,7 @@ export class CoreRecorderSession {
       throw new Error(`Native microphone recorder is missing: ${options.recorderPath}`);
     }
 
-    const args = ['--output', options.outputPath];
-    if (options.showOverlay === false) {
-      args.push('--no-overlay');
-    } else if (options.overlayStyle === 'enhanced') {
-      args.push('--enhanced-overlay');
-      const configuredSpan = options.waveformTimeSpanSeconds ?? DEFAULT_WAVEFORM_TIME_SPAN_SECONDS;
-      const waveformTimeSpanSeconds = Number.isFinite(configuredSpan)
-        ? Math.min(
-            MAX_WAVEFORM_TIME_SPAN_SECONDS,
-            Math.max(MIN_WAVEFORM_TIME_SPAN_SECONDS, configuredSpan)
-          )
-        : DEFAULT_WAVEFORM_TIME_SPAN_SECONDS;
-      args.push('--waveform-timespan-ms', String(Math.round(waveformTimeSpanSeconds * 1000)));
-    }
-
-    const child = childProcess.spawn(options.recorderPath, args, {
+    const child = childProcess.spawn(options.recorderPath, buildRecorderArguments(options), {
       windowsHide: true,
       stdio: ['pipe', 'pipe', 'pipe']
     });

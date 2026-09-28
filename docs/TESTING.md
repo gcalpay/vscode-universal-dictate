@@ -1,30 +1,72 @@
-# MVP test procedure
+# Manual and release test procedure
 
-The focused-input insertion milestone has already passed against the OpenAI Codex composer in a Windows VS Code window connected through Remote - WSL. The current test validates the complete local dictation path.
+This document describes the current shipped baseline. The detailed future acceptance matrix and milestone-specific gates live in `docs/DICTATION_RELIABILITY_PLAN.md`.
 
-## Environment
+Do not turn a compile result or mocked control into a Windows/Codex pass. Use synthetic text in captures and issue reports.
 
-- Windows 10/11 desktop VS Code
-- Universal Dictate installed from the Windows VSIX
-- Optional Remote - WSL workspace
-- OpenAI Codex composer or another VS Code text input focused
+## Environment record
 
-## First-run dictation test
+For every manual run record:
 
-1. Focus the target text input.
-2. Press `Ctrl+Alt+D`.
-3. Allow the initial multilingual Whisper base model download to complete.
-4. Wait until the status bar shows recording activity.
-5. Speak normally.
-6. Press `Ctrl+Alt+D` again.
-7. Wait for local transcription.
-8. Confirm that the spoken text is inserted at the target caret and that no Enter key is synthesized.
+- Windows version
+- VS Code version
+- Universal Dictate branch/commit or VSIX identity
+- local Windows vs Remote - WSL workspace
+- target control
+- visualization mode
+- waveform time span
+- start and finish controls
+- display scaling/monitor arrangement when testing the native overlay
 
-The first model download is approximately 148 MB. Subsequent dictation should not require networking.
+## Basic dictation
+
+1. Focus an editable target.
+2. Start with `Ctrl+Alt+D`.
+3. On first use, allow the model download/checksum verification to finish.
+4. Speak synthetic test text.
+5. Stop with `Ctrl+Alt+D`.
+6. Confirm the produced transcript is pasted once at the current target and no Enter/submission occurs.
+7. Repeat with the enhanced overlay Insert button.
+8. Separately exercise the genuine status-bar Dictate and Stop mouse paths and record focus/placement results; do not assume they preserve the previous target.
+
+Subsequent dictation should work without network access after the model exists.
+
+## Selection semantics
+
+Use:
+
+```text
+left old right
+```
+
+Select only `old`. A correct paste of `UD_TEST` produces:
+
+```text
+left UD_TEST right
+```
+
+Text outside the selection must remain unchanged.
 
 ## Cancellation
 
-While recording, press `Esc`. The temporary recording should be discarded and no text inserted.
+While recording:
+
+- press `Esc`, and separately
+- use overlay Discard when the overlay is enabled.
+
+No transcript should be inserted or submitted.
+
+## Visualization regression
+
+Exercise Both, Enhanced overlay, Status bar only and Off. For the enhanced overlay, verify waveform spans 1, 3, 5, 10 and 20 seconds do not alter recording length or final transcription behavior.
+
+When M1 size presets are implemented, test Small/Medium/Large at 100%, 125%, 150% and 200% scaling plus a mixed-DPI/multi-monitor setup. Drawing and Insert/Discard hit areas must remain aligned and the overlay must stay non-activating.
+
+## Clipboard baseline
+
+Copy recognizable plain text before dictation. After insertion, paste manually elsewhere and verify the prior clipboard text was restored.
+
+The current baseline uses delayed string restoration and does not yet establish ownership-aware preservation of every native clipboard format. M2 explicitly tests and improves this; do not overstate current guarantees.
 
 ## Diagnostics
 
@@ -34,42 +76,26 @@ Run:
 Universal Dictate: Show Diagnostics
 ```
 
-A packaged Windows build should report values equivalent to:
+A packaged Windows build should report the expected Windows UI-host placement and availability of the native paste helper, recorder and whisper runtime. After setup, the model should report installed.
 
-```text
-platform=win32
-remote=wsl
-nativePaste=available
-recorder=available
-whisper=available
-```
-
-After first-run model setup it should also report:
-
-```text
-model=installed
-```
-
-The critical placement result remains `platform=win32` even while the VS Code workspace is connected to WSL.
-
-## Clipboard preservation
-
-Copy a recognizable value before dictation. After the transcript is inserted, paste manually somewhere else and confirm that the previous clipboard text was restored.
-
-## Failure classifications
+## Failure classification
 
 ### Recorder fails to open
 
-Check Windows microphone privacy settings, especially permission for desktop applications to access the microphone.
+Check Windows microphone privacy settings, especially permission for desktop applications.
 
 ### Recording works but transcription fails
 
-Run diagnostics and verify `whisper=available` and `model=installed`. Preserve the exact error notification for debugging.
+Check diagnostics, retain the exact error and distinguish warm-server failure from CLI fallback failure.
+
+### Transcript is wrong
+
+Treat as ASR/language/audio quality until evidence indicates otherwise.
 
 ### Transcript is correct but appears in the wrong control
 
-Focus was lost during the recording/transcription lifecycle. This is a target-preservation problem, not an ASR problem.
+Treat as target-preservation/focus behavior. Record whether Start and Stop used the status bar, keyboard or native overlay. Issue #38 specifically concerns the genuine status-bar mouse workflow.
 
-### Transcript appears in Codex and is not submitted
+### Transcript appears and is not submitted
 
-The end-to-end MVP passes.
+That confirms only the exercised path. It does not prove all start/finish combinations or opaque composers.

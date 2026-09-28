@@ -10,7 +10,7 @@
 
 ![Universal Dictate settings menu](media/settings-menu.webp)
 
-Universal Dictate transcribes locally with the multilingual Whisper `base` model through `whisper.cpp`, including automatic punctuation, and inserts the transcript where the text cursor is currently active. It works in VS Code editors and agent/chat prompts and can also paste into text fields in other Windows applications while Universal Dictate is running. **It never submits or sends dictated text automatically.**
+Universal Dictate transcribes locally with the multilingual Whisper `base` model through `whisper.cpp`, including automatic punctuation, and pastes the completed transcript into the Windows control that owns keyboard focus at insertion time. It works in VS Code editors and agent/chat prompts and can also paste into text fields in other Windows applications while Universal Dictate is running. **It never submits or sends dictated text automatically.**
 
 ## Installation
 
@@ -39,11 +39,11 @@ Universal Dictate shows an always-visible **Dictate** action and settings gear i
 
 ```text
 Status bar: Dictate             Start recording
-Ctrl+Alt+D                      Start recording
-Ctrl+Alt+D                      Stop, transcribe locally and insert
+Status bar: Stop                Stop, transcribe locally and insert
+Ctrl+Alt+D                      Start or stop dictation
 Esc                             Cancel the current recording
-Insert                          Stop, transcribe and insert
-Discard                         Cancel and discard
+Overlay: Insert                 Stop, transcribe and insert
+Overlay: Discard                Cancel and discard
 ```
 
 The default **Enhanced overlay** is a native Windows, non-activating recording panel with a sensitive signed PCM signal display. Captured waveform samples stay visually stable as they move through the bounded history.
@@ -58,6 +58,12 @@ The audio-visualization choices are:
 The Enhanced waveform time span is configurable, so you can choose how much recent audio is visible across the waveform. This only changes the visualization and does **not** limit dictation length.
 
 Visualization and waveform time-span changes apply from the next dictation session. Existing persisted legacy `overlay` settings are treated as Enhanced overlay for compatibility.
+
+## Known insertion-target limitation
+
+The genuine VS Code status-bar `Dictate` / `Stop` item can move keyboard focus before Universal Dictate receives its command. This matters for opaque extension-owned inputs such as the Codex composer: after a mouse click on the status item, the eventual paste can target the wrong control or no longer have the intended caret/selection. [Issue #38](https://github.com/gcalpay/vscode-universal-dictate/issues/38) tracks this separately from transcription quality, overlay sizing and recovery work.
+
+Keyboard controls and the native recording overlay remain available, but they do not turn the unresolved mouse/status-bar path into a solved focus-preservation feature. Universal Dictate never auto-submits text.
 
 ## Languages
 
