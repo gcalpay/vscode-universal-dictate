@@ -8,8 +8,9 @@ Target branch: `fix/transcript-recovery`.
 Source baseline: `f8c33927d01fac44f77df80178ede5e6bacefa44`.
 M1 merge/base: `481913feb88ad16aca00da744dd2fe72cd90ef98`.
 
-This change implements M2.1 only. It was prepared as an uncommitted patch
-against the verified source baseline. Commit/push approval is still required.
+This change implements M2.1 only. The exact reviewed patch was committed after
+explicit user approval as `a21d6825354448c2709613ad7ae693817400a797`, with message
+`feat: add last transcript recovery`.
 No release, Marketplace publication, version bump, milestone merge or new
 branch is included. The roadmap remains
 [DICTATION_RELIABILITY_PLAN.md](DICTATION_RELIABILITY_PLAN.md).
@@ -105,8 +106,10 @@ Manifest/tests: `package.json`, `test/transcript-recovery.test.cjs`,
 CI: `.github/workflows/ci.yml`, `.github/workflows/windows-package.yml`.
 Guidance: `AGENTS.md`, this ledger.
 
-Proposed commit: `feat: add last transcript recovery`.
+Committed: `a21d6825354448c2709613ad7ae693817400a797` — `feat: add last transcript recovery`.
 
-Stop for approval before committing/pushing this change. After that, continue
-M2.2 on the same branch, then complete the remaining M2.3 and integrated M2
-validation. Do not merge M2 or start M3 before the user's M2 acceptance gate.
+M2.2 is being implemented on the same branch; its new source does not retroactively
+change the M2.1 validation boundary above. See
+[M2_2_CLIPBOARD_PRESERVATION.md](M2_2_CLIPBOARD_PRESERVATION.md). Complete the
+remaining M2.3/M2.4 work before the integrated M2.5 VSIX/user gate. Do not merge
+M2 or start M3 before that acceptance.

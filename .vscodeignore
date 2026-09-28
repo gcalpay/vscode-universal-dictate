@@ -16,3 +16,5 @@ tsconfig.json
 **/*.pdb
 **/*.vsix
 node_modules/**
+resources/bin/windows-fast-paste.exe
+.deps-clipboard-transaction-test

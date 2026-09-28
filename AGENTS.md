@@ -23,7 +23,7 @@ M2 must stay on `fix/transcript-recovery`. Its scope is:
 - if the user or another application changes the clipboard while insertion is in progress, preserve that newer clipboard instead of restoring stale content;
 - harden stale-session/disposal/lifecycle behavior without an unrelated engine rewrite.
 
-M2.1 source and tests are prepared; read [docs/M2_1_TRANSCRIPT_RECOVERY.md](docs/M2_1_TRANSCRIPT_RECOVERY.md) for the implementation ledger and validation limits. This is not a completed M2 release: full clipboard preservation (M2.2), the complete lifecycle review (M2.3), and real Windows validation are still outstanding.
+M2.1 is committed at `a21d6825354448c2709613ad7ae693817400a797`. Read [docs/M2_1_TRANSCRIPT_RECOVERY.md](docs/M2_1_TRANSCRIPT_RECOVERY.md) for its ledger. M2.2 clipboard source and tests are prepared but uncommitted; read [docs/M2_2_CLIPBOARD_PRESERVATION.md](docs/M2_2_CLIPBOARD_PRESERVATION.md) for its supported-format/refusal policy, protocol, test evidence and Windows-validation gaps. Unknown formats must remain untouched rather than silently reduced to text. M2.3 lifecycle work, M2.4 integration and M2.5 Windows/user acceptance remain outstanding. Do not produce an acceptance VSIX after an individual submilestone.
 
 Do not create M3 until M2 has passed automated/Windows review and the user explicitly approves the M2 merge.
 

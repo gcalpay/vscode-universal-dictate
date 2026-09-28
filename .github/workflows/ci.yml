@@ -33,8 +33,13 @@ jobs:
       - name: Overlay-size TypeScript tests
         run: node --test test/overlay-size.test.cjs
 
-      - name: Transcript recovery and UI tests
-        run: node --test test/transcript-recovery.test.cjs test/transcript-recovery-ui.test.cjs
+      - name: Transcript recovery, clipboard protocol and UI tests
+        run: node --test test/transcript-recovery.test.cjs test/transcript-recovery-ui.test.cjs test/clipboard-paste.test.cjs
+
+      - name: Clipboard transaction policy tests
+        run: |
+          g++ -std=c++20 -Wall -Wextra -Werror -pedantic test/native/clipboard-transaction-test.cpp -o .deps-clipboard-transaction-test
+          ./.deps-clipboard-transaction-test
 
       - name: Overlay layout geometry test
         run: |
