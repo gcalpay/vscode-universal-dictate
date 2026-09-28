@@ -12,6 +12,7 @@ permissions:
 jobs:
   package:
     runs-on: windows-latest
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -40,7 +41,8 @@ jobs:
           New-Item -ItemType Directory -Force .deps/miniaudio | Out-Null
           Invoke-WebRequest https://raw.githubusercontent.com/mackron/miniaudio/0.11.25/miniaudio.h -OutFile .deps/miniaudio/miniaudio.h
 
-      - name: Compile native Windows C++ helpers
+      - name: Compile native Windows helpers and test executables
+        id: native_build
         shell: pwsh
         run: |
           $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
@@ -61,22 +63,51 @@ jobs:
           $commands = @(
             "call `"$vcvars`"",
             "if not exist resources\bin mkdir resources\bin",
-            "cl /nologo /O2 /std:c++20 /EHsc test\native\overlay-layout-test.cpp /Fe:.deps\\overlay-layout-test.exe",
-            ".deps\\overlay-layout-test.exe",
-            "cl /nologo /O2 /std:c++20 /EHsc test\native\clipboard-transaction-test.cpp /Fe:.deps\clipboard-transaction-test.exe",
-            ".deps\clipboard-transaction-test.exe",
-            "cl /nologo /O2 /std:c++20 /EHsc native\windows-fast-paste.cpp /Fe:resources\bin\windows-clipboard-paste.exe user32.lib gdi32.lib",
-            "cl /nologo /O2 /std:c++20 /EHsc test\native\clipboard-request-test.cpp /Fe:.deps\clipboard-request-test.exe user32.lib gdi32.lib",
-            ".deps\clipboard-request-test.exe",
-            "cl /nologo /O2 /std:c++20 /EHsc test\native\clipboard-windows-test.cpp /Fe:.deps\clipboard-windows-test.exe user32.lib gdi32.lib",
-            ".deps\clipboard-windows-test.exe --allow-test-clipboard-replacement",
-            "cl /nologo /O2 /std:c++20 /EHsc /I .deps\miniaudio native\record-audio.cpp native\miniaudio-impl.cpp /Fe:resources\bin\universal-dictate-recorder.exe user32.lib gdi32.lib"
+            "cl /nologo /utf-8 /O2 /std:c++20 /EHsc native\windows-fast-paste.cpp /Fe:resources\bin\windows-clipboard-paste.exe user32.lib gdi32.lib",
+            "cl /nologo /utf-8 /O2 /std:c++20 /EHsc /I .deps\miniaudio native\record-audio.cpp native\miniaudio-impl.cpp /Fe:resources\bin\universal-dictate-recorder.exe user32.lib gdi32.lib",
+            "cl /nologo /utf-8 /O2 /std:c++20 /EHsc test\native\overlay-layout-test.cpp /Fe:.deps\overlay-layout-test.exe",
+            "cl /nologo /utf-8 /O2 /std:c++20 /EHsc test\native\clipboard-transaction-test.cpp /Fe:.deps\clipboard-transaction-test.exe",
+            "cl /nologo /utf-8 /O2 /std:c++20 /EHsc test\native\clipboard-request-test.cpp /Fe:.deps\clipboard-request-test.exe user32.lib gdi32.lib",
+            "cl /nologo /utf-8 /O2 /std:c++20 /EHsc test\native\clipboard-windows-test.cpp /Fe:.deps\clipboard-windows-test.exe user32.lib gdi32.lib"
           ) -join ' && '
 
           cmd.exe /D /S /C $commands
           if ($LASTEXITCODE -ne 0) {
             exit $LASTEXITCODE
           }
+
+      - name: Native overlay layout regression
+        if: ${{ !cancelled() && steps.native_build.outcome == 'success' }}
+        shell: pwsh
+        timeout-minutes: 2
+        run: |
+          & .deps/overlay-layout-test.exe
+          exit $LASTEXITCODE
+
+      - name: Native clipboard transaction policy tests
+        if: ${{ !cancelled() && steps.native_build.outcome == 'success' }}
+        shell: pwsh
+        timeout-minutes: 2
+        run: |
+          & .deps/clipboard-transaction-test.exe
+          exit $LASTEXITCODE
+
+      - name: Win32 request and lifetime-pipe tests
+        if: ${{ !cancelled() && steps.native_build.outcome == 'success' }}
+        shell: pwsh
+        timeout-minutes: 2
+        run: |
+          & .deps/clipboard-request-test.exe
+          exit $LASTEXITCODE
+
+      - name: Win32 clipboard preservation tests
+        if: ${{ !cancelled() && steps.native_build.outcome == 'success' }}
+        shell: pwsh
+        timeout-minutes: 3
+        run: |
+          # Only on the disposable CI desktop, never on the user's clipboard.
+          & .deps/clipboard-windows-test.exe --allow-test-clipboard-replacement
+          exit $LASTEXITCODE
 
       - name: Fetch pinned whisper.cpp Windows runtime
         shell: pwsh
@@ -107,9 +138,16 @@ jobs:
       - name: Package win32-x64 VSIX
         run: npm run package:vsix
 
+      - name: Inspect packaged VSIX contents and build identity
+        shell: pwsh
+        run: |
+          & ./test/inspect-vsix.ps1 -Path universal-dictate-win32-x64.vsix -ReportPath .deps/vsix-inspection.json
+
       - name: Upload win32-x64 VSIX
         uses: actions/upload-artifact@v7
         with:
           name: universal-dictate-win32-x64
-          path: universal-dictate-win32-x64.vsix
+          path: |
+            universal-dictate-win32-x64.vsix
+            .deps/vsix-inspection.json
           if-no-files-found: error

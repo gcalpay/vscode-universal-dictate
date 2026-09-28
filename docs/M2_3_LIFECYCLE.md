@@ -10,9 +10,15 @@ Exact baseline: `174883bd0ccf96b27e4727f40cf915d038e11836`.
 
 M2.2 was committed with explicit user approval as
 `fix: preserve clipboard state during transcript insertion` and its remote ref
-was verified. M2.3 source/tests described here are **prepared but uncommitted**.
-No milestone merge, PR, remote workflow dispatch, version bump, dependency
-installation, release or user-test VSIX is part of this change set.
+was verified. The exact M2.3 source/tests described here were subsequently
+approved and committed as `80fcd399055cae3c74ba390b155235e1386610d8`, with message
+`fix: harden dictation lifecycle and cancellation`.
+
+The local validation ledger below records the pre-commit M2.3 checks, not the
+later integration outcome. Draft PR #51 now provides the M2.4 automated review
+surface. See [M2_4_INTEGRATION.md](M2_4_INTEGRATION.md) for the actual Linux success,
+Windows clipboard failure and uncommitted correction. No milestone merge,
+version bump, release or user-test VSIX has occurred.
 
 M2.4 remains the integrated validation phase. **The user's VSIX test is M2.5,
 not an intermediate submilestone gate.** No M3 branch before accepted M2 merge.
@@ -151,9 +157,10 @@ that native cancellation or complete clipboard compatibility has shipped.
 
 ## Next checkpoint
 
-Proposed commit: `fix: harden dictation lifecycle and cancellation`.
-Stop for explicit commit approval. Then proceed with M2.4 integrated validation
-on this same branch, followed by the single M2.5 user-test VSIX.
+M2.3 is committed as `80fcd399055cae3c74ba390b155235e1386610d8`.
+Continue the M2.4 integration correction/revalidation described in
+[M2_4_INTEGRATION.md](M2_4_INTEGRATION.md) on this same branch. M2.5 remains the
+single user-test VSIX gate; a failed native integration check is not acceptance.
 
 ## Primary API references
 

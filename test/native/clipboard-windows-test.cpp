@@ -13,6 +13,7 @@
 using namespace universal_dictate::clipboard;
 namespace {
 int passed = 0;
+int failed = 0;
 void require(bool condition, const char* text) {
     if (!condition) throw std::runtime_error(text);
 }
@@ -58,10 +59,63 @@ std::vector<OwnedData> one(OwnedData entry) {
     return values;
 }
 bool fakeSend() noexcept { return true; } // No keystrokes in clipboard smoke tests.
+// Observe the real NativeHost, not a fake clipboard implementation. Log only
+// fixed outcome labels and numeric tokens, never clipboard contents.
+class ObservedHost final : public Host {
+public:
+    explicit ObservedHost(NativeHost& native) noexcept : native_(native) {}
+    bool cancelled() noexcept override { return native_.cancelled(); }
+    bool claim() noexcept override { return native_.claim(); }
+    void releaseClaim() noexcept override { native_.releaseClaim(); }
+    bool open() noexcept override { return native_.open(); }
+    bool close() noexcept override { return native_.close(); }
+    std::uint32_t sequence() noexcept override {
+        const auto value = native_.sequence();
+        if (count < tokens.size()) tokens[count++] = value;
+        return value;
+    }
+    bool isOwner() noexcept override { return native_.isOwner(); }
+    Code snapshot() noexcept override { return native_.snapshot(); }
+    Publish publish() noexcept override {
+        const auto result = native_.publish();
+        if (result == Publish::ready) {
+            // Availability queries do not force delayed rendering. A diagnostic
+            // GetClipboardData here could itself materialize missing formats
+            // before the token is recorded and accidentally mask the bug.
+            completeText = IsClipboardFormatAvailable(CF_UNICODETEXT)
+                && IsClipboardFormatAvailable(CF_LOCALE)
+                && IsClipboardFormatAvailable(CF_TEXT)
+                && IsClipboardFormatAvailable(CF_OEMTEXT);
+        }
+        return result;
+    }
+    bool restore() noexcept override { return native_.restore(); }
+    bool sendPaste() noexcept override { return native_.sendPaste(); }
+    void settlePaste() noexcept override { native_.settlePaste(); }
+    void print(Result result) const {
+        std::cout << "RESULT code=" << codeName(result.code)
+                  << " paste=" << pasteName(result.paste)
+                  << " clipboard=" << clipboardName(result.clipboard)
+                  << " sequence_checks=";
+        for (std::size_t i = 0; i < count; ++i) std::cout << (i ? "," : "") << tokens[i];
+        std::cout << "\n";
+    }
+    std::array<std::uint32_t, 4> tokens{};
+    std::size_t count = 0;
+    bool completeText = false;
+private:
+    NativeHost& native_;
+};
 Result transaction(bool (*send)() noexcept = fakeSend) {
-    NativeHost host(L"temporary transcript", send, std::chrono::milliseconds(0));
-    Transaction tx(host);
-    return tx.run();
+    NativeHost native(L"temporary transcript", send, std::chrono::milliseconds(0));
+    ObservedHost host(native);
+    Result result;
+    {
+        Transaction tx(host);
+        result = tx.run();
+    }
+    host.print(result);
+    return result;
 }
 void mustRestore(const Result& result) {
     require(result.code == Code::ok && result.paste == Paste::submitted &&
@@ -109,8 +163,33 @@ int main(int argc, char** argv) {
         ClipboardWindow window;
         copyWindow = window.window;
         auto test = [&](const char* name, auto body) {
-            body(); ++passed; std::cout << "PASS " << name << '\n';
+            std::cout << "RUN " << name << std::endl;
+            try {
+                body(); ++passed; std::cout << "PASS " << name << '\n';
+            } catch (const std::exception& error) {
+                ++failed;
+                std::cerr << "FAIL " << name << ": " << error.what() << '\n';
+            }
         };
+        test("temporary text token survives CloseClipboard without an external copy", [&] {
+            seed(window.window, {});
+            const std::wstring unicode = L"temporary \u00e4\u6c34 \U0001f41f";
+            NativeHost native(unicode, fakeSend, std::chrono::milliseconds(0));
+            ObservedHost host(native);
+            Result result;
+            {
+                Transaction tx(host);
+                result = tx.run();
+            }
+            host.print(result);
+            mustRestore(result);
+            require(host.completeText, "temporary standard text formats were not materialized");
+            require(host.count == 4 && host.tokens[1] != 0 &&
+                    host.tokens[1] == host.tokens[2] && host.tokens[2] == host.tokens[3],
+                    "our CloseClipboard changed the publication token");
+            OpenGuard guard(window.window);
+            require(CountClipboardFormats() == 0, "publication probe did not restore empty clipboard");
+        });
         test("empty clipboard", [&] {
             seed(window.window, {});
             mustRestore(transaction());
@@ -221,8 +300,9 @@ int main(int argc, char** argv) {
             require(memoryBytes(CF_UNICODETEXT, window.window) == before, "failed paste original lost");
         });
         seed(window.window, {});
-        std::cout << passed << " Win32 clipboard smoke tests passed (not target-focus tests)\n";
-        return 0;
+        std::cout << passed << " Win32 clipboard smoke tests passed, " << failed
+                  << " failed (not target-focus tests)\n";
+        return failed == 0 ? 0 : 1;
     } catch (const std::exception& error) {
         std::cerr << "FAIL Windows clipboard smoke: " << error.what() << '\n';
         return 1;

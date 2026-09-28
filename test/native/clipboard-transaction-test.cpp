@@ -181,6 +181,14 @@ int main() {
         const auto r = run(h);
         check(r.code == Code::clipboardChanged && r.paste == Paste::notAttempted && h.sends == 0 && h.restores == 0, "unsafe dispatch");
     });
+    test("post-close sequence change is not adopted even when owner is unchanged", [] {
+        FakeHost h;
+        h.onFirstClose = [](auto& f) { ++f.serial; };
+        const auto r = run(h);
+        check(r.code == Code::clipboardChanged && r.clipboard == Clipboard::newer &&
+              r.paste == Paste::notAttempted && h.sends == 0 && h.restores == 0,
+              "later token adopted or same-owner sequence change ignored");
+    });
     test("nonblocking global transaction claim", [] {
         FakeHost h; h.allowClaim = false;
         check(run(h).code == Code::busy && h.opens == 0 && h.sends == 0 && h.releases == 0, "busy transaction touched clipboard");

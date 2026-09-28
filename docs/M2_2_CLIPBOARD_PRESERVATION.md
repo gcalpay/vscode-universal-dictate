@@ -15,9 +15,10 @@ was advanced without force. No PR, workflow dispatch, merge, version bump or
 release accompanied this checkpoint. This is not a Windows-validated or accepted
 M2 milestone; M2.4 integrated validation and M2.5 user review remain outstanding.
 
-This ledger describes the M2.2 checkpoint. The subsequent, currently uncommitted
-[M2.3 change set](M2_3_LIFECYCLE.md) adds cooperative cancellation and upgrades the
-request/response transport to v2. The v1 framing/EOF description below is historical,
+This ledger describes the M2.2 checkpoint. The subsequent
+[M2.3 change set](M2_3_LIFECYCLE.md), committed at
+`80fcd399055cae3c74ba390b155235e1386610d8`, adds cooperative cancellation and
+upgrades the request/response transport to v2. The v1 framing/EOF description below is historical,
 not instructions for running the M2.3 host/helper.
 
 The requirement has not been reduced to text-only preservation: preserve the
@@ -167,9 +168,11 @@ ask the user to run it against valuable desktop clipboard contents.
 ## Next authorized gate
 
 M2.2 is committed at `174883bd0ccf96b27e4727f40cf915d038e11836`.
-M2.3 source/tests are now prepared on the same branch baseline and await their own
-commit approval. See [M2_3_LIFECYCLE.md](M2_3_LIFECYCLE.md). M2.4 is the integrated
-validation phase; only M2.5 supplies the user-test VSIX. M3 must not begin before
+M2.3 is committed at `80fcd399055cae3c74ba390b155235e1386610d8`.
+See [M2_3_LIFECYCLE.md](M2_3_LIFECYCLE.md) and the current
+[M2.4 integration ledger](M2_4_INTEGRATION.md). The original M2.2/M2.3 native
+clipboard code failed its first real Windows smoke check; corrections are not
+yet validated. Only M2.5 supplies the user-test VSIX. M3 must not begin before
 M2 is accepted and merged.
 
 ## Primary API references

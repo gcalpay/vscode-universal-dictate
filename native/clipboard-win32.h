@@ -17,6 +17,7 @@
 #include <memory>
 #include <new>
 #include <stdexcept>
+#include <string>
 #include <thread>
 #include <utility>
 #include <vector>
@@ -262,6 +263,34 @@ public:
     HWND window = nullptr;
 };
 
+// Prepare every standard text representation before publication. Leaving the
+// ANSI/OEM/locale alternatives to CloseClipboard can change the sequence after
+// Transaction has captured its token, even without another application's copy.
+// Do not "fix" that by adopting a later token or weakening the newer-copy check.
+inline UINT clipboardCodePage(LCID locale, LCTYPE type) {
+    DWORD codePage = 0;
+    if (!GetLocaleInfoW(locale, type | LOCALE_RETURN_NUMBER | LOCALE_NOUSEROVERRIDE,
+                        reinterpret_cast<LPWSTR>(&codePage), static_cast<int>(sizeof(codePage) / sizeof(wchar_t))) ||
+        codePage == 0) {
+        throw std::runtime_error("clipboard text code page unavailable");
+    }
+    return codePage;
+}
+
+inline OwnedData encodedTextData(UINT format, UINT codePage, const std::wstring& text) {
+    // Include the NUL in the conversion; allocate by byte count, not wchar count.
+    // Unicode remains the first and authoritative text format. Legacy encodings
+    // may substitute characters, just as Windows' implicit conversions can.
+    const int bytes = WideCharToMultiByte(codePage, 0, text.c_str(), -1, nullptr, 0, nullptr, nullptr);
+    if (bytes <= 0 || static_cast<std::size_t>(bytes) > kMaxSnapshotBytes)
+        throw std::runtime_error("clipboard text conversion failed");
+    std::vector<char> encoded(static_cast<std::size_t>(bytes));
+    if (WideCharToMultiByte(codePage, 0, text.c_str(), -1, encoded.data(), bytes,
+                            nullptr, nullptr) != bytes)
+        throw std::runtime_error("clipboard text conversion failed");
+    return memoryData(format, encoded.data(), encoded.size());
+}
+
 class NativeHost final : public Host {
 public:
     explicit NativeHost(std::wstring_view text, bool (*send)() noexcept,
@@ -270,6 +299,10 @@ public:
         : send_(send), grace_(grace), cancelled_(cancelled) {
         std::wstring terminated(text);
         temporary_ = memoryData(CF_UNICODETEXT, terminated.c_str(), (terminated.size() + 1) * sizeof(wchar_t));
+        const LCID locale = GetSystemDefaultLCID();
+        locale_ = memoryData(CF_LOCALE, &locale, sizeof(locale));
+        ansi_ = encodedTextData(CF_TEXT, clipboardCodePage(locale, LOCALE_IDEFAULTANSICODEPAGE), terminated);
+        oem_ = encodedTextData(CF_OEMTEXT, clipboardCodePage(locale, LOCALE_IDEFAULTCODEPAGE), terminated);
         const UINT format = RegisterClipboardFormatW(L"ExcludeClipboardContentFromMonitorProcessing");
         if (!format) throw std::runtime_error("clipboard privacy format unavailable");
         const DWORD zero = 0;
@@ -304,10 +337,12 @@ public:
         if (!EmptyClipboard()) return Publish::unchangedFailure;
         // Suppress the temporary transcript in Windows history/cloud clipboard.
         // Third-party clipboard observers are not covered by this marker.
-        if (!SetClipboardData(exclusion_.format, exclusion_.data)) return Publish::changedFailure;
-        exclusion_.release();
-        if (!SetClipboardData(CF_UNICODETEXT, temporary_.data)) return Publish::changedFailure;
-        temporary_.release();
+        // All allocations/conversions happened before EmptyClipboard. Any
+        // partial publication still follows the transaction's locked rollback.
+        for (auto* item : {&exclusion_, &temporary_, &locale_, &ansi_, &oem_}) {
+            if (!SetClipboardData(item->format, item->data)) return Publish::changedFailure;
+            item->release();
+        }
         return Publish::ready;
     }
     bool restore() noexcept override { return snapshot_.restore(); }
@@ -317,6 +352,9 @@ private:
     ClipboardWindow window_;
     Snapshot snapshot_;
     OwnedData temporary_;
+    OwnedData locale_;
+    OwnedData ansi_;
+    OwnedData oem_;
     OwnedData exclusion_;
     HANDLE mutex_ = nullptr;
     bool (*send_)() noexcept;
