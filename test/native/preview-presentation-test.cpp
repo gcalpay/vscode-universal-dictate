@@ -116,6 +116,8 @@ void renderCases(const std::filesystem::path& output, OverlaySize size, unsigned
         // by the production fallback label in a passing screenshot test.
         check(g_overlay.previewRenderer.draw(canvas.dc, preview, samples[i].empty() ? L"Listening…" : samples[i]), "DirectWrite preview rendering failed");
         check(g_overlay.previewRenderer.visibleLines() >= 1 && g_overlay.previewRenderer.visibleLines() <= preview.maxLines, "complete line limit");
+        if (size == OverlaySize::Medium && i == 1)
+            check(g_overlay.previewRenderer.visibleLines() == 2, "Medium must fit both German lines at every tested DPI");
         if (i == std::size(samples) - 1) check(g_overlay.previewRenderer.skippedLines() > 0, "long preview did not scroll to recent text");
         const auto current = canvas.snapshot();
         if (baseline.empty()) baseline = current;

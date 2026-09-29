@@ -23,7 +23,7 @@ inline TextLayout calculateTextLayout(OverlaySize size, std::uint32_t dpi) {
             break;
         case OverlaySize::Medium:
             result = {{40, 8, 122, 27}, {128, 8, 392, 27},
-                      {40, 30, 392, 40}, {40, 43, 392, 81}, 14, 2};
+                      {40, 30, 392, 40}, {40, 43, 392, 83}, 14, 2};
             break;
         case OverlaySize::Large:
         default:
