@@ -35,6 +35,9 @@ jobs:
       - name: M2 recovery, clipboard and lifecycle tests
         run: node --test test/transcript-recovery.test.cjs test/transcript-recovery-ui.test.cjs test/text-input.test.cjs test/lifecycle.test.cjs test/recorder-lifecycle.test.cjs
 
+      - name: M3 preview scheduling and PCM snapshot tests
+        run: node --unhandled-rejections=strict --test test/preview-pipeline.test.cjs test/preview-recorder.test.cjs test/preview-runtime.test.cjs
+
       - name: Fetch pinned miniaudio header
         shell: pwsh
         run: |
@@ -68,7 +71,9 @@ jobs:
             "cl /nologo /utf-8 /O2 /std:c++20 /EHsc test\native\overlay-layout-test.cpp /Fe:.deps\overlay-layout-test.exe",
             "cl /nologo /utf-8 /O2 /std:c++20 /EHsc test\native\unicode-input-test.cpp /Fe:.deps\unicode-input-test.exe",
             "cl /nologo /utf-8 /O2 /std:c++20 /EHsc test\native\text-input-request-test.cpp /Fe:.deps\text-input-request-test.exe user32.lib gdi32.lib",
-            "cl /nologo /utf-8 /O2 /std:c++20 /EHsc test\native\text-input-windows-test.cpp /Fe:.deps\text-input-windows-test.exe user32.lib gdi32.lib"
+            "cl /nologo /utf-8 /O2 /std:c++20 /EHsc test\native\text-input-windows-test.cpp /Fe:.deps\text-input-windows-test.exe user32.lib gdi32.lib",
+            "cl /nologo /utf-8 /O2 /std:c++20 /EHsc test\native\preview-buffer-test.cpp /Fe:.deps\preview-buffer-test.exe",
+            "cl /nologo /utf-8 /O2 /std:c++20 /EHsc test\native\preview-bridge-test.cpp /Fe:.deps\preview-bridge-test.exe"
           ) -join ' && '
 
           cmd.exe /D /S /C $commands
@@ -109,6 +114,18 @@ jobs:
           & .deps/text-input-windows-test.exe --allow-disposable-desktop-input
           exit $LASTEXITCODE
 
+      - name: Native PCM, preview protocol and actual Node IPC
+        if: ${{ !cancelled() && steps.native_build.outcome == 'success' }}
+        shell: pwsh
+        timeout-minutes: 3
+        run: |
+          & .deps/preview-buffer-test.exe
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & .deps/preview-bridge-test.exe
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node --unhandled-rejections=strict test/preview-native-ipc.cjs .deps/preview-bridge-test.exe
+          exit $LASTEXITCODE
+
       - name: Fetch pinned whisper.cpp Windows runtime
         shell: pwsh
         run: |
@@ -134,6 +151,37 @@ jobs:
           if (-not (Test-Path resources/whisper/whisper-server.exe)) {
             throw 'whisper-server.exe was not found in the pinned runtime archive'
           }
+
+      - name: Measure real Node preview adapter (synthetic speech, no microphone)
+        if: github.head_ref == 'feat/live-transcript-preview'
+        shell: pwsh
+        timeout-minutes: 6
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Invoke-WebRequest 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin' -OutFile .deps/ggml-base.bin
+          if ((Get-FileHash .deps/ggml-base.bin -Algorithm SHA256).Hash.ToLowerInvariant() -ne '60ed5bc3dd14eea856493d334349b405782ddcaf0028d4b5df4088345fba2efe') { throw 'Model checksum mismatch' }
+          Add-Type -AssemblyName System.Speech
+          $synth = [System.Speech.Synthesis.SpeechSynthesizer]::new()
+          try {
+            $voice = $synth.GetInstalledVoices() | Where-Object { $_.Enabled -and $_.VoiceInfo.Culture.Name.StartsWith('en-') } | Select-Object -First 1
+            if (-not $voice) { throw 'Synthetic English voice unavailable' }
+            $synth.SelectVoice($voice.VoiceInfo.Name)
+            $format = [System.Speech.AudioFormat.SpeechAudioFormatInfo]::new(16000, [System.Speech.AudioFormat.AudioBitsPerSample]::Sixteen, [System.Speech.AudioFormat.AudioChannel]::Mono)
+            $synth.SetOutputToWaveFile((Join-Path $pwd '.deps/preview-fixture.wav'), $format)
+            $synth.Speak(('This is a synthetic test of local dictation. The pump pressure is five bar, and the water temperature is twenty degrees. Do not submit the message. We are checking whether provisional words remain responsive during a longer recording. ' * 4))
+            $synth.SetOutputToNull()
+          } finally { $synth.Dispose() }
+          node test/preview/runtime-benchmark.cjs resources/whisper/whisper-server.exe .deps/ggml-base.bin .deps/preview-fixture.wav .deps/preview-adapter-results.json
+          exit $LASTEXITCODE
+
+      - name: Upload Node preview timing evidence
+        if: ${{ always() && github.head_ref == 'feat/live-transcript-preview' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: m3-preview-adapter-results
+          path: .deps/preview-adapter-results.json
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Package win32-x64 VSIX
         run: npm run package:vsix
