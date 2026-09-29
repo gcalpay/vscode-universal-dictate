@@ -1,166 +1,79 @@
 # M2 acceptance correction — direct input and optional clipboard overwrite
 
-Updated: 2026-09-29.
-Branch: `fix/transcript-recovery`.
+Updated: 2026-09-29, after detailed Codacy review and the user's conditional merge approval.
+Branch: `fix/transcript-recovery`; PR #51 records the actual merge state.
 Milestone base: `481913feb88ad16aca00da744dd2fe72cd90ef98` (accepted M1).
-Correction parent: `eb2f60369763486eedb6c9d88283ea6446ac8ccf` (rejected candidate).
-Corrected source: `eaf0570f1c817229e36177ccff32f50ce396a43f`.
-Status: committed, built and delivered. Normal dictation and Overwrite clipboard behavior are user-accepted.
-PR #51 remains draft and unmerged. Codacy triage and explicit merge approval remain open.
-No version bump, release, merge or installation on the user's PC is authorized by this document.
+Rejected correction parent: `eb2f60369763486eedb6c9d88283ea6446ac8ccf`.
+Accepted runtime source: `eaf0570f1c817229e36177ccff32f50ce396a43f`.
+
+**M2 acceptance is recorded.** The user accepts the current candidate and authorizes merge when no replacement VSIX is necessary. The detailed review found no required runtime correction, so no replacement installation is required. See [M2_CODACY_TRIAGE.md](M2_CODACY_TRIAGE.md) for all fourteen findings, their dispositions, and the exact evidence. Earlier pending-review/acceptance instructions in the roadmap and archived ledgers are superseded by this closeout. No publication, version bump or Issue #38 closure is authorized.
 
 ## Current contract
 
-The user rejected the `eb2f603` VSIX because ordinary dictation could be blocked by
-unsupported clipboard formats and menu-based reinsertion lost the caret. The
-snapshot/restore transport and recovery submenu were therefore replaced.
+The user rejected the earlier restoration VSIX because unsupported clipboard formats blocked ordinary dictation and menu-based reinsertion lost the caret. The snapshot/restore transport and recovery submenu were replaced.
 
 | Overwrite clipboard | Automatic insertion | Clipboard |
 | --- | --- | --- |
 | Off (default) | Attempt direct Unicode input into the currently focused input | No reads, writes, inspection, temporary replacement or restoration |
 | On | Attempt the same direct input | First copy the exact transcript once, overwriting existing contents; never restore the old clipboard |
 
-The user confirmed on 2026-09-29 that **Overwrite clipboard is working as intended**.
-Do not request the Off/On clipboard test again unless a later runtime change affects it.
+The user confirmed that Overwrite clipboard works as intended. Do not request those Off/On checks again unless a later runtime change affects them.
 
-When no usable input has focus, Off produces no automatic clipboard backup. On
-keeps the copied transcript available for manual paste unless a later user or
-application copy replaces it. If optional copying fails, direct input is still
-attempted and the failure is reported. Never retry uncertain input automatically.
+No usable focused input means Off creates no automatic clipboard backup. On leaves the copied transcript available for manual paste unless a later user/application copy replaces it. Optional-copy failure is reported but does not prevent the independent direct-input attempt. Uncertain input is not retried automatically.
 
-The fifth gear-menu entry toggles Overwrite clipboard directly. The setting is
-`universalDictate.overwriteClipboard`, default `false`; only literal `true`
-enables copying. Snapshot it before recording preparation so an in-progress
-session does not change mode after a settings edit.
+The fifth gear-menu entry toggles `universalDictate.overwriteClipboard`, default `false`; only literal `true` enables copying. The mode is captured before recording preparation. Settings edits affect the next session rather than an in-flight recording.
 
-Copy Last Transcript remains an explicit Command Palette command and deliberately
-replaces the clipboard regardless of the automatic setting. The old Last transcript
-submenu and Insert/Clear command contributions are removed. Overlay Insert remains
-a recording control, not a recovery command.
+**Universal Dictate: Copy Last Transcript** remains an explicit Command Palette command. It deliberately writes the retained transcript to the clipboard regardless of the automatic setting. The old Last transcript submenu and public Insert/Clear recovery commands are removed. Overlay Insert remains the Stop/transcribe/insert recording control.
 
-Retain the latest successful non-empty final transcript before insertion. Empty,
-failed or cancelled transcription does not replace the previous value; insertion
-or optional-copy failure does not erase retained text. Retention belongs to this
-window's extension memory independently of the clipboard and is not persisted.
-Copying unrelated content does not erase it; reload/restart clears recovery memory.
+Retain the exact latest successful non-empty final transcript before insertion. Empty, failed or cancelled transcription does not replace it; insertion or optional-copy failure does not erase it. This window's recovery state is memory-only and independent of the clipboard. An unrelated clipboard copy does not erase it; reload/restart/disposal clears recovery. No transcript log or persistent history was added.
 
-## Implementation
+## Implementation and limits
 
-The native helper `windows-text-input.exe` contains no clipboard access. Unicode
-input is submitted in bounded batches through Win32 SendInput, retaining surrogate
-pairs. It waits for physically held modifiers to be released rather than changing
-their state. HWND-level focus changes, cancellation and new modifier presses stop
-remaining input. It does not restore the target or use private DOM APIs.
+The native `windows-text-input.exe` helper contains no clipboard operations. It submits bounded Unicode batches, preserving surrogate pairs, and waits for physical modifier release rather than synthesizing modifier changes. HWND-level focus changes, cancellation and new modifier presses stop remaining input. It does not restore a target or use private DOM APIs.
 
-The protocol is `--unicode-input-v1`, with `UDTI1 <UTF-8 byte count>\n`
-followed by the exact bytes. The host keeps stdin open as a lifetime signal; EOF
-requests cancellation. Input text does not appear in process arguments or logs.
-Legacy paste executables and the retired clipboard protocol are excluded from the
-package.
+Protocol: `--unicode-input-v1`, with `UDTI1 <UTF-8 byte count>\n` followed by the exact bytes. The host keeps stdin open as the operation-lifetime signal; EOF requests cancellation. Input text is not placed in command arguments or logs. Legacy paste executables and retired clipboard-protocol components are excluded from the package.
 
-The optional copy preserves the exact transcript. Direct-input preparation maps
-control characters such as CR/LF and Tab to spaces, so input cannot synthesize
-Enter, Tab or Backspace commands. Ordinary Unicode and combining/surrogate
-characters are preserved. There is no clipboard fallback and no automatic retry.
+Direct-input preparation turns control characters, including CR/LF and Tab, into spaces. No Enter, Tab or Backspace command is synthesized, and messages are not submitted automatically. The optional clipboard copy retains the exact original transcript; direct input is not a guarantee of multiline formatting.
 
-M2.3 operation/session ownership, cancellation, recorder shutdown and WAV cleanup
-protections remain part of the corrected milestone. Historical clipboard-v2
-protocol details in the M2.1-M2.4 ledgers are archived evidence, not active behavior.
+Operation/session ownership, cancellation, recorder shutdown and WAV cleanup protections remain. Failed or unconfirmed cleanup is not described as successful cleanup. Input already submitted to Windows cannot be retracted. HWND identity is not proof of an editable Codex DOM target or the intended caret/selection; SendInput submission is not an application acknowledgement. **Issue #38 remains unresolved.**
 
-## Recorded validation and delivered candidate
+M2.1-M2.4 remain archived checkpoint evidence. Their discarded recovery-menu commands, clipboard-v2 protocols, restoration tests and obsolete next-gate statements do not define current behavior. The remaining future milestone scope in the roadmap is unchanged.
 
-These are recorded results for the corrected source, not new runtime tests or an
-artifact re-audit performed by this documentation cleanup.
+## Recorded candidate evidence
 
 | Evidence | Recorded result |
 | --- | --- |
-| Correction commit | `eaf0570f1c817229e36177ccff32f50ce396a43f` — `fix: replace clipboard restoration with optional overwrite` |
-| Linux CI | Run `36506468768`, success |
-| Windows package workflow | Run `36506468804`, success |
-| Native testing, as recorded at delivery | Unicode preparation/batching, request/lifetime-pipe tests, and actual direct input into a disposable Win32 EDIT with existing clipboard data |
-| Package audit, as recorded at delivery | Passed; all 18 recorded payload hashes independently checked in the delivery conversation |
-| Earlier sandbox validation | 139 Node tests and 84 portable Unicode assertions; not a real Codex acceptance matrix |
-| User feedback | Corrected VSIX installed; normal dictation works; Overwrite clipboard works as intended |
-| Merge approval | Not recorded |
+| Accepted runtime | `eaf0570f1c817229e36177ccff32f50ce396a43f` |
+| Original corrected Linux CI | Run `36506468768`, success |
+| Original corrected Windows package | Run `36506468804`, success |
+| Documentation-checkpoint Linux CI | Run `36580791482`, success |
+| Documentation-checkpoint Windows package | Run `36580791428`, success |
+| Native input validation at delivery | Unicode/request/lifetime checks and actual input into a disposable Win32 EDIT, not a Codex composer |
+| Package audit at delivery | Passed; all eighteen recorded payload hashes independently checked in the delivery conversation |
+| Earlier sandbox validation | 139 Node tests and 84 portable Unicode assertions; not a manual Codex acceptance matrix |
+| User feedback | Normal dictation and Overwrite clipboard work as intended |
+| Latest user decision | Current candidate accepted; merge authorized when no replacement runtime is necessary |
 
-The scratch Win32 EDIT tests are not VS Code/Codex caret tests. Superseded
-restoration test counts and the rejected package do not validate this transport.
+These are attributed recorded results, not an assertion that every historical test was rerun manually during this review. The final review also inspected existing recovery and lifecycle test coverage. Final-branch workflow outcomes and the actual merge SHA are recorded on PR #51.
 
-Delivered candidate: `universal-dictate-win32-x64_M2-clipboard-toggle-eaf0570.vsix`.
-Version: `0.1.5`; platform: `win32-x64`; Medium overlay default. The filename
-was changed, not the original CI-built bytes.
+Delivered and accepted candidate: `universal-dictate-win32-x64_M2-clipboard-toggle-eaf0570.vsix`.
+Version `0.1.5`, target `win32-x64`, Medium overlay default. The delivery renamed the file, not its original CI-built bytes.
 
 - Artifact ID: `11007278287`.
 - VSIX size: 8,575,990 bytes.
 - VSIX SHA-256: `49225f6d029ccfc49efe926c293b2c06188605552625e4571aaf59bdcaf39788`.
 - Outer ZIP SHA-256: `134c6e77624fb4dacfd0933956fa499462d957a7f6f273a7a8a19b2488d3144a`.
-- CI checkout: `c6dec6b74656afb63d6ab4a9e562da891a3ed5b2`, a synthetic PR merge,
-  not an actual merge into `main`.
+- Original CI checkout: `c6dec6b74656afb63d6ab4a9e562da891a3ed5b2`, a synthetic PR merge rather than an actual merge into main.
 
-Do not rebuild or resend this candidate solely because the conversation resumed.
-Do not redistribute `universal-dictate-win32-x64_M2-eb2f603.vsix`; that earlier
-restoration candidate failed user acceptance.
+Do not resend an identical installation solely because documentation changed. The rejected `universal-dictate-win32-x64_M2-eb2f603.vsix` remains superseded.
 
-## Codacy review — individual issue details still required
+## Codacy disposition and next action
 
-Rechecked on 2026-09-29 against corrected head `eaf0570f1c817229e36177ccff32f50ce396a43f`.
-Codacy check `109209423099` is `action_required`, with 13 new findings and
-zero GitHub check annotations. Its output and PR comment contain aggregate counts,
-not individual rules, files, lines or code context.
+The complete report is now available and all fourteen added findings have been reviewed. Seven security alerts are false positives in their specific contexts. Five clarity warnings concern intentionally strict agent/product safeguards. The constructor initializer-list suggestion and test function-length warning are genuine but nonblocking style/maintenance observations, deferred without changing runtime. The review found no required runtime correction.
 
-| Codacy category | Codacy severity | Findings | Disposition |
-| --- | --- | ---: | --- |
-| Security | Critical | 5 | Unclassified: individual details unavailable |
-| Security | High | 1 | Unclassified: individual details unavailable |
-| BestPractice | Medium | 5 | Unclassified: individual details unavailable |
-| Performance | Medium | 1 | Unclassified: individual details unavailable |
-| Complexity | Medium | 1 | Unclassified: individual details unavailable |
+No Codacy rule or quality threshold has been weakened. The tool's automatic result may remain non-green; a human disposition is not a fabricated passing check. The full finding IDs, reported locations, source reasoning, retrieval method and limitations are in [M2_CODACY_TRIAGE.md](M2_CODACY_TRIAGE.md).
 
-These are the analyzer's ratings, not confirmed vulnerabilities. None has been
-established as a false positive. The nine-finding count in the archived M2.4
-ledger belongs to an earlier head and must not be reused for this candidate.
-
-The report page and accessible API paths returned no usable individual details in
-this review. This access limitation is not evidence that the findings are harmless
-or fixed. Obtain an issue-detail export or expanded screenshots for PR #51 at the
-reviewed head, including each tool/rule, message, file, line and relevant code.
-Then record an evidence-backed disposition for every actual finding. Do not weaken
-quality gates or label findings as false positives without that evidence.
-
-## Remaining M2.5 gate
-
-Normal dictation and Overwrite clipboard behavior are already user-accepted. Do
-not ask for those checks again unless a later runtime correction affects them.
-
-Complete Codacy triage before deciding whether another candidate is needed. If no
-runtime correction follows, only genuinely unrecorded behavior may warrant a short
-spot check. Current candidates are:
-
-- Copy Last Transcript still works after an unrelated clipboard copy.
-- Cancel / repeated Stop causes no stale or duplicate later insertion.
-
-Existing automated lifecycle coverage should be considered before requesting
-manual repetition. A runtime correction requires relevant automated validation
-and one replacement final M2 candidate; documentation-only edits do not require
-another installation.
-
-Formal M2 acceptance and explicit merge approval remain separate. Do not create
-the next milestone branch, bump the version, publish, close Issue #38 or claim
-genuine status-bar target preservation as part of M2. The older unintended
-German-to-English output remains a separate unresolved bug.
-
-## Limits and review
-
-HWND focus is not proof of an editable DOM target or intended caret. Issue #38
-remains open. SendInput submission is not proof that Codex consumed the text.
-Cancellation cannot undo already-submitted input. Copying On deliberately
-discards the old clipboard; there is no delayed restoration that can overwrite a
-newer copy.
-
-The active roadmap follows this contract. M2.1-M2.4 remain archived checkpoint
-ledgers; their old commands, clipboard protocols, test counts and next-gate
-instructions are historical, not current implementation tasks. Lifecycle, review
-and release boundaries still apply.
+Verify final documentation-only scope and successful normal workflows, then perform the user's authorized PR #51 merge using the expected head. Do not ask for another acceptance/merge confirmation absent a material change. After merge, choose the next agreed milestone; diagnosing unintended German-to-English output before M3 remains a proposed sequence adjustment rather than an implemented fix or automatic branch creation.
 
 ## Primary API references
 
