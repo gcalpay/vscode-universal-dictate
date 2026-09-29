@@ -69,6 +69,8 @@ jobs:
             "cl /nologo /utf-8 /O2 /std:c++20 /EHsc native\windows-text-input.cpp /Fe:resources\bin\windows-text-input.exe user32.lib",
             "cl /nologo /utf-8 /O2 /std:c++20 /EHsc /I .deps\miniaudio native\record-audio.cpp native\miniaudio-impl.cpp /Fe:resources\bin\universal-dictate-recorder.exe user32.lib gdi32.lib",
             "cl /nologo /utf-8 /O2 /std:c++20 /EHsc test\native\overlay-layout-test.cpp /Fe:.deps\overlay-layout-test.exe",
+            "cl /nologo /utf-8 /O2 /std:c++20 /EHsc test\native\preview-layout-test.cpp /Fe:.deps\preview-layout-test.exe",
+            "cl /nologo /utf-8 /O2 /std:c++20 /EHsc /I .deps\miniaudio test\native\preview-presentation-test.cpp native\miniaudio-impl.cpp /Fe:.deps\preview-presentation-test.exe user32.lib gdi32.lib",
             "cl /nologo /utf-8 /O2 /std:c++20 /EHsc test\native\unicode-input-test.cpp /Fe:.deps\unicode-input-test.exe",
             "cl /nologo /utf-8 /O2 /std:c++20 /EHsc test\native\text-input-request-test.cpp /Fe:.deps\text-input-request-test.exe user32.lib gdi32.lib",
             "cl /nologo /utf-8 /O2 /std:c++20 /EHsc test\native\text-input-windows-test.cpp /Fe:.deps\text-input-windows-test.exe user32.lib gdi32.lib",
@@ -125,6 +127,25 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node --unhandled-rejections=strict test/preview-native-ipc.cjs .deps/preview-bridge-test.exe
           exit $LASTEXITCODE
+
+      - name: Native preview presentation, clipping and non-activation
+        if: ${{ !cancelled() && steps.native_build.outcome == 'success' }}
+        shell: pwsh
+        timeout-minutes: 3
+        run: |
+          & .deps/preview-layout-test.exe
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & .deps/preview-presentation-test.exe --allow-disposable-desktop .deps/preview-presentation
+          exit $LASTEXITCODE
+
+      - name: Upload scripted production-renderer images
+        if: ${{ always() && steps.native_build.outcome == 'success' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: m3-preview-presentation
+          path: .deps/preview-presentation/*.bmp
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Fetch pinned whisper.cpp Windows runtime
         shell: pwsh

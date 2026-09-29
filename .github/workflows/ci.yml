@@ -57,3 +57,8 @@ jobs:
           g++ -std=c++20 -Wall -Wextra -Werror -pedantic -pthread test/native/preview-bridge-test.cpp -o .deps/preview-bridge-test
           .deps/preview-bridge-test
           node --unhandled-rejections=strict test/preview-native-ipc.cjs ./.deps/preview-bridge-test
+
+      - name: Preview geometry regression
+        run: |
+          g++ -std=c++20 -Wall -Wextra -Werror -pedantic test/native/preview-layout-test.cpp -o .deps/preview-layout-test
+          .deps/preview-layout-test
