@@ -33,7 +33,7 @@ jobs:
         run: npm run test:m1
 
       - name: M2 recovery, clipboard and lifecycle tests
-        run: node --test test/transcript-recovery.test.cjs test/transcript-recovery-ui.test.cjs test/clipboard-paste.test.cjs test/lifecycle.test.cjs test/recorder-lifecycle.test.cjs
+        run: node --test test/transcript-recovery.test.cjs test/transcript-recovery-ui.test.cjs test/text-input.test.cjs test/lifecycle.test.cjs test/recorder-lifecycle.test.cjs
 
       - name: Fetch pinned miniaudio header
         shell: pwsh
@@ -63,12 +63,12 @@ jobs:
           $commands = @(
             "call `"$vcvars`"",
             "if not exist resources\bin mkdir resources\bin",
-            "cl /nologo /utf-8 /O2 /std:c++20 /EHsc native\windows-fast-paste.cpp /Fe:resources\bin\windows-clipboard-paste.exe user32.lib gdi32.lib",
+            "cl /nologo /utf-8 /O2 /std:c++20 /EHsc native\windows-text-input.cpp /Fe:resources\bin\windows-text-input.exe user32.lib",
             "cl /nologo /utf-8 /O2 /std:c++20 /EHsc /I .deps\miniaudio native\record-audio.cpp native\miniaudio-impl.cpp /Fe:resources\bin\universal-dictate-recorder.exe user32.lib gdi32.lib",
             "cl /nologo /utf-8 /O2 /std:c++20 /EHsc test\native\overlay-layout-test.cpp /Fe:.deps\overlay-layout-test.exe",
-            "cl /nologo /utf-8 /O2 /std:c++20 /EHsc test\native\clipboard-transaction-test.cpp /Fe:.deps\clipboard-transaction-test.exe",
-            "cl /nologo /utf-8 /O2 /std:c++20 /EHsc test\native\clipboard-request-test.cpp /Fe:.deps\clipboard-request-test.exe user32.lib gdi32.lib",
-            "cl /nologo /utf-8 /O2 /std:c++20 /EHsc test\native\clipboard-windows-test.cpp /Fe:.deps\clipboard-windows-test.exe user32.lib gdi32.lib"
+            "cl /nologo /utf-8 /O2 /std:c++20 /EHsc test\native\unicode-input-test.cpp /Fe:.deps\unicode-input-test.exe",
+            "cl /nologo /utf-8 /O2 /std:c++20 /EHsc test\native\text-input-request-test.cpp /Fe:.deps\text-input-request-test.exe user32.lib gdi32.lib",
+            "cl /nologo /utf-8 /O2 /std:c++20 /EHsc test\native\text-input-windows-test.cpp /Fe:.deps\text-input-windows-test.exe user32.lib gdi32.lib"
           ) -join ' && '
 
           cmd.exe /D /S /C $commands
@@ -84,12 +84,12 @@ jobs:
           & .deps/overlay-layout-test.exe
           exit $LASTEXITCODE
 
-      - name: Native clipboard transaction policy tests
+      - name: Native Unicode input policy tests
         if: ${{ !cancelled() && steps.native_build.outcome == 'success' }}
         shell: pwsh
         timeout-minutes: 2
         run: |
-          & .deps/clipboard-transaction-test.exe
+          & .deps/unicode-input-test.exe
           exit $LASTEXITCODE
 
       - name: Win32 request and lifetime-pipe tests
@@ -97,16 +97,16 @@ jobs:
         shell: pwsh
         timeout-minutes: 2
         run: |
-          & .deps/clipboard-request-test.exe
+          & .deps/text-input-request-test.exe
           exit $LASTEXITCODE
 
-      - name: Win32 clipboard preservation tests
+      - name: Win32 direct input and untouched clipboard tests
         if: ${{ !cancelled() && steps.native_build.outcome == 'success' }}
         shell: pwsh
         timeout-minutes: 3
         run: |
-          # Only on the disposable CI desktop, never on the user's clipboard.
-          & .deps/clipboard-windows-test.exe --allow-test-clipboard-replacement
+          # Sends real text to its own scratch EDIT and seeds a disposable clipboard fixture.
+          & .deps/text-input-windows-test.exe --allow-disposable-desktop-input
           exit $LASTEXITCODE
 
       - name: Fetch pinned whisper.cpp Windows runtime

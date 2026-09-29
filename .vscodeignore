@@ -18,3 +18,6 @@ tsconfig.json
 node_modules/**
 resources/bin/windows-fast-paste.exe
 .deps-clipboard-transaction-test
+resources/bin/windows-clipboard-paste.exe
+dist/core/clipboard-protocol.js
+.deps-unicode-input-test

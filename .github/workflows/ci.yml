@@ -34,12 +34,12 @@ jobs:
         run: node --test test/overlay-size.test.cjs
 
       - name: M2 recovery, clipboard and lifecycle tests
-        run: node --test test/transcript-recovery.test.cjs test/transcript-recovery-ui.test.cjs test/clipboard-paste.test.cjs test/lifecycle.test.cjs test/recorder-lifecycle.test.cjs
+        run: node --test test/transcript-recovery.test.cjs test/transcript-recovery-ui.test.cjs test/text-input.test.cjs test/lifecycle.test.cjs test/recorder-lifecycle.test.cjs
 
-      - name: Clipboard transaction policy tests
+      - name: Unicode input policy tests
         run: |
-          g++ -std=c++20 -Wall -Wextra -Werror -pedantic test/native/clipboard-transaction-test.cpp -o .deps-clipboard-transaction-test
-          ./.deps-clipboard-transaction-test
+          g++ -std=c++20 -Wall -Wextra -Werror -pedantic test/native/unicode-input-test.cpp -o .deps-unicode-input-test
+          ./.deps-unicode-input-test
 
       - name: Overlay layout geometry test
         run: |

@@ -1,16 +1,21 @@
-import * as path from 'node:path';
-import type * as vscode from 'vscode';
-import { pasteIntoFocusedControl as pasteIntoFocusedControlCore } from './core/paste';
+import * as vscode from 'vscode';
+import { pasteIntoFocusedControl as coreInsert } from './core/paste';
 
-/** Clipboard preservation is native; the VS Code adapter only resolves its path. */
+/** Native input never uses the clipboard; the optional copy is explicit. */
 export async function pasteIntoFocusedControl(
   context: vscode.ExtensionContext,
   text: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  overwriteClipboard = false
 ): Promise<void> {
-  await pasteIntoFocusedControlCore({ helperPath: getNativePasteHelperPath(context), signal }, text);
+  await coreInsert({
+    helperPath: getNativePasteHelperPath(context),
+    signal,
+    overwriteClipboard,
+    clipboard: vscode.env.clipboard
+  }, text);
 }
 
 export function getNativePasteHelperPath(context: vscode.ExtensionContext): string {
-  return context.asAbsolutePath(path.join('resources', 'bin', 'windows-clipboard-paste.exe'));
+  return vscode.Uri.joinPath(context.extensionUri, 'resources', 'bin', 'windows-text-input.exe').fsPath;
 }

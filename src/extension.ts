@@ -63,6 +63,10 @@ function getConfiguredOverlaySize(): OverlaySize {
   );
 }
 
+function getConfiguredOverwriteClipboard(): boolean {
+  return vscode.workspace.getConfiguration('universalDictate').get<unknown>('overwriteClipboard', false) === true;
+}
+
 function getConfiguredWaveformTimeSpanSeconds(): WaveformTimeSpanSeconds {
   const value = vscode.workspace
     .getConfiguration('universalDictate')
@@ -92,6 +96,7 @@ class DictationController implements vscode.Disposable {
   private readonly engine: DictationEngine;
   readonly recovery: TranscriptRecoveryController;
   private activeVisualization: VisualizationMode = 'enhancedOverlay';
+  private activeOverwriteClipboard = false;
 
   constructor(private readonly context: vscode.ExtensionContext) {
     // Use distinct stable IDs so VS Code can track the Dictate and settings
@@ -119,6 +124,7 @@ class DictationController implements vscode.Disposable {
 
     this.engine = new DictationEngine({
       prepare: async () => {
+        this.activeOverwriteClipboard = getConfiguredOverwriteClipboard();
         await ensureModel(this.context);
       },
       warm: () => warmWhisper(this.context),
@@ -135,7 +141,7 @@ class DictationController implements vscode.Disposable {
         );
       },
       transcribe: (audioPath) => transcribe(this.context, audioPath),
-      insert: (transcript, signal) => pasteIntoFocusedControl(this.context, transcript, signal),
+      insert: (transcript, signal) => pasteIntoFocusedControl(this.context, transcript, signal, this.activeOverwriteClipboard),
       onStateChanged: (state) => this.renderState(state),
       onLevel: (level) => {
         if (showsStatusBarWaveform(this.activeVisualization)) {
@@ -268,7 +274,7 @@ class DictationController implements vscode.Disposable {
 
 type LanguageQuickPickItem = vscode.QuickPickItem & { code: string };
 type SettingsQuickPickItem = vscode.QuickPickItem & {
-  action: 'language' | 'visualization' | 'overlaySize' | 'waveformTimeSpan' | 'lastTranscript';
+  action: 'language' | 'visualization' | 'overlaySize' | 'waveformTimeSpan' | 'overwriteClipboard';
 };
 type VisualizationQuickPickItem = vscode.QuickPickItem & { mode: VisualizationMode };
 type OverlaySizeQuickPickItem = vscode.QuickPickItem & { size: OverlaySize };
@@ -419,7 +425,7 @@ async function selectWaveformTimeSpan(): Promise<void> {
   );
 }
 
-async function openSettings(recovery: TranscriptRecoveryController): Promise<void> {
+async function openSettings(): Promise<void> {
   const configuration = vscode.workspace.getConfiguration('universalDictate');
   const currentLanguage = normalizeWhisperLanguage(
     configuration.get<string>('language', 'auto')
@@ -427,6 +433,7 @@ async function openSettings(recovery: TranscriptRecoveryController): Promise<voi
   const currentVisualization = getConfiguredVisualization();
   const currentOverlaySize = getConfiguredOverlaySize();
   const currentWaveformTimeSpan = getConfiguredWaveformTimeSpanSeconds();
+  const overwriteClipboard = getConfiguredOverwriteClipboard();
 
   const items: SettingsQuickPickItem[] = [
     {
@@ -454,10 +461,10 @@ async function openSettings(recovery: TranscriptRecoveryController): Promise<voi
       action: 'waveformTimeSpan'
     },
     {
-      label: '$(history) Last transcript',
-      description: recovery.availability,
-      detail: 'Insert, copy or clear the last completed transcript. Memory only.',
-      action: 'lastTranscript'
+      label: '$(clippy) Overwrite clipboard',
+      description: overwriteClipboard ? 'On' : 'Off (default)',
+      detail: 'Always insert automatically. On also copies the transcript to the clipboard; Off never accesses it. Click to toggle for the next dictation.',
+      action: 'overwriteClipboard'
     }
   ];
 
@@ -486,8 +493,13 @@ async function openSettings(recovery: TranscriptRecoveryController): Promise<voi
     return;
   }
 
-  if (selected.action === 'lastTranscript') {
-    await recovery.showMenu();
+  if (selected.action === 'overwriteClipboard') {
+    // Toggle the latest setting, not a stale value from when the picker opened.
+    const next = !getConfiguredOverwriteClipboard();
+    await configuration.update('overwriteClipboard', next, vscode.ConfigurationTarget.Global);
+    void vscode.window.showInformationMessage(
+      `Universal Dictate: overwrite clipboard ${next ? 'On' : 'Off'}. Applies from the next dictation.`
+    );
     return;
   }
 
@@ -512,7 +524,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
   const openSettingsCommand = vscode.commands.registerCommand(
     'universalDictate.openSettings',
-    () => openSettings(controller.recovery)
+    openSettings
   );
 
   const showDiagnostics = vscode.commands.registerCommand(
@@ -536,6 +548,8 @@ export function activate(context: vscode.ExtensionContext): void {
           `extensionKind=${extensionKind}`,
           `language=${configuredLanguage}`,
           `overlaySize=${getConfiguredOverlaySize()}`,
+          `overwriteClipboard=${getConfiguredOverwriteClipboard()}`,
+          'insertion=unicode-input-v1',
           `nativePaste=${fs.existsSync(getNativePasteHelperPath(context)) ? 'available' : 'missing'}`,
           `recorder=${fs.existsSync(getRecorderPath(context)) ? 'available' : 'missing'}`,
           `whisperCli=${fs.existsSync(getWhisperCliPath(context)) ? 'available' : 'missing'}`,

@@ -57,7 +57,7 @@ try {
         Assert-Valid ($names.Add($name)) "duplicate/case-colliding entry $name"
         Assert-Valid ($name -notmatch '(^/|\\|(^|/)\.\.(/|$))') "unsafe archive path $name"
         Assert-Valid ($name -notmatch '^extension/(\.git|\.github|\.vscode|\.deps|docs|native|test|src|node_modules)/') "development directory packaged: $name"
-        Assert-Valid ($name -notmatch '(^|/)(AGENTS\.md|tsconfig\.json|\.gitignore|windows-fast-paste\.exe)$') "development/legacy file packaged: $name"
+        Assert-Valid ($name -notmatch '(^|/)(AGENTS\.md|tsconfig\.json|\.gitignore|windows-fast-paste\.exe|windows-clipboard-paste\.exe|clipboard-protocol\.js)$') "development/legacy file packaged: $name"
         Assert-Valid ($name -notmatch '\.(ts|map|obj|lib|exp|pdb|vsix)$') "source/debug/build file packaged: $name"
         Assert-Valid ($name -notmatch '(?i)(^|/)[^/]*-test\.exe$') "test executable packaged: $name"
     }
@@ -69,10 +69,14 @@ try {
     Assert-Valid ($manifest.engines.vscode -eq $source.engines.vscode) 'VS Code engine range differs from source'
     Assert-Valid (@($manifest.extensionKind).Count -eq 1 -and $manifest.extensionKind[0] -eq 'ui') 'extension must run in the UI host'
     Assert-Valid ($manifest.contributes.configuration.properties.'universalDictate.overlaySize'.default -eq 'medium') 'Medium overlay is not the default'
-    foreach ($command in @('insertLastTranscript', 'copyLastTranscript', 'clearLastTranscript')) {
+    Assert-Valid ($manifest.contributes.configuration.properties.'universalDictate.overwriteClipboard'.default -eq $false) 'Overwrite clipboard must default Off'
+    foreach ($command in @('copyLastTranscript')) {
         $id = "universalDictate.$command"
         $commandEntries = @($manifest.contributes.commands | Where-Object { $_.command -eq $id })
         Assert-Valid ($commandEntries.Count -eq 1) "missing/duplicate recovery command $id"
+    }
+    foreach ($removed in @('insertLastTranscript', 'clearLastTranscript')) {
+        Assert-Valid (@($manifest.contributes.commands | Where-Object { $_.command -eq "universalDictate.$removed" }).Count -eq 0) 'obsolete recovery command packaged'
     }
     # Parse XML without any external resolver; do not execute archive content.
     $xml = [System.Xml.XmlDocument]::new()
@@ -95,9 +99,9 @@ try {
         Assert-Valid ($actual -eq (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()) "stale compiled module $entryName"
         $hashes[$entryName] = $actual
     }
-    Assert-Valid ((Read-EntryText 'extension/dist/core/clipboard-protocol.js').Contains('--clipboard-transaction-v2')) 'host clipboard protocol is not v2'
+    Assert-Valid ((Read-EntryText 'extension/dist/core/input-protocol.js').Contains('--unicode-input-v1')) 'host Unicode input protocol mismatch'
 
-    foreach ($file in @('windows-clipboard-paste.exe', 'universal-dictate-recorder.exe')) {
+    foreach ($file in @('windows-text-input.exe', 'universal-dictate-recorder.exe')) {
         $relative = "resources/bin/$file"
         $entryName = "extension/$relative"
         Assert-X64Executable $entryName
