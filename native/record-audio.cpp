@@ -38,6 +38,7 @@
 #include "miniaudio.h"
 #include "overlay-layout.h"
 #include "preview-bridge.h"
+#include "preview-text.h"
 #include <memory>
 
 #include <algorithm>
@@ -276,6 +277,7 @@ struct OverlayState {
     bool enhanced = false;
     bool previewEnabled = false;
     std::wstring previewText;
+    universal_dictate::preview::TextRenderer previewRenderer;
     OverlaySize overlaySize = OverlaySize::Medium;
     UINT dpi = kLogicalDpi;
     EnhancedOverlayLayout enhancedLayout =
@@ -499,20 +501,22 @@ void drawSignalField(HDC dc, const RECT& client) {
 }
 
 void drawEnhancedWaveform(HDC dc) {
-    OverlayRect waveform = g_overlay.enhancedLayout.waveform;
-    if (g_overlay.previewEnabled) {
-        waveform.bottom = waveform.top + (waveform.bottom - waveform.top) / 3;
-    }
+    const OverlayRect waveform = g_overlay.previewEnabled
+        ? universal_dictate::preview::calculateTextLayout(g_overlay.overlaySize, g_overlay.dpi).waveform
+        : g_overlay.enhancedLayout.waveform;
     const int left = waveform.left;
     const int right = waveform.right;
     const int top = waveform.top;
     const int bottom = waveform.bottom;
     const int centerY = (top + bottom) / 2;
     const int width = std::max(1, right - left);
-    const int maxAmplitude = std::max(scaleLogical(6, g_overlay.dpi), (bottom - top) / 2 - scaleLogical(4, g_overlay.dpi));
+    const int maxAmplitude = g_overlay.previewEnabled
+        ? std::max(1, (bottom - top) / 2 - scaleLogical(1, g_overlay.dpi))
+        : std::max(scaleLogical(6, g_overlay.dpi), (bottom - top) / 2 - scaleLogical(4, g_overlay.dpi));
 
     Gdiplus::Graphics graphics(dc);
     graphics.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+    if (g_overlay.previewEnabled) graphics.SetClip(Gdiplus::Rect(left, top, right-left, bottom-top));
     graphics.SetPixelOffsetMode(Gdiplus::PixelOffsetModeHighQuality);
 
     const Gdiplus::Color axisColor(115, 41, 82, 58);
@@ -623,10 +627,11 @@ void drawEnhancedOverlay(HDC dc, const RECT& client) {
     SetBkMode(dc, TRANSPARENT);
     SetTextColor(dc, RGB(244, 246, 250));
     HFONT previousFont = reinterpret_cast<HFONT>(SelectObject(dc, g_overlay.enhancedTitleFont));
-    RECT title = winRect(layout.title);
+    const auto previewLayout = universal_dictate::preview::calculateTextLayout(g_overlay.overlaySize, g_overlay.dpi);
+    RECT title = winRect(g_overlay.previewEnabled ? previewLayout.title : layout.title);
     DrawTextW(dc, L"Listening", -1, &title, DT_LEFT | DT_SINGLELINE | DT_VCENTER);
 
-    if (layout.showSubtitle) {
+    if (layout.showSubtitle && !g_overlay.previewEnabled) {
         SelectObject(dc, g_overlay.enhancedSubtitleFont);
         SetTextColor(dc, RGB(151, 164, 184));
         RECT subtitle = winRect(layout.subtitle);
@@ -636,21 +641,20 @@ void drawEnhancedOverlay(HDC dc, const RECT& client) {
     drawEnhancedWaveform(dc);
 
     if (g_overlay.previewEnabled) {
-        RECT caption = winRect(layout.waveform);
-        caption.top += (caption.bottom - caption.top) / 3 + scaleLogical(3, g_overlay.dpi);
+        const std::wstring& text = g_overlay.previewText;
+        const bool rendered = g_overlay.previewRenderer.draw(dc, previewLayout,
+            text.empty() ? L"Listening…" : text);
         SelectObject(dc, g_overlay.enhancedSubtitleFont);
         SetTextColor(dc, RGB(151, 164, 184));
-        RECT label = caption;
-        label.bottom = label.top + scaleLogical(12, g_overlay.dpi);
-        DrawTextW(dc, L"Preview", -1, &label, DT_LEFT | DT_SINGLELINE | DT_NOPREFIX);
-        caption.top = label.bottom;
-        SelectObject(dc, g_overlay.enhancedTitleFont);
-        SetTextColor(dc, RGB(222, 230, 242));
-        // Provisional latest-window text only, never authoritative transcript history.
-        const auto& text = g_overlay.previewText;
-        const UINT flags = DT_LEFT | DT_NOPREFIX | DT_END_ELLIPSIS |
-            (g_overlay.overlaySize == OverlaySize::Small ? DT_SINGLELINE : DT_WORDBREAK);
-        DrawTextW(dc, text.empty() ? L"..." : text.c_str(), -1, &caption, flags);
+        RECT label = winRect(previewLayout.label);
+        DrawTextW(dc, rendered && g_overlay.previewRenderer.skippedLines() > 0 ? L"Live preview · latest" : L"Live preview",
+            -1, &label, DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_NOPREFIX | DT_END_ELLIPSIS);
+        if (!rendered) {
+            // Normal recording/final transcription continues even if text rendering fails.
+            RECT caption = winRect(previewLayout.text);
+            DrawTextW(dc, L"Preview unavailable", -1, &caption,
+                DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX | DT_END_ELLIPSIS);
+        }
     }
 
     HPEN dividerPen = CreatePen(
@@ -1050,6 +1054,9 @@ bool createOverlay(HMONITOR targetMonitor, bool enhanced, OverlaySize overlaySiz
 }
 
 void destroyOverlay() noexcept {
+    g_overlay.previewRenderer.reset();
+    g_overlay.previewText.clear();
+    g_overlay.previewEnabled = false;
     if (g_overlay.window != nullptr) {
         DestroyWindow(g_overlay.window);
         g_overlay.window = nullptr;

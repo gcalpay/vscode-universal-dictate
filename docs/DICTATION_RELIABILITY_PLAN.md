@@ -237,6 +237,8 @@ Measure visible-text latency, decode duration, CPU/RAM pressure and behavior dur
 
 ### M3.3 — Overlay integration
 
+Presentation implementation and validation gates: [M3_3_PREVIEW_PRESENTATION.md](M3_3_PREVIEW_PRESENTATION.md). Off remains the default.
+
 Add an opt-in live-preview setting initially.
 
 - Show provisional text in the existing enhanced overlay.

@@ -31,6 +31,22 @@ export class RecorderLines {
   close(): void { this.pending = ''; this.dropping = false; }
 }
 
+/** Keep a bounded suffix without cutting a combining/emoji grapheme in half. */
+export function preparePreviewDisplayText(value: string): string {
+  if (typeof value !== 'string' || value.length > 16_384) throw new Error('Invalid preview text.');
+  const normalized = value.replace(/[\u0000-\u001f\u007f-\u009f]/g, ' ').replace(/\s+/g, ' ').trim();
+  const segments = Array.from(new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(normalized),
+    item => item.segment);
+  let bytes = 0, points = 0, first = segments.length;
+  for (let i = segments.length - 1; i >= 0; --i) {
+    const nextBytes = Buffer.byteLength(segments[i], 'utf8');
+    const nextPoints = Array.from(segments[i]).length;
+    if (bytes + nextBytes > 4096 || points + nextPoints > 1024) break;
+    bytes += nextBytes; points += nextPoints; first = i;
+  }
+  return segments.slice(first).join('');
+}
+
 type Pending = { id: number; settle: (value?: PreviewLease, error?: Error) => void };
 
 /** One request at a time; PCM is transported in bounded frames, never in files. */
@@ -87,8 +103,7 @@ export class RecorderPreviewChannel {
     if (this.stopped) return;
     if (update.sessionId !== this.sessionId || !Number.isSafeInteger(update.revision) || update.revision < 1)
       throw new Error('Invalid preview display identity.');
-    // Keep complete code points, strip controls, and cap native UI payloads.
-    const text = Array.from(update.text.replace(/[\u0000-\u001f\u007f-\u009f]/g, ' ').replace(/\s+/g, ' ').trim()).slice(-1024).join('');
+    const text = preparePreviewDisplayText(update.text);
     if (!text) return;
     this.send(`TEXT ${this.sessionId} ${update.revision} ${Buffer.from(text, 'utf8').toString('hex')}\n`, () => this.stop());
   }

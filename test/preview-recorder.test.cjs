@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { RecorderLines, RecorderPreviewChannel, MAX_PREVIEW_LINE } = require('../dist/core/preview-recorder');
+const { RecorderLines, RecorderPreviewChannel, MAX_PREVIEW_LINE, preparePreviewDisplayText } = require('../dist/core/preview-recorder');
 const { buildRecorderArguments } = require('../dist/core/recorder');
 const { validatePreviewAudio } = require('../dist/core/preview-audio');
 
@@ -82,4 +82,25 @@ test('UI text has safe bounded UTF-8 framing and never becomes a terminal comman
 test('framing bound permits maximum eight-second PCM plus ownership metadata', () => {
   const line = 'PREVIEW ' + 'a'.repeat(128) + ' 9007199254740991 9007199254612991 9007199254740991 ' + '0'.repeat(512000);
   assert.ok(line.length <= MAX_PREVIEW_LINE);
+});
+
+for (const cluster of ['a\u0308', '👨‍👩‍👧‍👦', '🇩🇪', '👍🏽', 'क्‍ष']) {
+  test(`display tail preserves whole graphemes: ${cluster}`, () => {
+    const source = cluster.repeat(800);
+    const result = preparePreviewDisplayText(source);
+    assert.ok(source.endsWith(result));
+    assert.ok(Array.from(result).length <= 1024);
+    assert.ok(Buffer.byteLength(result) <= 4096);
+    for (const part of new Intl.Segmenter(undefined, {granularity:'grapheme'}).segment(result))
+      assert.equal(part.segment, cluster);
+    assert.ok(result.length > 0);
+  });
+}
+test('display rejects excessive text and does not emit half of an oversized grapheme', () => {
+  assert.throws(() => preparePreviewDisplayText('x'.repeat(16385)), /Invalid preview text/);
+  assert.equal(preparePreviewDisplayText('a' + '\u0308'.repeat(1200)), '');
+});
+test('display preserves RTL, CJK and ampersands as literal text', () => {
+  const text = 'أنا أذهب إلى المنزل. 水温为二十度 & not a shortcut';
+  assert.equal(preparePreviewDisplayText(text), text);
 });
