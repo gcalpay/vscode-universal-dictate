@@ -1,6 +1,7 @@
 import * as fs from 'node:fs';
 import * as vscode from 'vscode';
 import { DictationEngine, DictationState } from './core/dictation';
+import { TranscriptRecoveryController } from './transcript-recovery';
 import { normalizeOverlaySize, OVERLAY_SIZES, type OverlaySize } from './core/overlay-size';
 import {
   getWhisperLanguageName,
@@ -62,6 +63,10 @@ function getConfiguredOverlaySize(): OverlaySize {
   );
 }
 
+function getConfiguredOverwriteClipboard(): boolean {
+  return vscode.workspace.getConfiguration('universalDictate').get<unknown>('overwriteClipboard', false) === true;
+}
+
 function getConfiguredWaveformTimeSpanSeconds(): WaveformTimeSpanSeconds {
   const value = vscode.workspace
     .getConfiguration('universalDictate')
@@ -89,7 +94,9 @@ class DictationController implements vscode.Disposable {
   private readonly settingsStatusBar: vscode.StatusBarItem;
   private readonly levelHistory = Array<number>(9).fill(0);
   private readonly engine: DictationEngine;
+  readonly recovery: TranscriptRecoveryController;
   private activeVisualization: VisualizationMode = 'enhancedOverlay';
+  private activeOverwriteClipboard = false;
 
   constructor(private readonly context: vscode.ExtensionContext) {
     // Use distinct stable IDs so VS Code can track the Dictate and settings
@@ -117,10 +124,11 @@ class DictationController implements vscode.Disposable {
 
     this.engine = new DictationEngine({
       prepare: async () => {
+        this.activeOverwriteClipboard = getConfiguredOverwriteClipboard();
         await ensureModel(this.context);
       },
       warm: () => warmWhisper(this.context),
-      startRecorder: (onLevel) => {
+      startRecorder: (onLevel, signal) => {
         this.activeVisualization = getConfiguredVisualization();
         return RecorderSession.start(
           this.context,
@@ -128,11 +136,12 @@ class DictationController implements vscode.Disposable {
           showsOverlay(this.activeVisualization),
           'enhanced',
           getConfiguredWaveformTimeSpanSeconds(),
-          getConfiguredOverlaySize()
+          getConfiguredOverlaySize(),
+          signal
         );
       },
       transcribe: (audioPath) => transcribe(this.context, audioPath),
-      insert: (transcript) => pasteIntoFocusedControl(this.context, transcript),
+      insert: (transcript, signal) => pasteIntoFocusedControl(this.context, transcript, signal, this.activeOverwriteClipboard),
       onStateChanged: (state) => this.renderState(state),
       onLevel: (level) => {
         if (showsStatusBarWaveform(this.activeVisualization)) {
@@ -148,6 +157,7 @@ class DictationController implements vscode.Disposable {
       onError: (error) => this.showError(error)
     });
 
+    this.recovery = new TranscriptRecoveryController(this.engine);
     this.context.subscriptions.push(this.statusBar, this.settingsStatusBar);
   }
 
@@ -171,6 +181,7 @@ class DictationController implements vscode.Disposable {
   }
 
   dispose(): void {
+    this.recovery.dispose();
     this.engine.dispose();
     this.statusBar.dispose();
     this.settingsStatusBar.dispose();
@@ -209,6 +220,7 @@ class DictationController implements vscode.Disposable {
         this.statusBar.tooltip = 'Speech recognition is running locally with whisper.cpp.';
         return;
       case 'inserting':
+        this.statusBar.command = undefined;
         this.statusBar.text = '$(check) Universal Dictate: inserting';
         return;
     }
@@ -262,7 +274,7 @@ class DictationController implements vscode.Disposable {
 
 type LanguageQuickPickItem = vscode.QuickPickItem & { code: string };
 type SettingsQuickPickItem = vscode.QuickPickItem & {
-  action: 'language' | 'visualization' | 'overlaySize' | 'waveformTimeSpan';
+  action: 'language' | 'visualization' | 'overlaySize' | 'waveformTimeSpan' | 'overwriteClipboard';
 };
 type VisualizationQuickPickItem = vscode.QuickPickItem & { mode: VisualizationMode };
 type OverlaySizeQuickPickItem = vscode.QuickPickItem & { size: OverlaySize };
@@ -421,6 +433,7 @@ async function openSettings(): Promise<void> {
   const currentVisualization = getConfiguredVisualization();
   const currentOverlaySize = getConfiguredOverlaySize();
   const currentWaveformTimeSpan = getConfiguredWaveformTimeSpanSeconds();
+  const overwriteClipboard = getConfiguredOverwriteClipboard();
 
   const items: SettingsQuickPickItem[] = [
     {
@@ -446,6 +459,12 @@ async function openSettings(): Promise<void> {
       description: waveformTimeSpanLabel(currentWaveformTimeSpan),
       detail: 'Choose how much recent audio is visible across the enhanced native waveform.',
       action: 'waveformTimeSpan'
+    },
+    {
+      label: '$(clippy) Overwrite clipboard',
+      description: overwriteClipboard ? 'On' : 'Off (default)',
+      detail: 'Always insert automatically. On also copies the transcript to the clipboard; Off never accesses it. Click to toggle for the next dictation.',
+      action: 'overwriteClipboard'
     }
   ];
 
@@ -471,6 +490,16 @@ async function openSettings(): Promise<void> {
 
   if (selected.action === 'overlaySize') {
     await selectOverlaySize();
+    return;
+  }
+
+  if (selected.action === 'overwriteClipboard') {
+    // Toggle the latest setting, not a stale value from when the picker opened.
+    const next = !getConfiguredOverwriteClipboard();
+    await configuration.update('overwriteClipboard', next, vscode.ConfigurationTarget.Global);
+    void vscode.window.showInformationMessage(
+      `Universal Dictate: overwrite clipboard ${next ? 'On' : 'Off'}. Applies from the next dictation.`
+    );
     return;
   }
 
@@ -519,6 +548,8 @@ export function activate(context: vscode.ExtensionContext): void {
           `extensionKind=${extensionKind}`,
           `language=${configuredLanguage}`,
           `overlaySize=${getConfiguredOverlaySize()}`,
+          `overwriteClipboard=${getConfiguredOverwriteClipboard()}`,
+          'insertion=unicode-input-v1',
           `nativePaste=${fs.existsSync(getNativePasteHelperPath(context)) ? 'available' : 'missing'}`,
           `recorder=${fs.existsSync(getRecorderPath(context)) ? 'available' : 'missing'}`,
           `whisperCli=${fs.existsSync(getWhisperCliPath(context)) ? 'available' : 'missing'}`,

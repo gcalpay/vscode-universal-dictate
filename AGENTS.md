@@ -1,37 +1,47 @@
 # Agent guidance
 
-Read [docs/DICTATION_RELIABILITY_PLAN.md](docs/DICTATION_RELIABILITY_PLAN.md) before reliability, overlay, live-preview, translation or focus-preservation work.
+Read [docs/M2_CODACY_TRIAGE.md](docs/M2_CODACY_TRIAGE.md) first for the latest M2 review and user acceptance. It supersedes the earlier pending-review/acceptance statements in the roadmap and ledgers. Read [docs/M2_CLIPBOARD_MODE_FIX.md](docs/M2_CLIPBOARD_MODE_FIX.md) for the current product contract, then [docs/DICTATION_RELIABILITY_PLAN.md](docs/DICTATION_RELIABILITY_PLAN.md) for the remaining milestone sequence. M2.1-M2.4 are archived checkpoints, not instructions to restore retired behavior.
 
-## Milestone workflow
+## Current checkpoint
 
-- One milestone uses exactly one product branch. All of that milestone's submilestones stay on the same branch.
-- Current sequence: M1 overlay sizes -> M2 transcript reliability -> M3 live preview -> M4 translation -> M5 insertion-target preservation -> M6 integrated validation/release.
-- At the end of each milestone, stop for the user's review. Do not create the next milestone branch until the user has checked the result and decided whether the current branch should merge.
-- After an approved merge, create the next milestone branch from the updated `main`. If a milestone is rejected or blocked, keep/revise that same branch or close it only after the user's decision; do not silently merge it.
-- No merge, Marketplace publication, release, issue closure or version bump without explicit approval.
+M1 was accepted and merged through PR #50. M2 runtime is the corrected `eaf0570` candidate. The user accepted normal dictation and Overwrite clipboard, then explicitly authorized accepting and merging M2 without another test when no replacement runtime is needed. The detailed Codacy review found no required runtime correction. Check PR #51 for the actual merge state and resulting main commit; do not infer merge from a prepared commit.
 
-## Current task
+The earlier `eb2f603` restoration candidate failed user acceptance and is superseded.
 
-**M1 implementation is complete on `feat/overlay-size-presets`; M1.3 is at the user-review gate.** M1.1 added size settings/propagation. M1.2 added shared Small/Medium/Large native layouts and Per-Monitor V2 DPI handling. Linux CI and Windows native/package CI are green on runtime head `35f458d4759165bc4be48802c8877eb7e2188d4f`. Draft PR #50 is open. The tested VSIX was inspected and contains no test binary/source, agent guidance, native source or docs source.
+Current M2 behavior:
+- Automatic direct Unicode input in both modes; the clipboard is not the insertion transport.
+- `universalDictate.overwriteClipboard` defaults Off. Off must perform no clipboard reads, writes, inspection, temporary replacement, or restoration during automatic dictation.
+- On additionally copies the exact transcript before attempting input and never restores the old clipboard. No target must not erase the copied backup; subsequent user/application copies win.
+- The fifth gear entry toggles Overwrite clipboard directly. The Last transcript submenu and public Insert/Clear recovery commands are removed. Overlay Insert is still a recording control.
+- Copy Last Transcript is an explicit Command Palette command backed by separate memory-only retained text. It deliberately writes to the clipboard regardless of the automatic setting.
+- Operation/session ownership, cancellation and recorder/WAV cleanup protections remain.
 
-Do not start M2 and do not merge PR #50 until the user has installed/tested M1 on Windows and explicitly approves the milestone.
+## Review outcome and next action
 
-## Repository boundaries
+The complete Codacy API report was retrieved through a read-only, credential-free GitHub runner diagnostic. The diagnostic was removed before merge preparation; the ordinary CI workflow was restored exactly. The report had fourteen added findings and two fixed historical entries. Seven security findings were false positives at their specific source locations; five clarity warnings concerned intentional safeguards; two style/maintenance suggestions were valid but nonblocking and deferred. See the per-finding evidence in the triage document. No analyzer or branch-protection rule was disabled, and a completed human review is not a claim that Codacy itself reports green.
 
-- Keep `fix/preserve-insertion-target` frozen as historical alternative-launcher evidence.
-- Keep `experiment/m1.2-statusbar-focus-probe` isolated as historical/upstream diagnostic evidence. Do not merge either branch into M1-M4 product work.
-- Inspect the local working tree and refs before edits. Never reset, clean, stash or overwrite unrelated user work.
-- Keep dependency installation, Git commits/pushes and build dispatches within the user's active authorization.
-- Planned behavior is not shipped behavior. Distinguish specified, implemented, compiled, packaged and real-Windows/real-Codex validated states.
+No replacement VSIX is needed for this review: runtime, tests, dependencies, settings and package behavior are unchanged. Preserve the user's acceptance rather than repeating the clipboard tests or requesting another formal merge confirmation. Only a subsequent runtime change invalidates that conditional approval.
+
+After the accepted merge is verified, choose the next agreed milestone. Diagnosing the older unintended German-to-English output before M3 was proposed, not yet adopted as a branch/sequence change. No new milestone implementation, release or version bump is authorized by this closeout.
+
+## Workflow and boundaries
+
+- One milestone uses one product branch; all submilestones stay on it.
+- Sequence remains M1 sizes -> M2 reliability -> M3 live preview -> M4 translation -> M5 target preservation -> M6 integrated release, unless the user approves a change.
+- Inspect refs and working state before changes. Never reset, clean, stash or overwrite unrelated user work.
+- Respect authorization for edits, dependency installation, commits, pushes and CI dispatches. Propose Conventional Commit messages before seeking approval for future work. The current M2 merge has conditional approval as recorded above; publication, issue closure and new milestone work do not.
+- Keep `fix/preserve-insertion-target` and `experiment/m1.2-statusbar-focus-probe` isolated as historical experiments.
+- Distinguish prepared source, compiled code, packaged artifacts, automated results and actual user/Windows/Codex evidence.
+- Evaluate new analyzer findings from actual rule/file evidence; the M2 dispositions do not suppress future defects.
 
 ## Product invariants
 
-- Follow the latest deliberately selected editable input plus caret/selection through final insertion.
-- Dictate/Stop/Insert controls do not themselves count as retargeting.
-- Never synthesize Enter or automatically submit.
+- The intended target is the latest deliberately selected editable input and caret/selection. Dictate/Stop/Insert controls are not deliberate retargeting.
+- Never synthesize Enter or automatically submit/send. Cancellation prevents remaining input; already-submitted input cannot be undone.
+- Do not auto-retry uncertain insertion. Do not queue an old insertion behind newer work.
 - Preserve local/offline inference after model setup and the Windows UI-host/Remote-WSL architecture.
-- Live preview v1 is overlay-only provisional text, not repeated target pastes.
-- Translation v1, if approved, uses the local Whisper source-language-to-English capability; arbitrary target languages require a separate backend decision.
-- Recovery, a native alternative launcher, overlay sizes, live preview or translation do not by themselves prove Issue #38 fixed.
+- No private Codex DOM/internals, global mouse hooks, click replay or mandatory custom VS Code in the released product.
+- Issue #38 remains unresolved. Unicode input and clipboard options do not prove focus/caret preservation.
+- Future live preview is overlay-only provisional text, not repeated pastes. Translation v1 is source-language-to-English unless the user changes scope.
 
-Update the roadmap ledger at each milestone handoff with branch/commit, files changed, checks actually run, user-visible/manual evidence, blockers and the next authorized action.
+Update the implementation ledger with actual branch/commit, checks, artifact identity, limitations, user results and the next authorized action. Never change files on the user's computer from this chat; the user installs the supplied VSIX themselves.

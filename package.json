@@ -54,7 +54,8 @@
     "onCommand:universalDictate.cancel",
     "onCommand:universalDictate.selectLanguage",
     "onCommand:universalDictate.openSettings",
-    "onCommand:universalDictate.showDiagnostics"
+    "onCommand:universalDictate.showDiagnostics",
+    "onCommand:universalDictate.copyLastTranscript"
   ],
   "contributes": {
     "commands": [
@@ -77,6 +78,10 @@
       {
         "command": "universalDictate.showDiagnostics",
         "title": "Universal Dictate: Show Diagnostics"
+      },
+      {
+        "command": "universalDictate.copyLastTranscript",
+        "title": "Universal Dictate: Copy Last Transcript"
       }
     ],
     "keybindings": [
@@ -142,6 +147,11 @@
           ],
           "default": 1,
           "description": "Amount of recent audio, in seconds, shown across the enhanced native waveform. Changes apply from the next dictation session."
+        },
+        "universalDictate.overwriteClipboard": {
+          "type": "boolean",
+          "default": false,
+          "description": "Always insert dictated text automatically into the currently focused input. When enabled, also copy the transcript to the clipboard, replacing its contents and keeping the transcript there even if insertion has no target. When disabled (default), never access the clipboard. Applies from the next dictation session."
         }
       }
     }
@@ -151,7 +161,8 @@
     "watch": "tsc -watch -p ./",
     "check": "tsc --noEmit -p ./",
     "test:m1": "npm run compile && node --test test/overlay-size.test.cjs",
-    "package:vsix": "npm run compile && vsce package --no-dependencies --target win32-x64 --out universal-dictate-win32-x64.vsix"
+    "package:vsix": "npm run compile && vsce package --no-dependencies --target win32-x64 --out universal-dictate-win32-x64.vsix",
+    "test:m2": "npm run compile && node --test test/transcript-recovery.test.cjs test/transcript-recovery-ui.test.cjs test/text-input.test.cjs test/lifecycle.test.cjs test/recorder-lifecycle.test.cjs"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
