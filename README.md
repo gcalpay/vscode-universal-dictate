@@ -86,12 +86,15 @@ Direct input does not synthesize Enter or submit messages. Whisper normalizes
 whitespace; as a further safeguard, the native input helper maps control
 characters such as line breaks and tabs to spaces. The optional clipboard copy
 retains the exact original transcript. Input-event submission is not confirmation
-that an opaque extension composer received it. Real VS Code/Codex acceptance of
-this revised input path is still required before M2 is merged.
+that an opaque extension composer received it. The corrected M2 candidate has
+positive normal-dictation feedback, and the user confirmed **Overwrite clipboard**
+is working as intended. Static-analysis review and formal merge approval remain
+open. See the [M2 checkpoint](docs/M2_CLIPBOARD_MODE_FIX.md) for exact evidence
+and remaining gates. This is not a new Marketplace release.
 
 ## Known insertion-target limitation
 
-The genuine VS Code status-bar `Dictate` / `Stop` item can move keyboard focus before Universal Dictate receives its command. This matters for opaque extension-owned inputs such as the Codex composer: after a mouse click on the status item, the eventual paste can target the wrong control or no longer have the intended caret/selection. [Issue #38](https://github.com/gcalpay/vscode-universal-dictate/issues/38) tracks this separately from transcription quality, overlay sizing and recovery work.
+The genuine VS Code status-bar `Dictate` / `Stop` item can move keyboard focus before Universal Dictate receives its command. This matters for opaque extension-owned inputs such as the Codex composer: after a mouse click on the status item, the eventual direct-input attempt can target the wrong control or no longer have the intended caret/selection. [Issue #38](https://github.com/gcalpay/vscode-universal-dictate/issues/38) tracks this separately from transcription quality, overlay sizing and recovery work.
 
 Keyboard controls and the native recording overlay remain available, but they do not turn the unresolved mouse/status-bar path into a solved focus-preservation feature. Universal Dictate never auto-submits text.
 

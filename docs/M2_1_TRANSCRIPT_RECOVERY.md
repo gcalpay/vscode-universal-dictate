@@ -1,6 +1,16 @@
 # M2.1 — Last Transcript implementation ledger
 
-Updated: 2026-09-28.
+> **Historical checkpoint — not current instructions.** Archived on 2026-09-29.
+> Everything below this notice records the earlier checkpoint, including its
+> then-pending gates and test limitations. Read
+> [M2_CLIPBOARD_MODE_FIX.md](M2_CLIPBOARD_MODE_FIX.md) for the current contract,
+> delivered candidate, user feedback and remaining review/acceptance gates.
+>
+> The retained-transcript foundation remains relevant, but the Insert/Clear
+> recovery commands and Last transcript submenu were removed. Copy Last Transcript
+> is the sole remaining recovery command.
+
+Historical checkpoint updated: 2026-09-28.
 
 ## Scope and repository state
 

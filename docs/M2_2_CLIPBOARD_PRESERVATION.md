@@ -1,6 +1,16 @@
 # M2.2 — Clipboard preservation implementation ledger
 
-Updated: 2026-09-28.
+> **Historical checkpoint — not current instructions.** Archived on 2026-09-29.
+> Everything below this notice records the earlier checkpoint, including its
+> then-pending gates and test limitations. Read
+> [M2_CLIPBOARD_MODE_FIX.md](M2_CLIPBOARD_MODE_FIX.md) for the current contract,
+> delivered candidate, user feedback and remaining review/acceptance gates.
+>
+> The full snapshot/restore transaction, format policy and clipboard-paste helper
+> were rejected and removed. Do not reinstate them. Current automatic insertion is
+> clipboard-free Unicode input with optional one-time clipboard overwrite.
+
+Historical checkpoint updated: 2026-09-28.
 
 ## Status and scope
 

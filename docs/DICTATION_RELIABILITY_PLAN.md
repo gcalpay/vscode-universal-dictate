@@ -1,8 +1,8 @@
 # Universal Dictate implementation roadmap
 
-Updated: 2026-09-28. Repository: `gcalpay/vscode-universal-dictate`.
+Updated: 2026-09-29. Repository: `gcalpay/vscode-universal-dictate`.
 
-This is the current implementation handoff. It replaces the earlier out-of-order milestone numbering. Historical planning and focus-diagnostic evidence remain available through pinned commits/branches, but the active milestone numbers below are chronological.
+This is the current implementation handoff. It replaces the earlier out-of-order milestone numbering. Historical planning and focus-diagnostic evidence remain available through pinned commits/branches, but the active milestone numbers below are chronological. M2 follows the user-approved [direct-input / optional-overwrite correction](M2_CLIPBOARD_MODE_FIX.md); the restoration design and recovery submenu are archived, not active requirements.
 
 ## 1. Branch and review policy
 
@@ -21,7 +21,7 @@ Workflow for every milestone:
 
 1. Start the milestone branch from the then-current `main`.
 2. Implement all submilestones on that same branch.
-3. Run the smallest relevant automated checks, then produce a concrete Windows artifact/procedure where GUI behavior matters.
+3. Run the smallest relevant automated checks, then supply the final milestone Windows VSIX with a short relevant checklist. Intermediate automated builds are not user-test gates.
 4. Stop for the user's review.
 5. Merge only after the user confirms the milestone behaves correctly.
 6. Only after that merge create the next milestone branch from updated `main`.
@@ -34,7 +34,7 @@ The normalized roadmap is now on `main`. M1 was accepted and merged through PR #
 
 ## 2. Verified baseline
 
-Snapshot checked 2026-09-28:
+Main/M1 baseline and corrected M2 checkpoint, checked 2026-09-29:
 
 - `main`: `481913feb88ad16aca00da744dd2fe72cd90ef98`, extension 0.1.5.
 - M1 PR #50 is merged into `main`; this does not by itself imply a new Marketplace release.
@@ -45,10 +45,13 @@ Snapshot checked 2026-09-28:
 - Visualization modes: Both, Enhanced overlay, Status bar only and Off.
 - Enhanced waveform history: 1, 3, 5, 10 or 20 seconds.
 - ASR: multilingual Whisper `base`, warm local `whisper-server`, one-shot `whisper-cli` fallback.
-- Insertion baseline: clipboard plus native Win32 Ctrl+V helper.
+- On `main` / M1 baseline: clipboard plus native Win32 Ctrl+V helper. This is not the corrected M2 transport.
 - Genuine status-bar Dictate and recording Stop are clickable.
 - Issue #38 remains unresolved for the genuine status-bar mouse workflow.
-- Transcript recovery, full clipboard preservation, live preview and translation are not yet implemented on the M2 branch baseline.
+- Corrected M2: `fix/transcript-recovery` at `eaf0570f1c817229e36177ccff32f50ce396a43f`; PR #51 is draft and unmerged.
+- M2 uses direct Unicode input, optional clipboard overwrite (Off by default), memory-only Copy Last Transcript and lifecycle hardening. Restoration and the Insert/Copy/Clear submenu were removed.
+- Both corrected-candidate workflows succeeded; normal dictation has positive feedback and the user confirmed Overwrite clipboard works as intended. Codacy triage and merge approval remain open.
+- Live preview and deliberate translation are not implemented. Genuine status-bar target preservation is not established.
 
 Historical branches that must not be merged into ordinary feature work:
 
@@ -57,17 +60,18 @@ Historical branches that must not be merged into ordinary feature work:
 
 ## 3. Product invariants
 
-These requirements remain settled across every milestone:
+These requirements remain settled across every milestone. Target/caret preservation is the M5 product goal, not a capability proven by the current M2 helper:
 
 - The intended target is the latest deliberately selected editable input plus its latest caret/selection until final insertion.
 - Deliberate target/caret/selection changes during recording or final processing win.
 - Clicking Universal Dictate Dictate/Stop/Insert controls is not deliberate retargeting.
 - Without a deliberate change, preserve the user's intended target and selection.
-- Selected text is replaced with ordinary paste semantics.
-- Never synthesize Enter or automatically submit/send.
-- Cancellation inserts nothing.
-- Retain a successful non-empty final transcript before insertion so an insertion or clipboard failure cannot destroy the only recoverable copy.
-- Preserve the complete pre-insertion Windows clipboard when Universal Dictate still owns the temporary clipboard state; if the user or another application changes the clipboard meanwhile, preserve that newer clipboard instead.
+- Intended selection replacement remains the target behavior. M2 direct input is not clipboard-based paste and cannot prove an opaque target's caret/selection.
+- Never synthesize Enter, Tab or Backspace or automatically submit/send. Control characters become spaces in direct input; multiline formatting is not guaranteed.
+- Cancellation before dispatch prevents insertion; cooperative cancellation stops remaining input but cannot retract events already submitted to Windows.
+- Retain a successful non-empty final transcript before insertion so an insertion or optional-copy failure cannot destroy the only recoverable copy.
+- Off (default): automatic dictation does not read, write, inspect, temporarily replace or restore the clipboard. On: copy the exact transcript once before attempting the same direct input; never restore old clipboard contents. Later user/application copies win.
+- Copy Last Transcript explicitly overwrites the clipboard regardless of the automatic setting. Retained text is separate memory-only state. No automatic retry or deferred reinsertion.
 - Preserve supported external Windows text inputs and Remote - WSL.
 - If target loss is known and there is no newer deliberate valid target, retain/recover text instead of guessing.
 - Local/offline transcription remains the product default after model setup.
@@ -121,113 +125,65 @@ Run targeted configuration/layout/native tests, TypeScript checks, Windows nativ
 
 Produce a concrete artifact/screenshots for the user. **Stop for review.** Do not create M2 until M1 is approved and merged.
 
-## 5. M2 — Transcript, clipboard and lifecycle reliability
+## 5. M2 — Transcript, optional clipboard overwrite and lifecycle reliability
 
 **Branch:** `fix/transcript-recovery`, created from `main` at `481913feb88ad16aca00da744dd2fe72cd90ef98` after the accepted M1 merge.
 
-**Status:** active planning/implementation milestone. Do not create M3 until M2 is implemented, tested, reviewed and explicitly approved for merge.
+**Status:** corrected M2.5 candidate at `eaf0570f1c817229e36177ccff32f50ce396a43f` is committed, built and delivered. The user reports normal dictation works and **Overwrite clipboard is working as intended**. PR #51 remains draft and unmerged. Codacy review and explicit merge approval remain open.
 
-### M2.1 — Retain one completed transcript and expose recovery actions
+The original M2.1-M2.4 work remains in history. Its restoration transport and Last transcript submenu were rejected and superseded. The numbered substeps below describe the corrected contract; do not reimplement retired behavior. See [M2_CLIPBOARD_MODE_FIX.md](M2_CLIPBOARD_MODE_FIX.md) for exact artifact identity, evidence, limitations and remaining gates.
 
-- Save the latest successful non-empty completed transcript in memory **before insertion is attempted**.
-- A later successful non-empty transcript replaces the previous retained transcript.
-- Empty/no-speech/cancelled/failed transcription does not replace the previous retained transcript.
-- Insertion or clipboard failure must not remove the retained transcript.
-- Extension reload/restart may clear this memory-only recovery state; document that honestly.
-- Add normal VS Code commands:
-  - **Universal Dictate: Insert Last Transcript**
-  - **Universal Dictate: Copy Last Transcript**
-  - **Universal Dictate: Clear Last Transcript**
-- Add **Last transcript** as the fifth entry in the existing Universal Dictate gear Quick Pick. Its submenu contains:
-  - Insert last transcript
-  - Copy last transcript
-  - Clear last transcript
-- Show the parent entry as Available/Empty rather than exposing the transcript text in the menu.
-- Insert Last Transcript must remain directly keyboard-invokable through the Command Palette/keybinding system so recovery does not require opening a focus-changing menu.
-- Insert does not clear the retained transcript.
-- Copy deliberately writes the retained transcript to the clipboard because that command explicitly asks for a copy.
-- Clear changes only the retained in-memory recovery state.
-- Do not automatically retry an uncertain paste; duplicate insertion is worse than explicit recovery.
+### M2.1 — Retain one completed transcript and expose explicit Copy
 
-### M2.2 — Preserve the user's complete clipboard and respect newer ownership
+- Retain the exact latest successful non-empty final transcript in this window's extension memory before insertion.
+- Empty/no-speech/cancelled/failed transcription must not replace it; insertion or optional-copy failure must not erase it.
+- A later successful non-empty transcript replaces it. Copying unrelated clipboard content does not. Reload/restart clears memory-only recovery; it is not persisted history.
+- Keep **Universal Dictate: Copy Last Transcript**, command `universalDictate.copyLastTranscript`, in the Command Palette. This explicit action overwrites the clipboard regardless of the automatic setting.
+- The old Last transcript submenu and public Insert/Clear recovery commands are removed. Overlay Insert remains the Stop/transcribe/insert recording control.
+- Never automatically retry uncertain insertion or queue old insertion behind newer work.
 
-The baseline uses VS Code's text clipboard API, writes the transcript, synthesizes Ctrl+V, waits a fixed delay and blindly restores the saved text. That is insufficient because it can destroy non-text clipboard data and overwrite a newer user/application copy.
+### M2.2 — Direct Unicode input and optional clipboard overwrite
 
-Product requirement:
+| Overwrite clipboard | Automatic insertion | Clipboard |
+| --- | --- | --- |
+| Off (default) | Attempt direct Unicode input | No reads, writes, inspection, temporary replacement or restoration |
+| On | Attempt the same direct input | First copy the exact transcript once, overwriting existing contents; never restore the old clipboard |
 
-> Dictation insertion must not leave the user's clipboard changed as a normal side effect. Preserve the complete pre-insertion Windows clipboard, not only text. Restore it only while Universal Dictate still owns the temporary clipboard state. If the user or another application changes the clipboard meanwhile, preserve that newer clipboard instead.
+- The fifth gear entry toggles `universalDictate.overwriteClipboard` directly. Only literal `true` enables automatic copying. Snapshot it before recording preparation; changes apply to the next session.
+- No usable focused target means Off creates no automatic clipboard backup. On leaves the copied transcript available unless a later user/application copy replaces it.
+- Optional-copy failure is reported but does not prevent the independent direct-input attempt. Do not retry uncertain input.
+- `windows-text-input.exe` has no clipboard operations. `--unicode-input-v1` / `UDTI1` replaces the retired protocol; the host keeps stdin open as the operation-lifetime signal.
+- Input is bounded and cancellation-aware. Control characters become spaces in direct input; the optional clipboard copy retains the exact final transcript.
+- The format whitelist, snapshot/restore transport and legacy paste binaries are removed, not alternative fallback paths.
+- User acceptance recorded 2026-09-29: normal dictation works and Overwrite clipboard behaves as intended. Do not request the Off/On clipboard test again unless a later runtime change affects it.
 
-Implementation direction:
-
-- Move preservation/ownership logic to the native Windows side as needed; `vscode.env.clipboard.readText()` alone cannot preserve images, files, HTML/rich text, Excel-style data or other registered clipboard formats.
-- Snapshot the complete pre-insertion clipboard sufficiently to restore its formats/data.
-- Temporarily place the final transcript on the clipboard for ordinary Ctrl+V paste semantics.
-- Track Windows clipboard change/sequence state so ownership is explicit rather than inferred from string equality or a timeout.
-- After paste, restore the pre-insertion clipboard only if the clipboard still corresponds to Universal Dictate's temporary write.
-- If a newer clipboard change occurred, do not restore stale content over it.
-- Treat identical newer text as a newer clipboard change as well; content comparison alone is not sufficient.
-- If complete preservation of a clipboard format fails, fail safely and report the limitation/error rather than silently claiming preservation.
-- Keep Last Transcript recovery available even if paste or clipboard restoration fails.
-
-Test at least:
-
-- previous clipboard contains plain text;
-- previous clipboard is empty;
-- previous clipboard contains an image;
-- previous clipboard contains copied files;
-- previous clipboard contains HTML/rich text or another multi-format payload;
-- user/app copies newer text during insertion;
-- user/app copies newer non-text content during insertion;
-- newer clipboard content is text identical to the transcript;
-- native paste failure;
-- clipboard snapshot failure;
-- clipboard restore failure;
-- clipboard ownership/sequence query failure.
+Regression coverage must distinguish Off with text/empty/non-text clipboard data; On copying once; later user/application copies; optional-copy failure with input still attempted; retained recovery after failed insertion; no automatic retry; and session-stable settings. Snapshot/restore tests are not requirements for this replacement transport.
 
 ### M2.3 — Lifecycle/session-generation hardening
 
-The current engine primarily relies on one `session` reference plus a `busy` boolean. Add the minimum explicit operation/session identity needed to reject stale asynchronous work.
+The implemented operation/session ownership, cancellation and recorder/WAV cleanup protections remain part of corrected M2. Preserve them rather than restarting an engine rewrite.
 
-Test/fix:
+Regression coverage includes duplicate Stop and early overlay actions; disposal during preparation/recording/transcription; recorder/transcription failure; obsolete callbacks/results; stale controls or insertion; confirmed recorder closure before cleanup; and reported shutdown/cleanup failures. Cancellation cannot undo input already submitted.
 
-- duplicate Stop;
-- duplicate native-overlay Stop;
-- disposal while preparing;
-- disposal while recording;
-- disposal while transcribing;
-- recorder start/stop failure;
-- transcription failure;
-- late callbacks from an obsolete recorder session;
-- an old transcription completing after a newer session exists;
-- stale operations must never insert;
-- stale operations must never resurrect obsolete UI/control state;
-- temporary WAV cleanup on all relevant paths.
+The [M2.3 ledger](M2_3_LIFECYCLE.md) records the historical implementation checkpoint. Its clipboard-v2 protocol is superseded; its original test counts are not the corrected transport's results.
 
-Avoid an unnecessary engine rewrite.
+### M2.4 — Integration and automated validation
 
-### M2.4 — VS Code integration and automated validation
+- Preserve M1 regressions, native compilation, full-project checks, recovery/UI/lifecycle tests and revised Unicode/request/lifetime-pipe tests.
+- Audit the actual VSIX for Off default, Copy-only recovery, correct native helper/protocol, compiled payload identity and absent legacy/diagnostic components.
+- Corrected-source Linux CI `36506468768` and Windows package run `36506468804` succeeded. Delivery evidence records the package audit and payload-hash verification.
+- Real input tests used a disposable scratch Win32 EDIT, not a Codex composer. They do not establish intended-target or caret preservation.
+- Codacy reports 13 findings and `action_required`. Individual details were inaccessible in the 2026-09-29 review; all remain unclassified. Successful builds do not complete this review gate.
 
-- Update `package.json` command contributions/activation wiring as needed.
-- Extend the existing settings gear Quick Pick with Last transcript; do not add permanent status-bar buttons.
-- Add focused recovery, clipboard-ownership and lifecycle tests instead of overloading the M1 overlay-size tests.
-- Preserve M1 tests as regressions.
-- Run TypeScript checks/compile, focused unit tests, Windows native compilation, Windows packaging and VSIX content inspection.
+### M2.5 — Remaining acceptance and merge gate
 
-### M2.5 — User review gate
+Normal dictation and Overwrite clipboard behavior are user-accepted on the corrected candidate. Preserve that evidence and do not request another identical build/test merely because the conversation resumed.
 
-Produce a concrete Windows VSIX and stop for review. Manual checks should include:
+Finish the per-finding Codacy review first. After that, only genuinely unrecorded or correction-affected behavior may need a focused spot check; the currently unrecorded candidates are explicit Copy Last Transcript after an unrelated clipboard copy and Cancel/repeated Stop producing no stale or duplicate later insertion. Existing automated lifecycle coverage should be considered before asking for manual repetition.
 
-- normal dictation/insertion still works;
-- the original clipboard is restored after normal insertion;
-- images/files/rich clipboard content survive normal insertion;
-- a newer clipboard change made during insertion survives;
-- failed/misdirected insertion still leaves Last Transcript available;
-- Insert / Copy / Clear Last Transcript;
-- Command Palette access to the recovery commands;
-- Remote - WSL;
-- Small/Medium/Large overlay regression.
+Approved runtime fixes require relevant revalidation and one replacement final M2 candidate on this branch. Documentation-only cleanup does not require a new installation.
 
-Do not merge M2 or create M3 until the user explicitly approves the tested result.
+Do not merge M2 or create the next milestone branch until review and user acceptance are complete and merge is explicitly approved. No version bump, release, publication or issue closure is part of M2 closure.
 
 ## 6. M3 — Live transcript preview
 
@@ -366,7 +322,10 @@ Existing focus/recovery IDs from the earlier specification remain useful:
 
 - T01-T10: focus/target/helper behavior -> primarily M5/M6.
 - T11: overlay size/DPI/hit-area regression -> M1/M6.
-- T12-T13: transcript recovery and clipboard behavior -> M2/M6.
+- T12: memory-only retained final transcript and explicit Copy Last Transcript -> M2/M6.
+- T13: automatic Off leaves the clipboard untouched; On copies once without restoration; newer copies win -> M2/M6.
+
+The retired Insert/Clear menu and snapshot/restore cases are historical, not active T12/T13 requirements.
 
 Additions:
 
@@ -394,14 +353,16 @@ M1 is complete and accepted.
 - selected product default/fallback: Medium
 - Issue #38 remains unresolved and was not claimed fixed by M1
 
-M2 is now the active milestone.
+M2 is at its corrected final-candidate review gate.
 
-- M2 branch: `fix/transcript-recovery`
-- branch base: `481913feb88ad16aca00da744dd2fe72cd90ef98`
-- first implementation target: retain Last Transcript before insertion, expose Insert/Copy/Clear recovery actions, then implement complete clipboard preservation/ownership protection and lifecycle hardening
-- no M2 runtime implementation has been accepted yet
-- no M3 branch may be created until M2 passes its user gate and is merged
+- M2 branch: `fix/transcript-recovery`.
+- Milestone base: `481913feb88ad16aca00da744dd2fe72cd90ef98`.
+- Corrected source: `eaf0570f1c817229e36177ccff32f50ce396a43f`; PR #51 is draft and unmerged.
+- Normal dictation and Overwrite clipboard behavior are user-accepted.
+- Codacy triage is blocked on individual details of 13 findings, not resolved or dismissed.
+- Next action: obtain those details, triage actual findings, finish only justified targeted M2.5 checks, then seek explicit merge approval.
+- Current contract and delivered-artifact identity: [M2_CLIPBOARD_MODE_FIX.md](M2_CLIPBOARD_MODE_FIX.md).
+- Unintended German-to-English output remains a separate unresolved bug. An earlier language-correctness milestone was proposed, not approved; do not silently change the sequence or expand M2.
+- No new milestone branch, version bump or publication is authorized here.
 
-The clipboard requirement is now explicit: preserve whatever the user had on the Windows clipboard before normal dictation insertion, across formats, and restore it only if no newer clipboard change has occurred.
-
-Historical detailed plan before renumbering: commit `3c0c3bc2fd611a3a76835897edc5af3a674bf2df`.
+Historical detailed plan before renumbering: commit `3c0c3bc2fd611a3a76835897edc5af3a674bf2df`. M2.1-M2.4 ledgers are archived checkpoint evidence, not instructions to restore discarded code.

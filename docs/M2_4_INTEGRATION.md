@@ -1,6 +1,18 @@
 # M2.4 — Integrated automated validation
 
-Updated: 2026-09-28 (GitHub run timestamps are UTC).
+> **Historical checkpoint — not current instructions.** Archived on 2026-09-29.
+> Everything below this notice records the earlier checkpoint, including its
+> then-pending gates and test limitations. Read
+> [M2_CLIPBOARD_MODE_FIX.md](M2_CLIPBOARD_MODE_FIX.md) for the current contract,
+> delivered candidate, user feedback and remaining review/acceptance gates.
+>
+> The correction described below as uncommitted was subsequently committed at
+> `eb2f60369763486eedb6c9d88283ea6446ac8ccf`; its restoration candidate failed user
+> acceptance. Replacement `eaf0570f1c817229e36177ccff32f50ce396a43f` passed its two
+> workflows. Normal dictation and Overwrite clipboard behavior are now user-accepted.
+> The nine Codacy findings below describe an earlier head; the current 13 remain unclassified.
+
+Historical checkpoint updated: 2026-09-28 (GitHub run timestamps are UTC).
 Repository: `gcalpay/vscode-universal-dictate`.
 Branch: `fix/transcript-recovery`.
 Baseline: `80fcd399055cae3c74ba390b155235e1386610d8`.

@@ -1,6 +1,16 @@
 # M2.3 — Lifecycle, recorder shutdown and cooperative cancellation
 
-Updated: 2026-09-28.
+> **Historical checkpoint — not current instructions.** Archived on 2026-09-29.
+> Everything below this notice records the earlier checkpoint, including its
+> then-pending gates and test limitations. Read
+> [M2_CLIPBOARD_MODE_FIX.md](M2_CLIPBOARD_MODE_FIX.md) for the current contract,
+> delivered candidate, user feedback and remaining review/acceptance gates.
+>
+> Operation/session ownership and recorder/WAV cleanup protections remain relevant.
+> The clipboard-v2 helper/protocol described below is superseded by the Unicode
+> helper. Historical test counts do not validate the replacement transport.
+
+Historical checkpoint updated: 2026-09-28.
 
 ## State and authorized scope
 
