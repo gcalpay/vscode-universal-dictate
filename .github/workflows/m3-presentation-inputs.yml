@@ -1,0 +1,48 @@
+name: M3 presentation inputs (temporary)
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/m3-presentation-inputs.yml'
+permissions:
+  contents: read
+jobs:
+  inputs:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'feat/live-transcript-preview'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Archive tracked source and read public analyzer report
+        env:
+          REVIEW_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          mkdir -p .deps/m3-presentation-inputs
+          git archive --format=zip HEAD -o .deps/m3-presentation-inputs/source.zip
+          git rev-parse HEAD > .deps/m3-presentation-inputs/checkout.txt
+          printf '%s\n' "$REVIEW_HEAD" > .deps/m3-presentation-inputs/head.txt
+          python3 - <<'PY'
+          import json, urllib.request
+          from pathlib import Path
+          root = Path('.deps/m3-presentation-inputs')
+          base = 'https://api.codacy.com/api/v3/analysis/organizations/gh/gcalpay/repositories/vscode-universal-dictate/pull-requests/52'
+          for name, suffix in [('codacy-meta', ''), ('codacy-issues', '/issues?limit=100')]:
+              try:
+                  request = urllib.request.Request(base + suffix, headers={'Accept': 'application/json'})
+                  with urllib.request.urlopen(request, timeout=20) as response:
+                      raw = response.read(1048577)
+                  if len(raw) > 1048576:
+                      raise ValueError('response exceeds review bound')
+                  payload = json.loads(raw)
+              except Exception as error:
+                  payload = {'retrieval_error': str(error)}
+              (root / (name + '.json')).write_text(json.dumps(payload, indent=2), encoding='utf-8')
+          PY
+          sha256sum .deps/m3-presentation-inputs/source.zip
+      - uses: actions/upload-artifact@v7
+        with:
+          name: m3-presentation-inputs
+          path: .deps/m3-presentation-inputs/*
+          if-no-files-found: error
+          retention-days: 2
