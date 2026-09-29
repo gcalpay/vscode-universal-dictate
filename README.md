@@ -108,6 +108,8 @@ Language selection is available from the settings gear or from the Command Palet
 Universal Dictate: Select Language
 ```
 
+**Note:** Select the language you intend to speak, or use Auto-detect. If you select a different language from the one being spoken, Whisper can translate the speech into the selected language. This translation is performed entirely offline by the local multilingual Whisper model; no audio or text is sent to an online translation service.
+
 The extension uses the Windows default microphone, records 16 kHz mono PCM16 WAV through miniaudio and transcribes it locally with a bundled, pinned `whisper.cpp` runtime.
 
 ## Privacy

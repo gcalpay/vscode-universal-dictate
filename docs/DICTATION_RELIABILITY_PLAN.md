@@ -4,6 +4,24 @@ Updated: 2026-09-29. Repository: `gcalpay/vscode-universal-dictate`.
 
 This is the current implementation handoff. It replaces the earlier out-of-order milestone numbering. Historical planning and focus-diagnostic evidence remain available through pinned commits/branches, but the active milestone numbers below are chronological. M2 follows the user-approved [direct-input / optional-overwrite correction](M2_CLIPBOARD_MODE_FIX.md); the restoration design and recovery submenu are archived, not active requirements.
 
+## Active 1.0.0 scope — approved 2026-09-29
+
+M1 and M2 are complete and merged. Current base is the M2 merge
+`479ca6be4cd114372d0eece9db9962e42b3e6ba5`. M3 is active on
+`feat/live-transcript-preview`; M3.1 preparation is recorded in
+[M3_1_PREVIEW_FEASIBILITY.md](M3_1_PREVIEW_FEASIBILITY.md).
+
+The user skipped M4 and parked M5 outside 1.0.0. Clipboard overwrite is the
+accepted recovery workaround; Issue #38 remains unresolved. Keep the Language
+label/behavior and the approved README note. The reported mismatched-language
+output does not require a new language-fix milestone.
+
+Route: M3.1 measurement -> M3.2 pipeline -> M3.3 overlay -> M3.4 final VSIX/user
+gate -> accepted M3 merge -> M6 integrated 1.0.0 candidate and release approval.
+No release/version bump is authorized by starting M3. Current M2 closeout evidence
+is in [M2_CODACY_TRIAGE.md](M2_CODACY_TRIAGE.md) and PR #51, superseding historical
+pending-review statements below. Do not repeat M2 acceptance.
+
 ## 1. Branch and review policy
 
 **One milestone = one branch. Submilestones do not get separate branches.**
@@ -13,8 +31,8 @@ This is the current implementation handoff. It replaces the earlier out-of-order
 | M1 Overlay size presets | `feat/overlay-size-presets` |
 | M2 Transcript reliability | `fix/transcript-recovery` |
 | M3 Live transcript preview | `feat/live-transcript-preview` |
-| M4 Translation | `feat/translate-to-english` |
-| M5 Insertion-target preservation | `fix/statusbar-focus-preservation` |
+| M4 Translation | Skipped for 1.0.0; no branch |
+| M5 Insertion-target preservation | Parked outside 1.0.0; no branch |
 | M6 Integrated validation/release | `release/next` |
 
 Workflow for every milestone:
@@ -36,7 +54,7 @@ The normalized roadmap is now on `main`. M1 was accepted and merged through PR #
 
 Main/M1 baseline and corrected M2 checkpoint, checked 2026-09-29:
 
-- `main`: `481913feb88ad16aca00da744dd2fe72cd90ef98`, extension 0.1.5.
+- M3 base / current main: `479ca6be4cd114372d0eece9db9962e42b3e6ba5` (accepted M2 merge), extension 0.1.5. M1 historical base: `481913feb88ad16aca00da744dd2fe72cd90ef98`.
 - M1 PR #50 is merged into `main`; this does not by itself imply a new Marketplace release.
 - Windows UI extension host, including Remote - WSL.
 - Recorder: native miniaudio/WASAPI, 16 kHz mono PCM16 WAV.
@@ -48,9 +66,9 @@ Main/M1 baseline and corrected M2 checkpoint, checked 2026-09-29:
 - On `main` / M1 baseline: clipboard plus native Win32 Ctrl+V helper. This is not the corrected M2 transport.
 - Genuine status-bar Dictate and recording Stop are clickable.
 - Issue #38 remains unresolved for the genuine status-bar mouse workflow.
-- Corrected M2: `fix/transcript-recovery` at `eaf0570f1c817229e36177ccff32f50ce396a43f`; PR #51 is draft and unmerged.
+- Corrected M2 runtime: `eaf0570f1c817229e36177ccff32f50ce396a43f`, accepted and merged through PR #51; the merge changed no runtime relative to that tested candidate.
 - M2 uses direct Unicode input, optional clipboard overwrite (Off by default), memory-only Copy Last Transcript and lifecycle hardening. Restoration and the Insert/Copy/Clear submenu were removed.
-- Both corrected-candidate workflows succeeded; normal dictation has positive feedback and the user confirmed Overwrite clipboard works as intended. Codacy triage and merge approval remain open.
+- M2 workflows passed, Codacy findings were triaged and the user accepted M2 without a replacement runtime. Merge is complete; no new M2 test or approval is required.
 - Live preview and deliberate translation are not implemented. Genuine status-bar target preservation is not established.
 
 Historical branches that must not be merged into ordinary feature work:
@@ -129,7 +147,7 @@ Produce a concrete artifact/screenshots for the user. **Stop for review.** Do no
 
 **Branch:** `fix/transcript-recovery`, created from `main` at `481913feb88ad16aca00da744dd2fe72cd90ef98` after the accepted M1 merge.
 
-**Status:** corrected M2.5 candidate at `eaf0570f1c817229e36177ccff32f50ce396a43f` is committed, built and delivered. The user reports normal dictation works and **Overwrite clipboard is working as intended**. PR #51 remains draft and unmerged. Codacy review and explicit merge approval remain open.
+**Status:** complete, accepted and merged through PR #51 at `479ca6be4cd114372d0eece9db9962e42b3e6ba5`. The user accepted the corrected `eaf0570` runtime and authorized the merge without another VSIX after review found no required runtime change. See [M2_CODACY_TRIAGE.md](M2_CODACY_TRIAGE.md) and the final PR addendum for the completed review.
 
 The original M2.1-M2.4 work remains in history. Its restoration transport and Last transcript submenu were rejected and superseded. The numbered substeps below describe the corrected contract; do not reimplement retired behavior. See [M2_CLIPBOARD_MODE_FIX.md](M2_CLIPBOARD_MODE_FIX.md) for exact artifact identity, evidence, limitations and remaining gates.
 
@@ -173,17 +191,15 @@ The [M2.3 ledger](M2_3_LIFECYCLE.md) records the historical implementation check
 - Audit the actual VSIX for Off default, Copy-only recovery, correct native helper/protocol, compiled payload identity and absent legacy/diagnostic components.
 - Corrected-source Linux CI `36506468768` and Windows package run `36506468804` succeeded. Delivery evidence records the package audit and payload-hash verification.
 - Real input tests used a disposable scratch Win32 EDIT, not a Codex composer. They do not establish intended-target or caret preservation.
-- Codacy reports 13 findings and `action_required`. Individual details were inaccessible in the 2026-09-29 review; all remain unclassified. Successful builds do not complete this review gate.
+- M2 Codacy review is complete. The final-head report contained 12 Added findings: five security false positives, four intentional policy warnings, one nonblocking documentation warning and two deferred style/maintenance suggestions. Codacy itself remained `action_required`; no rule or threshold was weakened. See the triage ledger and final PR addendum.
 
-### M2.5 — Remaining acceptance and merge gate
+### M2.5 — Acceptance and merge completed
 
-Normal dictation and Overwrite clipboard behavior are user-accepted on the corrected candidate. Preserve that evidence and do not request another identical build/test merely because the conversation resumed.
-
-Finish the per-finding Codacy review first. After that, only genuinely unrecorded or correction-affected behavior may need a focused spot check; the currently unrecorded candidates are explicit Copy Last Transcript after an unrelated clipboard copy and Cancel/repeated Stop producing no stale or duplicate later insertion. Existing automated lifecycle coverage should be considered before asking for manual repetition.
-
-Approved runtime fixes require relevant revalidation and one replacement final M2 candidate on this branch. Documentation-only cleanup does not require a new installation.
-
-Do not merge M2 or create the next milestone branch until review and user acceptance are complete and merge is explicitly approved. No version bump, release, publication or issue closure is part of M2 closure.
+The user accepted the corrected candidate and authorized merging without another
+VSIX when no runtime correction was required. That condition was verified and
+PR #51 was merged. Keep the already installed corrected candidate; M3.1 adds no
+runtime changes. Historical M2 ledgers record previous checkpoints, not remaining
+acceptance work. Any future runtime change needs its own relevant validation.
 
 ## 6. M3 — Live transcript preview
 
@@ -194,6 +210,8 @@ Goal: show provisional words in the native recording overlay while the user spea
 **v1 must not repeatedly type partial hypotheses into the target input.** Partial Whisper output can change; continuous target insertion would create selection, undo, focus and correction problems that belong to a different feature.
 
 ### M3.1 — Feasibility and latency measurement
+
+**Started, not complete:** [M3.1 evidence and benchmark](M3_1_PREVIEW_FEASIBILITY.md). Mechanics tests do not establish inference latency. Compare full prefixes and 4/8/12-second snapshots, measure Stop contention and choose an approach before M3.2.
 
 The current recorder emits level events and writes the final WAV. The current warm server receives complete audio files through HTTP. Do not assume whisper.cpp's console `print_realtime` option creates a streaming HTTP API.
 
@@ -209,6 +227,8 @@ Measure visible-text latency, decode duration, CPU/RAM pressure and behavior dur
 - Only one preview decode may be active per session unless measured concurrency is justified.
 - Use latest-only/coalescing scheduling; never build an unbounded queue.
 - Tag results with session/generation IDs and discard stale results.
+- Snapshot Language and preview configuration at session start so provisional and final output use the same session settings.
+- Give final transcription priority; validate active-request cancellation against the pinned worker rather than merely ignoring late text.
 - Preview failures must not stop recording or destroy the final recording.
 - Preserve the full audio needed for authoritative final transcription.
 - Normal final transcription/fallback remains available even if preview is disabled or fails.
@@ -227,82 +247,30 @@ Add an opt-in live-preview setting initially.
 
 On Stop, stop scheduling preview work, discard stale preview responses, compute/obtain the authoritative final transcript, retain it under M2 rules and insert exactly once.
 
-Test pauses, repetitions, silence, long recording, slow preview, worker failure, rapid start/stop and consecutive sessions. Then stop for user review before merge/M4.
+Test pauses, repetitions, silence, long recording, slow preview, worker failure, rapid start/stop and consecutive sessions. Then stop for user review and explicit M3 merge approval before M6; M4 is skipped and M5 is parked.
 
-## 7. M4 — Optional translation
+## 7. M4 — Optional translation (skipped for 1.0.0)
 
-**Branch:** `feat/translate-to-english`, only after M3 is accepted and only if the user still wants translation.
+The user explicitly skipped this milestone. No `feat/translate-to-english` branch,
+translation toggle, output-language selector or live translated-caption feature
+is part of 1.0.0. Keep existing Language behavior and the approved README note.
+Historical design remains in the roadmap at the M2 merge commit.
 
-The pinned multilingual Whisper model and whisper.cpp support source-language-to-English translation. That is not arbitrary target-language translation.
+## 8. M5 — Genuine insertion-target preservation (parked outside 1.0.0)
 
-### M4.1 — Scope decision
+The user accepted clipboard recovery as the current workaround and chose not to
+require this milestone for 1.0.0. Do not create `fix/statusbar-focus-preservation`
+or merge frozen experiments as part of M3.
 
-Before runtime implementation, confirm the first product scope. Recommended v1:
-
-- Output: Original language
-- Output: Translate to English
-- Off/original remains default
-
-Other target languages require a separate translation backend/product decision.
-
-### M4.2 — Backend consistency
-
-Pass the selected task through both warm-server and CLI paths. The server accepts a `translate` request field; the CLI exposes `--translate`. Snapshot task/language at session start so a settings change does not alter an in-flight recording.
-
-### M4.3 — Settings and preview semantics
-
-Expose output mode in VS Code Settings and the existing settings picker. Keep input-language selection separate from output task.
-
-Recommended first interaction with M3: live preview remains in recognized/original speech language and only the final result is translated to English. Do not implement live translated captions unless explicitly requested.
-
-### M4.4 — Validation and gate
-
-Test multilingual samples, auto-detect, named languages, numbers, units, proper nouns, negation, warm-server/CLI parity and failure paths. Stop for user review before merge/M5.
-
-## 8. M5 — Genuine insertion-target preservation
-
-**Branch:** `fix/statusbar-focus-preservation`, created from main after M4 review/merge unless the user reprioritizes this milestone earlier.
-
-Goal: make the genuine VS Code-owned status-bar Dictate/Stop mouse workflow preserve the agreed latest target/caret/selection without corrective clicks.
-
-### M5.1 — Refresh capability and old diagnostic
-
-Recheck the current stable VS Code extension API and workbench implementation. Reuse M1-era evidence only where still applicable.
-
-The historical H1 hypothesis was to prevent primary mouse-down default focus movement inside VS Code while leaving click/keyboard behavior intact. Its isolated build never reached real Codex testing; the last recorded H1 host failed at packaging with `spawn signtool.exe ENOENT`.
-
-Diagnose the exact current blocker before adding more infrastructure. Do not merge the old native-launcher or diagnostic branches into this product branch.
-
-### M5.2 — Matched experimental hosts
-
-If H1 remains technically plausible, produce matched baseline/H1 development hosts and a matching fixed-text probe. Do not require users to install a custom VS Code as the final product solution.
-
-### M5.3 — Real Windows/Codex acceptance
-
-Using `UD_TEST`, separately test:
-
-- Codex caret insertion
-- Codex selection replacement
-- normal editor and another VS Code input
-- status-bar Start vs status-bar Stop
-- keyboard/overlay paths
-- deliberate retarget during recording
-- deliberate retarget while final processing is pending
-- same-input caret/selection changes
-- local vs Remote - WSL
-- two windows/minimize/restore where relevant
-
-A compile, synthetic DOM event or mocked input is not evidence.
-
-### M5.4 — Delivery decision and gate
-
-Only merge a product change that has a supported delivery path. If the only successful route requires a custom VS Code or an unavailable upstream API, leave Issue #38 open and record the blocker instead of weakening requirements. A separate native launcher still requires an explicit product decision.
-
-Stop for user review before any merge and before M6.
+Issue #38 remains open. Optional clipboard backup does not prevent the genuine
+status-bar item from changing focus and does not restore an opaque composer/caret.
+Document that limitation in the release; do not advertise universal target
+preservation. Reopening M5 requires a separate product decision. Historical
+experiments and acceptance matrix remain available at the M2 merge commit.
 
 ## 9. M6 — Integrated validation and release
 
-**Branch:** `release/next`, created from the accepted main state after M5 (or from unchanged main if M5 is explicitly parked).
+**Branch:** `release/next`, created from updated main after accepted M3 merge. M4 is skipped and M5 is parked. Prepare and test an explicitly approved 1.0.0 release candidate before separate publication approval.
 
 ### M6.1 — Integrated regression
 
@@ -320,7 +288,7 @@ Provide the tested artifact and exact evidence to the user. Merge/publish/tag/cl
 
 Existing focus/recovery IDs from the earlier specification remain useful:
 
-- T01-T10: focus/target/helper behavior -> primarily M5/M6.
+- T01-T10: full focus-preservation claims are parked with M5; M6 validates supported workflows and documents Issue #38 rather than claiming it fixed.
 - T11: overlay size/DPI/hit-area regression -> M1/M6.
 - T12: memory-only retained final transcript and explicit Copy Last Transcript -> M2/M6.
 - T13: automatic Off leaves the clipboard untouched; On copies once without restoration; newer copies win -> M2/M6.
@@ -336,33 +304,27 @@ Additions:
 | T16 | M3 | Preview failure leaves recording and final transcription usable |
 | T17 | M3 | Small/Medium/Large remain usable with preview enabled and do not grow outside the chosen preset |
 | T18 | M3 | Final Stop inserts one authoritative transcript without duplicated preview fragments |
-| T19 | M4 | Original vs Translate-to-English produces the selected final mode on warm-server and CLI fallback |
-| T20 | M4 | Translation preserves critical numbers, units and negation in representative manual samples; observed limitations documented |
-| T21 | M4 | Settings changes affect the next session, not an in-flight session; preview/final language behavior matches the chosen policy |
+| T19-T21 | M4 | Skipped with the dedicated translation milestone; not 1.0.0 gates |
+| T22 | M3 | Language and preview settings are session-stable; changes affect the next session |
 
 Every manual result records commit/artifact, Windows/VS Code/Codex versions, local/WSL, target, display scaling where relevant, controls used, expected/actual result and Pass/Fail/Blocked/Not run. Never replace real GUI evidence with compilation.
 
 ## 11. Current handoff
 
-M1 is complete and accepted.
+M1 and M2 are accepted and merged. M2 merge/base for M3:
+`479ca6be4cd114372d0eece9db9962e42b3e6ba5` (PR #51). The accepted M2 runtime
+remains the corrected `eaf0570` candidate; no replacement test is requested here.
 
-- M1 branch: `feat/overlay-size-presets`
-- PR #50 merged into `main`
-- M1 merge commit: `481913feb88ad16aca00da744dd2fe72cd90ef98`
-- user Windows review: Small/Medium/Large behaved as intended
-- selected product default/fallback: Medium
-- Issue #38 remains unresolved and was not claimed fixed by M1
+M3 branch: `feat/live-transcript-preview`. M3.1 is started: source/protocol review
+and 22 diagnostic mechanics tests passed in the chat sandbox; pinned Windows
+Whisper latency, CPU/RAM and Stop-contention measurements are pending. See
+[M3_1_PREVIEW_FEASIBILITY.md](M3_1_PREVIEW_FEASIBILITY.md) for the prepared
+benchmark, evidence limits and commit/run approval gate. No product live preview,
+new VSIX, M3 merge, version bump or publication has occurred.
 
-M2 is at its corrected final-candidate review gate.
+M4 is skipped and M5 is parked outside 1.0.0 by the user's explicit decision.
+Keep Language as-is and include the approved offline note. After M3 acceptance,
+proceed to M6 integrated release validation. Issue #38 stays unresolved.
 
-- M2 branch: `fix/transcript-recovery`.
-- Milestone base: `481913feb88ad16aca00da744dd2fe72cd90ef98`.
-- Corrected source: `eaf0570f1c817229e36177ccff32f50ce396a43f`; PR #51 is draft and unmerged.
-- Normal dictation and Overwrite clipboard behavior are user-accepted.
-- Codacy triage is blocked on individual details of 13 findings, not resolved or dismissed.
-- Next action: obtain those details, triage actual findings, finish only justified targeted M2.5 checks, then seek explicit merge approval.
-- Current contract and delivered-artifact identity: [M2_CLIPBOARD_MODE_FIX.md](M2_CLIPBOARD_MODE_FIX.md).
-- Unintended German-to-English output remains a separate unresolved bug. An earlier language-correctness milestone was proposed, not approved; do not silently change the sequence or expand M2.
-- No new milestone branch, version bump or publication is authorized here.
-
-Historical detailed plan before renumbering: commit `3c0c3bc2fd611a3a76835897edc5af3a674bf2df`. M2.1-M2.4 ledgers are archived checkpoint evidence, not instructions to restore discarded code.
+Historical pre-renumbering plan: `3c0c3bc2fd611a3a76835897edc5af3a674bf2df`.
+Archived M2.1-M2.4 ledgers are evidence, not instructions to revive discarded code.
