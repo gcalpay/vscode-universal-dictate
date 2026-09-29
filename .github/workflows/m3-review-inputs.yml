@@ -1,0 +1,45 @@
+name: M3 review inputs (temporary)
+
+on:
+  pull_request:
+    paths: ['.github/workflows/m3-review-inputs.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  review-inputs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Prepare tracked-source snapshot and declared type-check inputs
+        run: |
+          mkdir -p .deps/review
+          git archive --format=zip --output=.deps/review/source.zip HEAD
+          git rev-parse HEAD > .deps/review/checkout.txt
+          npm install --no-audit --no-fund
+          python3 - <<'PY'
+          from pathlib import Path
+          from zipfile import ZipFile, ZIP_DEFLATED
+          import hashlib, json
+          root = Path('.deps/review')
+          with ZipFile(root / 'types.zip', 'w', ZIP_DEFLATED) as archive:
+              for folder in ('node_modules/@types/node', 'node_modules/@types/vscode', 'node_modules/undici-types'):
+                  for path in sorted(Path(folder).rglob('*')):
+                      if path.is_file():
+                          archive.write(path, path.as_posix())
+          (root / 'sha256.json').write_text(json.dumps({p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in root.glob('*.zip')}, indent=2))
+          PY
+      - uses: actions/upload-artifact@v7
+        with:
+          name: m3-review-inputs
+          path: .deps/review/*
+          retention-days: 1
+          if-no-files-found: error
