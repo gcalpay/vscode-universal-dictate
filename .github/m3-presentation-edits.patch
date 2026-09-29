@@ -1,0 +1,232 @@
+diff --git a/AGENTS.md b/AGENTS.md
+index e6b4ace..46252ee 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -1,9 +1,9 @@
+ # Agent guidance
+ 
+-Read [docs/M3_2_PREVIEW_PIPELINE.md](docs/M3_2_PREVIEW_PIPELINE.md) first for the
+-current pipeline preparation and remaining integration gates. Actual M3.1
+-measurements are in [docs/M3_1_RESULTS.md](docs/M3_1_RESULTS.md); the original
+-benchmark design is in [docs/M3_1_PREVIEW_FEASIBILITY.md](docs/M3_1_PREVIEW_FEASIBILITY.md).
++Read [docs/M3_3_PREVIEW_PRESENTATION.md](docs/M3_3_PREVIEW_PRESENTATION.md) first
++for the current presentation changes and Windows review gate. The connected
++pipeline is recorded in [docs/M3_2_PREVIEW_PIPELINE.md](docs/M3_2_PREVIEW_PIPELINE.md).
++Actual M3.1 measurements are in [docs/M3_1_RESULTS.md](docs/M3_1_RESULTS.md).
+ [docs/DICTATION_RELIABILITY_PLAN.md](docs/DICTATION_RELIABILITY_PLAN.md) is the
+ roadmap. The M2 product contract remains in
+ [docs/M2_CLIPBOARD_MODE_FIX.md](docs/M2_CLIPBOARD_MODE_FIX.md); historical M2
+@@ -36,8 +36,9 @@ snapshotted with Language and visualization before each recording. No hidden
+ preview decoding for Status bar only / Off. Initial native overlay display is
+ connected; M3.3 presentation verification and M3.4 user acceptance remain.
+ 
+-The user authorized continuing M3.2 and its normal commits/CI, including the
+-optional setting. Do not ask for repeated approval of each routine integration
++The user authorized continuing implementation and its normal commits/CI, and
++reconfirmed that Live preview must remain Off by default. M3.3 improves layout,
++Unicode rendering and clipping without changing accepted window/button sizes. Do not ask for repeated approval of each routine integration
+ commit. Significant scope changes, M3 merge and release still require approval.
+ See the pipeline ledger and PR #52 for current test/Windows evidence, not the
+ older preparation-only status. Do not equate local tests with Windows acceptance.
+@@ -46,7 +47,7 @@ older preparation-only status. Do not equate local tests with Windows acceptance
+ 
+ - One milestone = one branch; all M3 submilestones stay on this branch.
+ - Inspect current refs before writing; do not overwrite unrelated changes.
+-- Continue the authorized M3.2 integration with Conventional Commits and normal
++- Continue the authorized M3 implementation with Conventional Commits and normal
+   checks. Dependency/backend changes and significant design deviations still
+   require approval. Distinguish prepared, committed, executed and untested work.
+ - User VSIX testing occurs at M3.4, not each intermediate submilestone. Diagnostic
+ diff --git a/docs/DICTATION_RELIABILITY_PLAN.md b/docs/DICTATION_RELIABILITY_PLAN.md
+index b26cc58..2087c90 100644
+--- a/docs/DICTATION_RELIABILITY_PLAN.md
++++ b/docs/DICTATION_RELIABILITY_PLAN.md
+@@ -237,6 +237,8 @@ Measure visible-text latency, decode duration, CPU/RAM pressure and behavior dur
+ 
+ ### M3.3 — Overlay integration
+ 
++Presentation implementation and validation gates: [M3_3_PREVIEW_PRESENTATION.md](M3_3_PREVIEW_PRESENTATION.md). Off remains the default.
++
+ Add an opt-in live-preview setting initially.
+ 
+ - Show provisional text in the existing enhanced overlay.
+diff --git a/native/record-audio.cpp b/native/record-audio.cpp
+index a22d277..8b2f7b9 100644
+--- a/native/record-audio.cpp
++++ b/native/record-audio.cpp
+@@ -38,6 +38,7 @@
+ #include "miniaudio.h"
+ #include "overlay-layout.h"
+ #include "preview-bridge.h"
++#include "preview-text.h"
+ #include <memory>
+ 
+ #include <algorithm>
+@@ -276,6 +277,7 @@ struct OverlayState {
+     bool enhanced = false;
+     bool previewEnabled = false;
+     std::wstring previewText;
++    universal_dictate::preview::TextRenderer previewRenderer;
+     OverlaySize overlaySize = OverlaySize::Medium;
+     UINT dpi = kLogicalDpi;
+     EnhancedOverlayLayout enhancedLayout =
+@@ -499,20 +501,22 @@ void drawSignalField(HDC dc, const RECT& client) {
+ }
+ 
+ void drawEnhancedWaveform(HDC dc) {
+-    OverlayRect waveform = g_overlay.enhancedLayout.waveform;
+-    if (g_overlay.previewEnabled) {
+-        waveform.bottom = waveform.top + (waveform.bottom - waveform.top) / 3;
+-    }
++    const OverlayRect waveform = g_overlay.previewEnabled
++        ? universal_dictate::preview::calculateTextLayout(g_overlay.overlaySize, g_overlay.dpi).waveform
++        : g_overlay.enhancedLayout.waveform;
+     const int left = waveform.left;
+     const int right = waveform.right;
+     const int top = waveform.top;
+     const int bottom = waveform.bottom;
+     const int centerY = (top + bottom) / 2;
+     const int width = std::max(1, right - left);
+-    const int maxAmplitude = std::max(scaleLogical(6, g_overlay.dpi), (bottom - top) / 2 - scaleLogical(4, g_overlay.dpi));
++    const int maxAmplitude = g_overlay.previewEnabled
++        ? std::max(1, (bottom - top) / 2 - scaleLogical(1, g_overlay.dpi))
++        : std::max(scaleLogical(6, g_overlay.dpi), (bottom - top) / 2 - scaleLogical(4, g_overlay.dpi));
+ 
+     Gdiplus::Graphics graphics(dc);
+     graphics.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
++    if (g_overlay.previewEnabled) graphics.SetClip(Gdiplus::Rect(left, top, right-left, bottom-top));
+     graphics.SetPixelOffsetMode(Gdiplus::PixelOffsetModeHighQuality);
+ 
+     const Gdiplus::Color axisColor(115, 41, 82, 58);
+@@ -623,10 +627,11 @@ void drawEnhancedOverlay(HDC dc, const RECT& client) {
+     SetBkMode(dc, TRANSPARENT);
+     SetTextColor(dc, RGB(244, 246, 250));
+     HFONT previousFont = reinterpret_cast<HFONT>(SelectObject(dc, g_overlay.enhancedTitleFont));
+-    RECT title = winRect(layout.title);
++    const auto previewLayout = universal_dictate::preview::calculateTextLayout(g_overlay.overlaySize, g_overlay.dpi);
++    RECT title = winRect(g_overlay.previewEnabled ? previewLayout.title : layout.title);
+     DrawTextW(dc, L"Listening", -1, &title, DT_LEFT | DT_SINGLELINE | DT_VCENTER);
+ 
+-    if (layout.showSubtitle) {
++    if (layout.showSubtitle && !g_overlay.previewEnabled) {
+         SelectObject(dc, g_overlay.enhancedSubtitleFont);
+         SetTextColor(dc, RGB(151, 164, 184));
+         RECT subtitle = winRect(layout.subtitle);
+@@ -636,21 +641,20 @@ void drawEnhancedOverlay(HDC dc, const RECT& client) {
+     drawEnhancedWaveform(dc);
+ 
+     if (g_overlay.previewEnabled) {
+-        RECT caption = winRect(layout.waveform);
+-        caption.top += (caption.bottom - caption.top) / 3 + scaleLogical(3, g_overlay.dpi);
++        const std::wstring& text = g_overlay.previewText;
++        const bool rendered = g_overlay.previewRenderer.draw(dc, previewLayout,
++            text.empty() ? L"Listening…" : text);
+         SelectObject(dc, g_overlay.enhancedSubtitleFont);
+         SetTextColor(dc, RGB(151, 164, 184));
+-        RECT label = caption;
+-        label.bottom = label.top + scaleLogical(12, g_overlay.dpi);
+-        DrawTextW(dc, L"Preview", -1, &label, DT_LEFT | DT_SINGLELINE | DT_NOPREFIX);
+-        caption.top = label.bottom;
+-        SelectObject(dc, g_overlay.enhancedTitleFont);
+-        SetTextColor(dc, RGB(222, 230, 242));
+-        // Provisional latest-window text only, never authoritative transcript history.
+-        const auto& text = g_overlay.previewText;
+-        const UINT flags = DT_LEFT | DT_NOPREFIX | DT_END_ELLIPSIS |
+-            (g_overlay.overlaySize == OverlaySize::Small ? DT_SINGLELINE : DT_WORDBREAK);
+-        DrawTextW(dc, text.empty() ? L"..." : text.c_str(), -1, &caption, flags);
++        RECT label = winRect(previewLayout.label);
++        DrawTextW(dc, rendered && g_overlay.previewRenderer.skippedLines() > 0 ? L"Live preview · latest" : L"Live preview",
++            -1, &label, DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_NOPREFIX | DT_END_ELLIPSIS);
++        if (!rendered) {
++            // Normal recording/final transcription continues even if text rendering fails.
++            RECT caption = winRect(previewLayout.text);
++            DrawTextW(dc, L"Preview unavailable", -1, &caption,
++                DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX | DT_END_ELLIPSIS);
++        }
+     }
+ 
+     HPEN dividerPen = CreatePen(
+@@ -1050,6 +1054,9 @@ bool createOverlay(HMONITOR targetMonitor, bool enhanced, OverlaySize overlaySiz
+ }
+ 
+ void destroyOverlay() noexcept {
++    g_overlay.previewRenderer.reset();
++    g_overlay.previewText.clear();
++    g_overlay.previewEnabled = false;
+     if (g_overlay.window != nullptr) {
+         DestroyWindow(g_overlay.window);
+         g_overlay.window = nullptr;
+diff --git a/src/core/preview-recorder.ts b/src/core/preview-recorder.ts
+index 6ba1cb5..718de27 100644
+--- a/src/core/preview-recorder.ts
++++ b/src/core/preview-recorder.ts
+@@ -31,6 +31,22 @@ export class RecorderLines {
+   close(): void { this.pending = ''; this.dropping = false; }
+ }
+ 
++/** Keep a bounded suffix without cutting a combining/emoji grapheme in half. */
++export function preparePreviewDisplayText(value: string): string {
++  if (typeof value !== 'string' || value.length > 16_384) throw new Error('Invalid preview text.');
++  const normalized = value.replace(/[\u0000-\u001f\u007f-\u009f]/g, ' ').replace(/\s+/g, ' ').trim();
++  const segments = Array.from(new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(normalized),
++    item => item.segment);
++  let bytes = 0, points = 0, first = segments.length;
++  for (let i = segments.length - 1; i >= 0; --i) {
++    const nextBytes = Buffer.byteLength(segments[i], 'utf8');
++    const nextPoints = Array.from(segments[i]).length;
++    if (bytes + nextBytes > 4096 || points + nextPoints > 1024) break;
++    bytes += nextBytes; points += nextPoints; first = i;
++  }
++  return segments.slice(first).join('');
++}
++
+ type Pending = { id: number; settle: (value?: PreviewLease, error?: Error) => void };
+ 
+ /** One request at a time; PCM is transported in bounded frames, never in files. */
+@@ -87,8 +103,7 @@ export class RecorderPreviewChannel {
+     if (this.stopped) return;
+     if (update.sessionId !== this.sessionId || !Number.isSafeInteger(update.revision) || update.revision < 1)
+       throw new Error('Invalid preview display identity.');
+-    // Keep complete code points, strip controls, and cap native UI payloads.
+-    const text = Array.from(update.text.replace(/[\u0000-\u001f\u007f-\u009f]/g, ' ').replace(/\s+/g, ' ').trim()).slice(-1024).join('');
++    const text = preparePreviewDisplayText(update.text);
+     if (!text) return;
+     this.send(`TEXT ${this.sessionId} ${update.revision} ${Buffer.from(text, 'utf8').toString('hex')}\n`, () => this.stop());
+   }
+diff --git a/test/preview-recorder.test.cjs b/test/preview-recorder.test.cjs
+index fcfc10b..b65ff5c 100644
+--- a/test/preview-recorder.test.cjs
++++ b/test/preview-recorder.test.cjs
+@@ -1,6 +1,6 @@
+ const test = require('node:test');
+ const assert = require('node:assert/strict');
+-const { RecorderLines, RecorderPreviewChannel, MAX_PREVIEW_LINE } = require('../dist/core/preview-recorder');
++const { RecorderLines, RecorderPreviewChannel, MAX_PREVIEW_LINE, preparePreviewDisplayText } = require('../dist/core/preview-recorder');
+ const { buildRecorderArguments } = require('../dist/core/recorder');
+ const { validatePreviewAudio } = require('../dist/core/preview-audio');
+ 
+@@ -83,3 +83,24 @@ test('framing bound permits maximum eight-second PCM plus ownership metadata', (
+   const line = 'PREVIEW ' + 'a'.repeat(128) + ' 9007199254740991 9007199254612991 9007199254740991 ' + '0'.repeat(512000);
+   assert.ok(line.length <= MAX_PREVIEW_LINE);
+ });
++
++for (const cluster of ['a\u0308', '👨‍👩‍👧‍👦', '🇩🇪', '👍🏽', 'क्‍ष']) {
++  test(`display tail preserves whole graphemes: ${cluster}`, () => {
++    const source = cluster.repeat(800);
++    const result = preparePreviewDisplayText(source);
++    assert.ok(source.endsWith(result));
++    assert.ok(Array.from(result).length <= 1024);
++    assert.ok(Buffer.byteLength(result) <= 4096);
++    for (const part of new Intl.Segmenter(undefined, {granularity:'grapheme'}).segment(result))
++      assert.equal(part.segment, cluster);
++    assert.ok(result.length > 0);
++  });
++}
++test('display rejects excessive text and does not emit half of an oversized grapheme', () => {
++  assert.throws(() => preparePreviewDisplayText('x'.repeat(16385)), /Invalid preview text/);
++  assert.equal(preparePreviewDisplayText('a' + '\u0308'.repeat(1200)), '');
++});
++test('display preserves RTL, CJK and ampersands as literal text', () => {
++  const text = 'أنا أذهب إلى المنزل. 水温为二十度 & not a shortcut';
++  assert.equal(preparePreviewDisplayText(text), text);
++});
