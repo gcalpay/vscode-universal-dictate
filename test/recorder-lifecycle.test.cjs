@@ -49,6 +49,7 @@ function harness(settings = {}) {
       if (id === 'node:fs') return filesystem;
       if (id === 'node:readline') return readline;
       if (id === './overlay-size') return overlay;
+      if (id === './preview-recorder') return require('../dist/core/preview-recorder');
       throw Error(`Unexpected require ${id}`);
     }
   }, { filename: 'recorder.js' });

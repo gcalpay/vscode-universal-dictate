@@ -8,6 +8,8 @@ import {
   RecorderOverlayStyle
 } from './core/recorder';
 import type { OverlaySize } from './core/overlay-size';
+import type { PreviewLease } from './core/preview-audio';
+import type { PreviewUpdate } from './core/preview-coordinator';
 
 const RECORDER_RELATIVE_PATH = ['resources', 'bin', 'universal-dictate-recorder.exe'];
 
@@ -23,6 +25,11 @@ export { RecorderAction, RecorderOverlayStyle } from './core/recorder';
 export class RecorderSession {
   private constructor(private readonly core: CoreRecorderSession) {}
 
+  get previewSessionId(): string | undefined { return this.core.previewSessionId; }
+
+  acquirePreview(signal: AbortSignal): Promise<PreviewLease | undefined> { return this.core.acquirePreview(signal); }
+  showPreview(update: PreviewUpdate): void { this.core.showPreview(update); }
+
   get outputPath(): string {
     return this.core.outputPath;
   }
@@ -34,7 +41,8 @@ export class RecorderSession {
     overlayStyle: RecorderOverlayStyle = 'compact',
     waveformTimeSpanSeconds = 1,
     overlaySize: OverlaySize = 'medium',
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    livePreview = false
   ): Promise<RecorderSession> {
     signal?.throwIfAborted();
     const recorderPath = getRecorderPath(context);
@@ -45,7 +53,8 @@ export class RecorderSession {
     const recordingsDir = vscode.Uri.joinPath(context.globalStorageUri, 'recordings').fsPath;
     await fs.promises.mkdir(recordingsDir, { recursive: true });
     signal?.throwIfAborted();
-    const outputPath = path.join(recordingsDir, `dictation-${randomUUID()}.wav`);
+    const sessionId = randomUUID();
+    const outputPath = path.join(recordingsDir, `dictation-${sessionId}.wav`);
 
     const core = await CoreRecorderSession.start(
       {
@@ -55,7 +64,8 @@ export class RecorderSession {
         overlayStyle,
         waveformTimeSpanSeconds,
         overlaySize,
-        signal
+        signal,
+        previewSessionId: livePreview && showOverlay && overlayStyle === 'enhanced' ? sessionId : undefined
       },
       onLevel
     );

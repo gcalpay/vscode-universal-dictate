@@ -2,9 +2,11 @@
 
 Prepared 2026-09-29. Branch: `feat/live-transcript-preview`.
 Verified base: `479ca6be4cd114372d0eece9db9962e42b3e6ba5` (accepted M2 merge).
-Status: branch created; diagnostic harness and documentation prepared in the chat
-sandbox. Commit, draft PR and runner execution await explicit approval. No product
-runtime changes or user-test VSIX are part of this checkpoint.
+Status: benchmark preparation committed at `545c8d6a265014d56242dad5806cefc704a0353c`
+and draft PR #52 opened. Windows benchmark run `36635186997` completed successfully.
+Its downloaded artifact was inspected; [M3_1_RESULTS.md](M3_1_RESULTS.md) records
+measurements, limitations and the bounded eight-second prototype decision.
+M3.2 foundation is prepared but uncommitted; it is not integrated product preview.
 
 ## Approved scope and release route
 
@@ -39,7 +41,7 @@ Source references:
 - https://github.com/gcalpay/vscode-universal-dictate/blob/479ca6be4cd114372d0eece9db9962e42b3e6ba5/src/core/whisper.ts
 - https://github.com/ggml-org/whisper.cpp/blob/v1.9.1/examples/server/server.cpp
 
-## Candidate architecture — provisional, not implemented
+## Candidate architecture — benchmark design, integration not implemented
 
 Keep the complete final recording independent from preview. Supply separate valid,
 immutable WAV snapshots through the existing warm inference worker. Evaluate full
@@ -106,7 +108,7 @@ Memory values concern the worker, not the combined future recorder/UI pipeline.
 Reports omit transcript text and retain hashes/counts, source/fixture/binary
 identities and host metadata. No private user audio is required.
 
-## Evidence actually obtained in this chat
+## Original preparation evidence (historical; runner results now available)
 
 - 22 standard-library mechanics tests passed on the Linux chat sandbox: WAV
   validation/snapshot geometry, unchanged source, multipart fields, real loopback
@@ -121,21 +123,18 @@ identities and host metadata. No private user audio is required.
   Windows pipeline execution are NOT RUN. No CPU/latency suitability conclusion
   for the user's i7-7700 or any Windows machine has been reached.
 
-## Exit gate and next authorized action
+## Current gate and next action
 
-Proposed commit: `test(m3): add offline live-preview feasibility benchmark`.
-After commit approval, open the M3 draft PR; the path-filtered diagnostic workflow
-and existing PR workflows can then run. The diagnostic has no VSIX output. A new
-workflow's manual dispatch may not be available before it exists on the default
-branch, so use its pull-request trigger for the initial run.
+The original preparation was approved, committed and exercised in PR #52. Do not
+repeat its initial benchmark merely because an earlier paragraph says NOT RUN;
+that paragraph is the historical pre-commit boundary. The actual experiment and
+its source/fixture/artifact identities are in [M3_1_RESULTS.md](M3_1_RESULTS.md).
 
-Read actual benchmark output and inspect failures. Select a snapshot policy only
-when it offers useful freshness without unbounded memory/work or unacceptable Stop
-blocking. If results are insufficient, refine M3.1 rather than declare it passed
-or proceed with broad overlay changes. Full German/natural-speech quality and
-actual user-machine/UI latency remain final M3 acceptance items; synthetic runner
-speech does not establish them.
+The initial measurement gate supports a bounded eight-second preview prototype,
+not a guaranteed production latency or transcript-quality claim. M3.2 core
+scheduling/snapshot preparation and remaining native/runtime integration are in
+[M3_2_PREVIEW_PIPELINE.md](M3_2_PREVIEW_PIPELINE.md). Approve its new commit before
+updating the branch. All M3 work stays on `feat/live-transcript-preview`.
 
-M3.1 is STARTED, not completed. No additional user test/reinstallation is requested
-now. One final user-test VSIX is delivered at M3.4. M3 merge, M6 version bump and
-Marketplace publication each retain their approval gates.
+No user reinstall/test is requested now. The first live-preview user-test VSIX is
+still the final M3.4 gate; M3 merge and M6 release retain their approval gates.

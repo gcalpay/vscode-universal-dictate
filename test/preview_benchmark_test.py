@@ -183,7 +183,7 @@ class TransportTests(unittest.TestCase):
                 self.end_headers()
                 try:
                     self.wfile.write(body)
-                except (BrokenPipeError, ConnectionResetError):
+                except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
                     pass
         server = http.server.ThreadingHTTPServer(('127.0.0.1', 0), Handler)
         serve = threading.Thread(target=server.serve_forever, daemon=True)

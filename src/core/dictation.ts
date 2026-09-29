@@ -1,10 +1,15 @@
 import * as fs from 'node:fs';
+import type { PreviewLease } from './preview-audio';
+import type { PreviewUpdate } from './preview-coordinator';
 
 export type DictationRecorderAction = 'stop' | 'cancel';
 export type TranscriptRecoveryResult = 'completed' | 'empty' | 'busy' | 'disposed';
 
 export interface DictationSession {
   readonly outputPath: string;
+  readonly previewSessionId?: string;
+  acquirePreview?(signal: AbortSignal): Promise<PreviewLease | undefined>;
+  showPreview?(update: PreviewUpdate): void;
   onAction(listener: (action: DictationRecorderAction) => void): void;
   onFailure?(listener: (error: Error) => void): void;
   stop(): Promise<string>;
@@ -25,6 +30,8 @@ interface Operation {
   pendingAction?: DictationRecorderAction;
   cancellation?: Promise<void>;
   terminal?: Promise<void>;
+  preview?: { stop(): Promise<void> };
+  previewStopping?: Promise<void>;
 }
 
 export interface DictationEngineOptions {
@@ -32,6 +39,7 @@ export interface DictationEngineOptions {
   readonly warm: () => Promise<void>;
   readonly startRecorder: (onLevel: (level: number) => void, signal: AbortSignal) => Promise<DictationSession>;
   readonly transcribe: (audioPath: string) => Promise<string>;
+  readonly startPreview?: (session: DictationSession, signal: AbortSignal) => { stop(): Promise<void> } | undefined;
   readonly insert: (transcript: string, signal: AbortSignal) => Promise<void>;
   readonly onStateChanged?: (state: DictationState) => void;
   readonly onLevel?: (level: number) => void;
@@ -77,6 +85,7 @@ export class DictationEngine {
     if (this.disposed || !op) return;
     const wasRecording = op.phase === 'recording';
     op.abort.abort();
+    void this.stopPreview(op);
     this.notifyRecordingChanged(false);
     this.emitSafely(op, 'cancelling');
     if (wasRecording) await this.cancelRecording(op);
@@ -91,6 +100,7 @@ export class DictationEngine {
     const op = this.operation;
     if (op) {
       op.abort.abort();
+      void this.stopPreview(op);
       if (op.phase === 'recording') void this.cancelRecording(op);
       else if (op.phase === 'stopping') void this.cancelSession(op).catch(() => undefined);
     }
@@ -162,6 +172,11 @@ export class DictationEngine {
       op.phase = 'recording';
       const pending = op.pendingAction;
       op.pendingAction = undefined;
+      if (!pending && this.current(op)) {
+        try { op.preview = this.options.startPreview?.(session, op.abort.signal); }
+        catch { this.reportError(new Error('Live preview unavailable; normal dictation remains available.')); }
+        if (!this.current(op)) void this.stopPreview(op);
+      }
       if (pending) this.handleRecorderAction(op, pending);
     } catch (error) {
       if (this.current(op)) this.reportError(error);
@@ -190,8 +205,21 @@ export class DictationEngine {
     if (!this.current(op) || !['opening-microphone', 'recording'].includes(op.phase)) return;
     this.reportError(error);
     op.abort.abort();
+    void this.stopPreview(op);
     this.notifyRecordingChanged(false);
     if (op.phase === 'recording') void this.cancelRecording(op);
+  }
+
+  private stopPreview(op: Operation): Promise<void> {
+    if (!op.preview) return Promise.resolve();
+    if (!op.previewStopping) {
+      // stop() invalidates immediately; physical recorder shutdown is not delayed.
+      try { op.previewStopping = op.preview.stop().catch(() => {
+        this.reportError(new Error('Live preview shutdown failed.'));
+      }); }
+      catch { op.previewStopping = Promise.resolve(); this.reportError(new Error('Live preview shutdown failed.')); }
+    }
+    return op.previewStopping;
   }
 
   private cancelSession(op: Operation): Promise<void> {
@@ -210,7 +238,7 @@ export class DictationEngine {
     op.terminal = (async () => {
       try { await this.cancelSession(op); }
       catch (error) { this.reportError(error); }
-      finally { this.finish(op); }
+      finally { await this.stopPreview(op); this.finish(op); }
     })();
     return op.terminal;
   }
@@ -219,6 +247,7 @@ export class DictationEngine {
     if (op.terminal) return op.terminal;
     if (!this.current(op) || !op.session || op.phase !== 'recording') return Promise.resolve();
     op.phase = 'stopping';
+    void this.stopPreview(op);
     this.notifyRecordingChanged(false);
     op.terminal = this.finalizeRecording(op, op.session);
     return op.terminal;
@@ -233,6 +262,8 @@ export class DictationEngine {
       this.emitSafely(op, 'transcribing');
       audioPath = await stopping;
       writerClosed = true;
+      if (!this.current(op)) return;
+      await this.stopPreview(op);
       if (!this.current(op)) return;
       op.phase = 'transcribing';
       const transcript = await this.options.transcribe(audioPath);
@@ -249,6 +280,7 @@ export class DictationEngine {
       if (this.current(op)) this.reportError(error);
     } finally {
       op.phase = 'cleaning';
+      await this.stopPreview(op);
       if (!writerClosed) {
         try { await this.cancelSession(op); writerClosed = true; }
         catch (error) { this.reportError(error); }

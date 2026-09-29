@@ -1,7 +1,9 @@
 # Agent guidance
 
-Read [docs/M3_1_PREVIEW_FEASIBILITY.md](docs/M3_1_PREVIEW_FEASIBILITY.md) first for
-current M3 scope, benchmark evidence, limitations and the next approval gate.
+Read [docs/M3_2_PREVIEW_PIPELINE.md](docs/M3_2_PREVIEW_PIPELINE.md) first for the
+current pipeline preparation and remaining integration gates. Actual M3.1
+measurements are in [docs/M3_1_RESULTS.md](docs/M3_1_RESULTS.md); the original
+benchmark design is in [docs/M3_1_PREVIEW_FEASIBILITY.md](docs/M3_1_PREVIEW_FEASIBILITY.md).
 [docs/DICTATION_RELIABILITY_PLAN.md](docs/DICTATION_RELIABILITY_PLAN.md) is the
 roadmap. The M2 product contract remains in
 [docs/M2_CLIPBOARD_MODE_FIX.md](docs/M2_CLIPBOARD_MODE_FIX.md); historical M2
@@ -21,21 +23,32 @@ from the speech. Keep the Language label and current behavior; add the approved
 README note about local offline translation when languages are mismatched. No
 translation toggle or language-correctness milestone is in the current scope.
 
-M3.1 prepares a diagnostic harness, not a product live-preview implementation.
-Do not infer successful inference latency from mechanics tests, simulations,
-source review or the existence of a benchmark workflow. Actual pinned Windows
-inference timing and Stop contention are the next measurement gate. Benchmark
-fixtures are synthetic/prerecorded and do not prove live microphone/overlay or
-user-workstation performance. M3.2 begins after a justified feasibility decision.
+M3.1's real Windows benchmark completed; the verified artifact supports a bounded
+trailing eight-second prototype rather than repeated full-recording prefixes.
+Auto remains Auto; it measured slower than explicit English. Do not promise a
+two-second end-to-end latency or treat synthetic runner speech as user-machine,
+natural-speech or live-overlay evidence.
+
+M3.2 now connects the bounded PCM handoff, framed recorder channel, cancellable
+Whisper preview HTTP and recording-engine lifecycle. Live preview has an explicit
+On/Off setting in VS Code Settings and the sixth gear entry, defaults Off, and is
+snapshotted with Language and visualization before each recording. No hidden
+preview decoding for Status bar only / Off. Initial native overlay display is
+connected; M3.3 presentation verification and M3.4 user acceptance remain.
+
+The user authorized continuing M3.2 and its normal commits/CI, including the
+optional setting. Do not ask for repeated approval of each routine integration
+commit. Significant scope changes, M3 merge and release still require approval.
+See the pipeline ledger and PR #52 for current test/Windows evidence, not the
+older preparation-only status. Do not equate local tests with Windows acceptance.
 
 ## Workflow and approval boundaries
 
 - One milestone = one branch; all M3 submilestones stay on this branch.
 - Inspect current refs before writing; do not overwrite unrelated changes.
-- Prepare source/tests and propose a Conventional Commit message before commit
-  approval. Starting M3 does not waive approval for commits, pushes, dependency
-  installs or remote workflow dispatches. State explicitly what is prepared,
-  committed, executed and still untested.
+- Continue the authorized M3.2 integration with Conventional Commits and normal
+  checks. Dependency/backend changes and significant design deviations still
+  require approval. Distinguish prepared, committed, executed and untested work.
 - User VSIX testing occurs at M3.4, not each intermediate submilestone. Diagnostic
   runner outputs are not a request to install or retest the M2 extension.
 - Merge only after the final M3 candidate is accepted and merge is approved.

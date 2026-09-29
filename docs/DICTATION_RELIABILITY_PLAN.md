@@ -211,7 +211,7 @@ Goal: show provisional words in the native recording overlay while the user spea
 
 ### M3.1 — Feasibility and latency measurement
 
-**Started, not complete:** [M3.1 evidence and benchmark](M3_1_PREVIEW_FEASIBILITY.md). Mechanics tests do not establish inference latency. Compare full prefixes and 4/8/12-second snapshots, measure Stop contention and choose an approach before M3.2.
+**Initial backend measurement reviewed:** [M3.1 results](M3_1_RESULTS.md) record the completed Windows run and bounded eight-second prototype decision. [M3.2 pipeline](M3_2_PREVIEW_PIPELINE.md) records the prepared scheduling core and remaining native/runtime integration. These results do not establish natural-speech accuracy or user-machine/overlay latency.
 
 The current recorder emits level events and writes the final WAV. The current warm server receives complete audio files through HTTP. Do not assume whisper.cpp's console `print_realtime` option creates a streaming HTTP API.
 
@@ -223,6 +223,8 @@ Test the smallest local approach for supplying bounded, valid audio snapshots to
 Measure visible-text latency, decode duration, CPU/RAM pressure and behavior during longer speech. Pick one approach before broad UI work.
 
 ### M3.2 — Preview inference pipeline
+
+**Integrated prototype:** [M3.2 source/test status](M3_2_PREVIEW_PIPELINE.md). Native PCM, cancellable HTTP, engine lifecycle and the opt-in setting are connected. Windows adapter timing, presentation validation and final user acceptance remain explicit gates.
 
 - Only one preview decode may be active per session unless measured concurrency is justified.
 - Use latest-only/coalescing scheduling; never build an unbounded queue.

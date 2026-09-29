@@ -70,6 +70,7 @@ try {
     Assert-Valid (@($manifest.extensionKind).Count -eq 1 -and $manifest.extensionKind[0] -eq 'ui') 'extension must run in the UI host'
     Assert-Valid ($manifest.contributes.configuration.properties.'universalDictate.overlaySize'.default -eq 'medium') 'Medium overlay is not the default'
     Assert-Valid ($manifest.contributes.configuration.properties.'universalDictate.overwriteClipboard'.default -eq $false) 'Overwrite clipboard must default Off'
+    Assert-Valid ($manifest.contributes.configuration.properties.'universalDictate.livePreview'.default -eq $false) 'Live preview must default Off'
     foreach ($command in @('copyLastTranscript')) {
         $id = "universalDictate.$command"
         $commandEntries = @($manifest.contributes.commands | Where-Object { $_.command -eq $id })

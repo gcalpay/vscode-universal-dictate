@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { WhisperRuntime } from './core/whisper';
 import { normalizeWhisperLanguage } from './languages';
 import { ensureModel } from './model';
+import type { PreviewAudio } from './core/preview-audio';
 
 const WHISPER_CLI_RELATIVE_PATH = ['resources', 'whisper', 'whisper-cli.exe'];
 const WHISPER_SERVER_RELATIVE_PATH = ['resources', 'whisper', 'whisper-server.exe'];
@@ -38,11 +39,17 @@ export function disposeWhisper(): void {
 
 export async function transcribe(
   context: vscode.ExtensionContext,
-  audioPath: string
+  audioPath: string,
+  sessionLanguage?: string
 ): Promise<string> {
   const configuration = vscode.workspace.getConfiguration('universalDictate');
-  const language = normalizeWhisperLanguage(configuration.get<string>('language', 'auto'));
+  const language = normalizeWhisperLanguage(sessionLanguage ?? configuration.get<string>('language', 'auto'));
   return await getRuntime(context).transcribe(audioPath, language);
+}
+
+export async function previewWhisper(context: vscode.ExtensionContext, audio: PreviewAudio,
+  language: string, signal: AbortSignal): Promise<string> {
+  return await getRuntime(context).preview(audio, language, signal);
 }
 
 function getRuntime(context: vscode.ExtensionContext): WhisperRuntime {

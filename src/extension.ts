@@ -1,6 +1,7 @@
 import * as fs from 'node:fs';
 import * as vscode from 'vscode';
-import { DictationEngine, DictationState } from './core/dictation';
+import { DictationEngine, DictationState, type DictationSession } from './core/dictation';
+import { PreviewCoordinator } from './core/preview-coordinator';
 import { TranscriptRecoveryController } from './transcript-recovery';
 import { normalizeOverlaySize, OVERLAY_SIZES, type OverlaySize } from './core/overlay-size';
 import {
@@ -17,7 +18,8 @@ import {
   getWhisperServerPath,
   isWhisperWarm,
   transcribe,
-  warmWhisper
+  warmWhisper,
+  previewWhisper
 } from './whisper';
 
 type VisualizationMode = 'both' | 'enhancedOverlay' | 'statusBar' | 'off';
@@ -63,6 +65,10 @@ function getConfiguredOverlaySize(): OverlaySize {
   );
 }
 
+function getConfiguredLivePreview(): boolean {
+  return vscode.workspace.getConfiguration('universalDictate').get<unknown>('livePreview', false) === true;
+}
+
 function getConfiguredOverwriteClipboard(): boolean {
   return vscode.workspace.getConfiguration('universalDictate').get<unknown>('overwriteClipboard', false) === true;
 }
@@ -97,6 +103,8 @@ class DictationController implements vscode.Disposable {
   readonly recovery: TranscriptRecoveryController;
   private activeVisualization: VisualizationMode = 'enhancedOverlay';
   private activeOverwriteClipboard = false;
+  private activeLivePreview = false;
+  private activeLanguage = 'auto';
 
   constructor(private readonly context: vscode.ExtensionContext) {
     // Use distinct stable IDs so VS Code can track the Dictate and settings
@@ -125,11 +133,13 @@ class DictationController implements vscode.Disposable {
     this.engine = new DictationEngine({
       prepare: async () => {
         this.activeOverwriteClipboard = getConfiguredOverwriteClipboard();
+        this.activeVisualization = getConfiguredVisualization();
+        this.activeLivePreview = getConfiguredLivePreview() && showsOverlay(this.activeVisualization);
+        this.activeLanguage = normalizeWhisperLanguage(vscode.workspace.getConfiguration('universalDictate').get<string>('language', 'auto'));
         await ensureModel(this.context);
       },
       warm: () => warmWhisper(this.context),
       startRecorder: (onLevel, signal) => {
-        this.activeVisualization = getConfiguredVisualization();
         return RecorderSession.start(
           this.context,
           onLevel,
@@ -137,10 +147,12 @@ class DictationController implements vscode.Disposable {
           'enhanced',
           getConfiguredWaveformTimeSpanSeconds(),
           getConfiguredOverlaySize(),
-          signal
+          signal,
+          this.activeLivePreview
         );
       },
-      transcribe: (audioPath) => transcribe(this.context, audioPath),
+      transcribe: (audioPath) => transcribe(this.context, audioPath, this.activeLanguage),
+      startPreview: (session, signal) => this.startPreview(session, signal),
       insert: (transcript, signal) => pasteIntoFocusedControl(this.context, transcript, signal, this.activeOverwriteClipboard),
       onStateChanged: (state) => this.renderState(state),
       onLevel: (level) => {
@@ -159,6 +171,22 @@ class DictationController implements vscode.Disposable {
 
     this.recovery = new TranscriptRecoveryController(this.engine);
     this.context.subscriptions.push(this.statusBar, this.settingsStatusBar);
+  }
+
+  private startPreview(session: DictationSession, signal: AbortSignal): { stop(): Promise<void> } | undefined {
+    if (!this.activeLivePreview || !session.previewSessionId || !session.acquirePreview || !session.showPreview) return undefined;
+    const coordinator = new PreviewCoordinator({ sessionId: session.previewSessionId,
+      language: this.activeLanguage,
+      acquire: previewSignal => session.acquirePreview!(previewSignal),
+      decode: (audio, language, previewSignal) => previewWhisper(this.context, audio, language, previewSignal),
+      onPreview: update => { if (!signal.aborted) session.showPreview!(update); },
+      onFailure: () => { if (!signal.aborted) void vscode.window.showInformationMessage('Universal Dictate: live preview stopped. Final dictation remains available.'); }
+    });
+    const abort = () => { void coordinator.stop(); };
+    signal.addEventListener('abort', abort, { once: true });
+    if (signal.aborted) { signal.removeEventListener('abort', abort); return undefined; }
+    coordinator.start();
+    return { stop: () => { signal.removeEventListener('abort', abort); return coordinator.stop(); } };
   }
 
   initialize(): void {
@@ -274,7 +302,7 @@ class DictationController implements vscode.Disposable {
 
 type LanguageQuickPickItem = vscode.QuickPickItem & { code: string };
 type SettingsQuickPickItem = vscode.QuickPickItem & {
-  action: 'language' | 'visualization' | 'overlaySize' | 'waveformTimeSpan' | 'overwriteClipboard';
+  action: 'language' | 'visualization' | 'overlaySize' | 'waveformTimeSpan' | 'overwriteClipboard' | 'livePreview';
 };
 type VisualizationQuickPickItem = vscode.QuickPickItem & { mode: VisualizationMode };
 type OverlaySizeQuickPickItem = vscode.QuickPickItem & { size: OverlaySize };
@@ -465,6 +493,12 @@ async function openSettings(): Promise<void> {
       description: overwriteClipboard ? 'On' : 'Off (default)',
       detail: 'Always insert automatically. On also copies the transcript to the clipboard; Off never accesses it. Click to toggle for the next dictation.',
       action: 'overwriteClipboard'
+    },
+    {
+      label: '$(comment-discussion) Live preview',
+      description: getConfiguredLivePreview() ? (showsOverlay(currentVisualization) ? 'On' : 'On (overlay required)') : 'Off (default)',
+      detail: 'Show provisional text while recording in the enhanced overlay. Off performs no preview decoding. Click to toggle for the next recording.',
+      action: 'livePreview'
     }
   ];
 
@@ -490,6 +524,17 @@ async function openSettings(): Promise<void> {
 
   if (selected.action === 'overlaySize') {
     await selectOverlaySize();
+    return;
+  }
+
+  if (selected.action === 'livePreview') {
+    const next = !getConfiguredLivePreview();
+    await configuration.update('livePreview', next, vscode.ConfigurationTarget.Global);
+    // Report effective value, since a workspace override can supersede User settings.
+    const effective = getConfiguredLivePreview();
+    void vscode.window.showInformationMessage(
+      `Universal Dictate: live preview ${effective ? 'On' : 'Off'}. Applies from the next recording.${effective !== next ? ' A workspace setting overrides the user setting.' : ''}`
+    );
     return;
   }
 
@@ -548,6 +593,8 @@ export function activate(context: vscode.ExtensionContext): void {
           `extensionKind=${extensionKind}`,
           `language=${configuredLanguage}`,
           `overlaySize=${getConfiguredOverlaySize()}`,
+          `livePreview=${getConfiguredLivePreview()}`,
+          `previewEffective=${getConfiguredLivePreview() && showsOverlay(getConfiguredVisualization())}`,
           `overwriteClipboard=${getConfiguredOverwriteClipboard()}`,
           'insertion=unicode-input-v1',
           `nativePaste=${fs.existsSync(getNativePasteHelperPath(context)) ? 'available' : 'missing'}`,

@@ -1,6 +1,8 @@
 import * as childProcess from 'node:child_process';
 import * as fs from 'node:fs';
-import * as readline from 'node:readline';
+import { MAX_PREVIEW_LINE, RecorderLines, RecorderPreviewChannel, validPreviewSession } from './preview-recorder';
+import type { PreviewUpdate } from './preview-coordinator';
+import type { PreviewLease } from './preview-audio';
 import { normalizeOverlaySize, type OverlaySize } from './overlay-size';
 
 const START_TIMEOUT_MS = 10000;
@@ -16,6 +18,7 @@ export type RecorderOverlayStyle = 'compact' | 'enhanced';
 
 export interface RecorderStartOptions {
   readonly recorderPath: string;
+  readonly previewSessionId?: string;
   readonly signal?: AbortSignal;
   readonly outputPath: string;
   readonly showOverlay?: boolean;
@@ -52,6 +55,8 @@ export function buildRecorderArguments(options: RecorderStartOptions): string[] 
 
     args.push('--waveform-timespan-ms', String(Math.round(waveformTimeSpanSeconds * 1000)));
     args.push('--overlay-size', normalizeOverlaySize(options.overlaySize));
+    if (options.previewSessionId && validPreviewSession(options.previewSessionId))
+      args.push('--preview-session', options.previewSessionId);
   }
 
   return args;
@@ -83,12 +88,14 @@ export class CoreRecorderSession {
   private nativeActionDelivered = false;
   private nativeActionListener: ((action: RecorderAction) => void) | undefined;
   private readonly abortListener: () => void;
+  private readonly preview?: RecorderPreviewChannel;
 
   private constructor(
     private readonly child: childProcess.ChildProcessWithoutNullStreams,
     readonly outputPath: string,
     onLevel: (level: number) => void,
-    private readonly signal?: AbortSignal
+    private readonly signal?: AbortSignal,
+    readonly previewSessionId?: string
   ) {
     this.ready = new Promise<void>((resolve, reject) => {
       this.readyResolve = resolve;
@@ -100,9 +107,14 @@ export class CoreRecorderSession {
     child.stderr.on('data', (chunk: string) => {
       this.stderr = (this.stderr + chunk).slice(-MAX_STDERR_CHARS);
     });
-    const lines = readline.createInterface({ input: child.stdout });
-    lines.on('line', (line: string) => {
+    if (previewSessionId) this.preview = new RecorderPreviewChannel(previewSessionId, (line, fail) => {
+      if (this.command || this.closed || this.exited || child.stdin.destroyed) { fail(new Error('Recorder input closed.')); return; }
+      child.stdin.write(line, (error?: Error | null) => { if (error) fail(error); });
+    });
+    child.stdout.setEncoding('utf8');
+    const lines = new RecorderLines(previewSessionId ? MAX_PREVIEW_LINE : 4096, (line: string) => {
       if (this.closed || this.exited || this.command || this.failure) return;
+      if (this.preview?.line(line)) return;
       if (line === 'READY' && !this.readySettled) {
         this.readySettled = true;
         this.becameReady = true;
@@ -115,19 +127,20 @@ export class CoreRecorderSession {
       } else if (line === 'ACTION CANCEL') {
         this.queueNativeAction('cancel');
       }
-    });
+    }, () => this.preview?.fail());
+    child.stdout.on('data', (chunk: string) => lines.push(chunk));
     // Pipe errors are observed even after cancellation so a broken stdin cannot
     // become an unhandled EventEmitter error on the extension host.
     child.stdin.on('error', (error: Error) => this.pipeFailure(error));
     child.stdout.on('error', (error: Error) => this.pipeFailure(error));
     child.stderr.on('error', (error: Error) => this.pipeFailure(error));
-    lines.on('error', (error: Error) => this.pipeFailure(error));
     child.on('error', (error: Error) => {
       this.fail(error);
       this.killRecorder();
     });
     child.on('exit', (code: number | null, terminationSignal: NodeJS.Signals | null) => {
       this.exited = true;
+      this.preview?.stop();
       if (code !== 0 || terminationSignal || !this.command) {
         this.fail(new Error(`Microphone recorder exited unexpectedly (${String(code)}${terminationSignal ? `, ${terminationSignal}` : ''})${this.stderr.trim() ? `: ${this.stderr.trim()}` : ''}`));
       }
@@ -135,6 +148,7 @@ export class CoreRecorderSession {
     });
     child.on('close', (code: number | null) => {
       this.closed = true;
+      this.preview?.stop();
       this.signal?.removeEventListener('abort', this.abortListener);
       lines.close();
       if (!this.readySettled) this.rejectReady(new Error('Microphone recorder exited before becoming ready.'));
@@ -156,7 +170,9 @@ export class CoreRecorderSession {
     const child = childProcess.spawn(options.recorderPath, buildRecorderArguments(options), {
       windowsHide: true, stdio: ['pipe', 'pipe', 'pipe']
     });
-    const session = new CoreRecorderSession(child, options.outputPath, onLevel, options.signal);
+    const previewId = options.showOverlay !== false && options.overlayStyle === 'enhanced' &&
+      options.previewSessionId && validPreviewSession(options.previewSessionId) ? options.previewSessionId : undefined;
+    const session = new CoreRecorderSession(child, options.outputPath, onLevel, options.signal, previewId);
     let timer: NodeJS.Timeout | undefined;
     try {
       await Promise.race([
@@ -189,6 +205,12 @@ export class CoreRecorderSession {
     this.deliverFailure();
   }
 
+  acquirePreview(signal: AbortSignal): Promise<PreviewLease | undefined> {
+    return this.preview?.acquire(signal) ?? Promise.resolve(undefined);
+  }
+
+  showPreview(update: PreviewUpdate): void { this.preview?.display(update); }
+
   stop(): Promise<string> {
     if (!this.stopPromise) {
       this.stopPromise = (async () => {
@@ -218,6 +240,7 @@ export class CoreRecorderSession {
   private request(command: 'STOP' | 'CANCEL'): void {
     if (this.command || this.closed) return;
     this.command = command; // First terminal command wins; no repeated writes.
+    this.preview?.stop();
     if (this.exited) return;
     if (this.child.stdin.destroyed) {
       this.pipeFailure(new Error('Microphone recorder input is closed.'));
