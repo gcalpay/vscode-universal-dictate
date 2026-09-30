@@ -1,0 +1,67 @@
+name: Release analyzer evidence (read-only)
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions: {}
+
+jobs:
+  collect-report:
+    if: github.repository == 'gcalpay/vscode-universal-dictate' && github.head_ref == 'release/next' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Read public Codacy report without credentials
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REVIEW_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import re
+          import time
+          import urllib.request
+          from pathlib import Path
+
+          number = os.environ['PR_NUMBER']
+          head = os.environ['REVIEW_HEAD']
+          if not number.isdecimal() or not re.fullmatch(r'[0-9a-f]{40}', head):
+              raise ValueError('Invalid review identity')
+          root = Path('review-evidence')
+          root.mkdir()
+          base = 'https://api.codacy.com/api/v3/analysis/organizations/gh/gcalpay/repositories/vscode-universal-dictate/pull-requests/' + number
+          current = False
+          for attempt in range(8):
+              try:
+                  payloads = {}
+                  for name, suffix in [('metadata', ''), ('issues', '/issues?limit=100')]:
+                      request = urllib.request.Request(base + suffix, headers={'Accept': 'application/json'})
+                      with urllib.request.urlopen(request, timeout=20) as response:
+                          raw = response.read(1048577)
+                      if len(raw) > 1048576:
+                          raise ValueError('Report exceeds review bound')
+                      payloads[name] = json.loads(raw)
+                      (root / (name + '.json')).write_text(json.dumps(payloads[name], indent=2), encoding='utf-8')
+                  meta = payloads['metadata']
+                  current = meta.get('pullRequest', {}).get('headCommitSha') == head and meta.get('isAnalysing') is False and payloads['issues'].get('analyzed') is True
+                  if current:
+                      break
+              except (OSError, ValueError) as error:
+                  (root / 'retrieval-error.txt').write_text(str(error), encoding='utf-8')
+              time.sleep(20)
+          (root / 'identity.json').write_text(json.dumps({'head': head, 'pull_request': int(number), 'current_complete_report': current}), encoding='utf-8')
+          if not current:
+              raise RuntimeError('No complete current-head report; inspect evidence rather than assuming quality success')
+          print('Current report collected. This is evidence retrieval, NOT a passed analyzer gate.')
+          PY
+
+      - name: Upload public report for human review
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-analyzer-evidence
+          path: review-evidence/
+          retention-days: 14
+          if-no-files-found: error
