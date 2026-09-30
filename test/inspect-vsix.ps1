@@ -60,6 +60,7 @@ try {
         Assert-Valid ($name -notmatch '(^|/)(AGENTS\.md|tsconfig\.json|\.gitignore|windows-fast-paste\.exe|windows-clipboard-paste\.exe|clipboard-protocol\.js)$') "development/legacy file packaged: $name"
         Assert-Valid ($name -notmatch '\.(ts|map|obj|lib|exp|pdb|vsix|ttf|otf|woff|woff2)$') "source/debug/build file packaged: $name"
         Assert-Valid ($name -notmatch '(?i)(^|/)[^/]*-test\.exe$') "test executable packaged: $name"
+        Assert-Valid ($name -notmatch '^extension/resources/whisper/.*\.exe$' -or $name -match '^extension/resources/whisper/whisper-(cli|server)\.exe$') "unused upstream executable packaged: $name"
     }
 
     $manifest = Read-EntryText 'extension/package.json' | ConvertFrom-Json -AsHashtable
