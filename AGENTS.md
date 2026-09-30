@@ -1,85 +1,60 @@
 # Agent guidance
 
-Read [docs/M3_3_PREVIEW_PRESENTATION.md](docs/M3_3_PREVIEW_PRESENTATION.md) first
-for the current presentation changes and Windows review gate. The connected
-pipeline is recorded in [docs/M3_2_PREVIEW_PIPELINE.md](docs/M3_2_PREVIEW_PIPELINE.md).
-Actual M3.1 measurements are in [docs/M3_1_RESULTS.md](docs/M3_1_RESULTS.md).
-[docs/DICTATION_RELIABILITY_PLAN.md](docs/DICTATION_RELIABILITY_PLAN.md) is the
-roadmap. The M2 product contract remains in
-[docs/M2_CLIPBOARD_MODE_FIX.md](docs/M2_CLIPBOARD_MODE_FIX.md); historical M2
-review findings are dispositioned in [docs/M2_CODACY_TRIAGE.md](docs/M2_CODACY_TRIAGE.md)
-and PR #51. Do not restart completed M2 acceptance or restore its rejected design.
+Read [docs/M6_RELEASE.md](docs/M6_RELEASE.md) first for the active release checkpoint,
+then [docs/DICTATION_RELIABILITY_PLAN.md](docs/DICTATION_RELIABILITY_PLAN.md).
+The M2/M3 documents and PRs #51/#52 are historical evidence, not outstanding
+implementation or acceptance instructions.
 
-## Current checkpoint
+## Current checkpoint and authorization
 
-M1 and M2 are accepted and merged. M3 starts from the M2 merge commit
-`479ca6be4cd114372d0eece9db9962e42b3e6ba5` on `feat/live-transcript-preview`.
-The user approved M3.1 feasibility work, skipped M4, and parked M5 outside 1.0.0.
-Remaining release route: M3 -> M6 integrated validation/release candidate ->
-separately approved 1.0.0 publication. Keep the milestone numbers; no M4/M5 branch.
+M1, M2 and M3 are accepted and merged. M3 merged at
+`d1408904409c8636a4ffada6ef342a5d04b6ed3a`. Work continues on `release/next`.
+The user authorized the English default, supplied three real screenshots, approved
+the README rewrite and requested the resulting 1.0.0 VSIX for testing. Routine
+release preparation, its Conventional Commits, package audit and CI are authorized.
+Publication and release-branch merge still wait for explicit user approval.
 
-The reported language behavior was explained by selecting a language different
-from the speech. Keep the Language label and current behavior; add the approved
-README note about local offline translation when languages are mismatched. No
-translation toggle or language-correctness milestone is in the current scope.
+The final defaults are Language **English**, overlay size **Medium**, Live preview
+**Off**, Overwrite clipboard **Off**, Enhanced overlay visualization and one-second
+waveform history. Preserve explicit user settings; do not reset preferences on
+upgrade. Keep the Language label and the approved offline language note.
 
-M3.1's real Windows benchmark completed; the verified artifact supports a bounded
-trailing eight-second prototype rather than repeated full-recording prefixes.
-Auto remains Auto; it measured slower than explicit English. Do not promise a
-two-second end-to-end latency or treat synthetic runner speech as user-machine,
-natural-speech or live-overlay evidence.
+Use the three supplied screenshots losslessly, retain the existing waveform-only
+overlay as a fourth screenshot, and remove the obsolete overview graphic. The
+settings image is an example with preview On, not a picture of the default state.
+Do not fabricate screenshots, redraw labels or substitute scripted renderer images.
 
-M3.2 now connects the bounded PCM handoff, framed recorder channel, cancellable
-Whisper preview HTTP and recording-engine lifecycle. Live preview has an explicit
-On/Off setting in VS Code Settings and the sixth gear entry, defaults Off, and is
-snapshotted with Language and visualization before each recording. No hidden
-preview decoding for Status bar only / Off. Initial native overlay display is
-connected; M3.3 presentation verification and M3.4 user acceptance remain.
+## Release gates
 
-The user authorized continuing implementation and its normal commits/CI, and
-reconfirmed that Live preview must remain Off by default. M3.3 improves layout,
-Unicode rendering and clipping without changing accepted window/button sizes. Do not ask for repeated approval of each routine integration
-commit. Significant scope changes, M3 merge and release still require approval.
-See the pipeline ledger and PR #52 for current test/Windows evidence, not the
-older preparation-only status. Do not equate local tests with Windows acceptance.
+- Work on this release branch; inspect refs before writes and preserve unrelated work.
+- M4 translation is skipped. M5 focus preservation is parked; Issue #38 stays open.
+- Build the candidate as version **1.0.0** without publishing a tag or release.
+- Verify exact package identity, English/Medium/Off defaults, release media, README,
+  changelog, native x64 helpers and absence of development material and font files.
+- Report automated evidence separately from the user's Windows/VS Code test.
+- Retain the tested VSIX bytes and SHA-256. After final approval, publish those bytes
+  rather than silently rebuilding or incrementing the version.
+- Do not add an update popup, translation toggle, new backend or model.
+- Never request publication credentials in chat. Use an authorized publishing path.
+- No source changes, installations or settings edits occur on the user's PC here.
 
-## Workflow and approval boundaries
+## Product invariants
 
-- One milestone = one branch; all M3 submilestones stay on this branch.
-- Inspect current refs before writing; do not overwrite unrelated changes.
-- Continue the authorized M3 implementation with Conventional Commits and normal
-  checks. Dependency/backend changes and significant design deviations still
-  require approval. Distinguish prepared, committed, executed and untested work.
-- User VSIX testing occurs at M3.4, not each intermediate submilestone. Diagnostic
-  runner outputs are not a request to install or retest the M2 extension.
-- Merge only after the final M3 candidate is accepted and merge is approved.
-  M6 version change, release tag and Marketplace publication need approval.
-- Changes in this chat occur in its sandbox or on GitHub, never on the user's PC.
-- Keep frozen launcher and Code OSS diagnostic branches isolated.
-- Review new analyzer findings from actual evidence; do not disable protections
-  or assume prior false-positive dispositions apply to new findings.
+Local/offline inference after model setup and the Windows UI-host/Remote-WSL
+architecture remain. Preview is opt-in, overlay-only and bounded; final transcription
+uses the complete recording. Do not insert or copy partial hypotheses. Only the
+final transcript is retained, inserted once and optionally copied.
 
-## M3 and retained product invariants
+Automatic clipboard Off performs no clipboard access. On copies the final text once
+before direct Unicode input; do not restore old clipboard data. Copy Last Transcript
+is a separate explicit action backed by memory-only retained text. Keep session,
+cancellation and WAV cleanup safeguards. No Enter, automatic submission or automatic
+retry of uncertain insertion. Cancellation cannot undo already-submitted input.
 
-- Provisional words appear only in the existing non-activating recording overlay;
-  do not repeatedly type hypotheses into any editor or composer.
-- Preserve the complete recording independently of bounded preview snapshots.
-  One authoritative final transcript is retained and inserted once after Stop.
-- Latest-only scheduling; bounded work/memory; session identity rejects stale
-  callbacks. Preview failure must not destroy audio or normal final transcription.
-- Measure active-preview cancellation/final-priority behavior. Dropping a result
-  does not by itself stop a native decode.
-- Keep Small/Medium/Large sizes and Medium default. No focus activation or silent
-  overlay enlargement. Preview is initially opt-in; no new backend/model/cloud.
-- Keep Windows UI-host/Remote-WSL architecture and local inference after setup.
-- Automatic clipboard Off performs no reads/writes/inspection/restoration. On
-  copies the exact final transcript once before the same direct Unicode input;
-  do not restore stale clipboard data. Copy Last Transcript is a separate explicit
-  command backed by memory-only retained text. Preserve M2 lifecycle/WAV cleanup.
-- Never synthesize Enter or automatically submit/send. No automatic retry of
-  uncertain input. Cancellation cannot retract already-submitted events.
-- Latest deliberately selected editable target/caret remains the intended target.
-  Issue #38 is unresolved: clipboard backup is a recovery workaround, not proof
-  of status-bar focus preservation. M5 is parked, not claimed fixed or closed.
-- No private Codex internals, global mouse hooks, click replay or required custom
-  VS Code build in the released extension.
+The intended input/caret is the latest deliberate selection. Clipboard recovery does
+not prove focus preservation. Do not use private Codex internals, global hooks, click
+replay or mandatory custom VS Code. Keep historical experiment branches isolated.
+
+Review analyzer findings at their actual source locations; previous false positives
+do not automatically classify new findings. Do not disable checks or claim that a
+review disposition changes an analyzer's reported status.

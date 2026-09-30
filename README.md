@@ -1,149 +1,91 @@
 # VS Code Universal Dictate
 
-**Local, offline dictation for VS Code on Windows. Dictate into editors and agent/chat prompts such as Codex, then review the transcript before sending. 99 Whisper languages. Remote-WSL.**
+**Local, offline dictation for VS Code on Windows, including Remote - WSL. Dictate into editors and agent/chat prompts such as Codex, then review the transcript before sending. 99 Whisper languages.**
 
 **Open source · MIT · [GitHub](https://github.com/gcalpay/vscode-universal-dictate)**
 
 ![Universal Dictate status-bar controls](media/status-bar-controls.webp)
 
-![Universal Dictate enhanced recording overlay](media/enhanced-overlay.webp)
-
 ![Universal Dictate settings menu](media/settings-menu.webp)
 
-Universal Dictate transcribes locally with the multilingual Whisper `base` model through `whisper.cpp`, including automatic punctuation, and sends the completed transcript as Unicode text to the Windows input that owns keyboard focus at insertion time. It works in VS Code editors and agent/chat prompts and can also insert into compatible text fields in other Windows applications while Universal Dictate is running. **It never submits or sends dictated text automatically.**
+*Example settings with Live preview enabled; the defaults are listed below.*
 
-## Installation
+![Recording overlay with live transcript preview](media/live-preview.webp)
 
-### VS Code Marketplace
+![Waveform-only recording overlay with Live preview off](media/enhanced-overlay.webp)
 
-In VS Code, open **Extensions** (`Ctrl+Shift+X`), search for **Universal Dictate** and choose **Install**.
+Universal Dictate transcribes locally with the multilingual Whisper `base` model through `whisper.cpp`, including automatic punctuation, and sends the completed transcript as Unicode text to the input that owns keyboard focus at insertion time. It works in VS Code editors and agent/chat prompts and can also insert into compatible text fields in other Windows applications while Universal Dictate is running. **It never submits or sends dictated text automatically.**
 
-### VSIX
+Available from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=gcalpay.vscode-universal-dictate).
 
-For manual/offline installation, download the latest Windows x64 `.vsix` from [GitHub Releases](https://github.com/gcalpay/vscode-universal-dictate/releases/latest), then install it directly:
+## Settings
 
-```text
-Ctrl+Shift+P
-Extensions: Install from VSIX...
-```
+Open the settings gear next to **Dictate**, or find **Universal Dictate** in VS Code Settings.
 
-Do not install a separate copy inside WSL. Universal Dictate declares `extensionKind: ["ui"]` so it runs in the local Windows extension host while a workspace may remain connected through Remote - WSL.
-
-On first dictation, Universal Dictate downloads the multilingual Whisper `base` model (about 148 MB), verifies its SHA-256 checksum and stores it in VS Code's local extension storage. After that, normal dictation can run offline.
-
-For lower post-recording latency, Universal Dictate starts a local `whisper-server` worker when recording begins and keeps the model loaded for later dictations. Model initialization overlaps with the time you are speaking. The worker listens only on `127.0.0.1` behind a randomized per-session request path. If it cannot start or exits unexpectedly, Universal Dictate automatically falls back to the one-shot `whisper-cli` path. The current Windows build remains CPU-only.
-
-## Current controls
-
-Universal Dictate shows an always-visible **Dictate** action and settings gear in VS Code's right-side status-bar utility group.
-
-```text
-Status bar: Dictate             Start recording
-Status bar: Stop                Stop, transcribe locally and insert
-Ctrl+Alt+D                      Start or stop dictation
-Esc                             Cancel the current recording
-Overlay: Insert                 Stop, transcribe and insert
-Overlay: Discard                Cancel and discard
-```
-
-The default **Enhanced overlay** is a native Windows, non-activating recording panel with a sensitive signed PCM signal display. Captured waveform samples stay visually stable as they move through the bounded history.
-
-The audio-visualization choices are:
-
-- **Enhanced overlay** — default; native PCM waveform overlay plus static recording feedback in the status bar.
-- **Both** — Enhanced overlay plus the animated status-bar signal history.
-- **Status bar only** — animated status-bar signal without the native overlay.
-- **Off** — no waveform visualization; static recording feedback remains available.
-
-The Enhanced waveform time span is configurable, so you can choose how much recent audio is visible across the waveform. This only changes the visualization and does **not** limit dictation length.
-
-Visualization and waveform time-span changes apply from the next dictation session. Existing persisted legacy `overlay` settings are treated as Enhanced overlay for compatibility.
-
-## Live transcript preview
-
-**Live preview** is optional and defaults to **Off**. Toggle it in the settings gear
-or VS Code Settings (`universalDictate.livePreview`). Changes apply to the next
-recording. Preview runs only with **Enhanced overlay** or **Both** visualization;
-Status bar only and Off do not perform invisible preview decoding.
-
-When enabled, the overlay shows provisional text from recent speech. It may revise
-words and is not a complete transcript history. The full recording is still
-transcribed once after Stop, and only that final transcript is inserted. Preview
-is entirely local and adds CPU work; disabling it removes preview snapshots and
-preview inference without changing normal final dictation.
-
-## Clipboard behavior
-
-The fifth settings-gear entry is **Overwrite clipboard**, default **Off**.
-Click it to toggle; a change applies to the next dictation session.
-
-| Setting | Automatic insertion | Clipboard |
+| Setting | What it does | Default |
 | --- | --- | --- |
-| **Off (default)** | Send text directly to the currently focused input | Not read, written, temporarily replaced, or restored |
-| **On** | Still send text directly | Also copy the exact transcript before the insertion attempt, replacing existing clipboard contents; never restore old contents |
+| **Language** | Choose the language you intend to speak, or Auto-detect. All 99 Whisper languages are available. | **English** |
+| **Audio visualization** | Choose Enhanced overlay, Both (overlay and status-bar waveform), Status bar only, or Off. | **Enhanced overlay** |
+| **Overlay size** | Choose Small, Medium or Large. | **Medium** |
+| **Waveform time span** | Show the latest 1, 3, 5, 10 or 20 seconds in the overlay waveform. This does not limit recording length. | **1 second** |
+| **Overwrite clipboard** | Also copy the final transcript to the clipboard, replacing its previous contents. Automatic insertion still uses direct text input. | **Off** |
+| **Live preview** | Show provisional text while speaking. Requires Enhanced overlay or Both. | **Off** |
 
-No clipboard-format check can block normal dictation. The old snapshot/restore
-transaction has been removed. With no usable focused input, automatic insertion
-can do nothing. Off creates no clipboard backup; On leaves the copied transcript
-available for manual paste, unless a later user/application copy replaces it.
-If the optional copy itself fails, direct input is still attempted and a warning
-is reported. There is no automatic retry of uncertain or partial insertion.
+Change settings before starting a recording. Changes made during a recording apply to the next one. Saved choices take precedence over the defaults.
 
-**Universal Dictate: Copy Last Transcript** remains an optional Command Palette
-command. It deliberately overwrites the clipboard regardless of the automatic
-clipboard setting. The transcript is stored only in this window's extension
-memory until replaced by a successful transcription or lost on reload/restart.
-The old Last transcript submenu and the Insert/Clear commands are removed.
+### Live preview
 
-Direct input does not synthesize Enter or submit messages. Whisper normalizes
-whitespace; as a further safeguard, the native input helper maps control
-characters such as line breaks and tabs to spaces. The optional clipboard copy
-retains the exact original transcript. Input-event submission is not confirmation
-that an opaque extension composer received it. M2 was accepted and merged through
-PR #51; its review is recorded in [M2 triage](docs/M2_CODACY_TRIAGE.md). This branch's
-M3 work is not a new Marketplace release.
+When enabled, the overlay shows recent provisional words, which may be revised as recognition continues. It is not a complete transcript history. After Stop, Universal Dictate transcribes the **complete recording** and inserts the final transcript once.
 
-## Known insertion-target limitation
+Preview and final transcription both run locally. Preview adds processing work and some delay, particularly with Auto-detect. Turning it Off removes the extra preview processing; Status bar only and Off visualization do not run invisible previews.
 
-The genuine VS Code status-bar `Dictate` / `Stop` item can move keyboard focus before Universal Dictate receives its command. This matters for opaque extension-owned inputs such as the Codex composer: after a mouse click on the status item, the eventual direct-input attempt can target the wrong control or no longer have the intended caret/selection. [Issue #38](https://github.com/gcalpay/vscode-universal-dictate/issues/38) tracks this separately from transcription quality, overlay sizing and recovery work.
+## Controls
 
-Keyboard controls and the native recording overlay remain available, but they do not turn the unresolved mouse/status-bar path into a solved focus-preservation feature. Universal Dictate never auto-submits text.
+| Control | Action |
+| --- | --- |
+| Status bar: **Dictate** | Start recording |
+| Status bar: **Stop** | Stop, transcribe locally and insert |
+| **Ctrl+Alt+D** | Start or stop dictation |
+| **Esc** | Cancel the current recording |
+| Overlay: **Insert** | Stop, transcribe and insert |
+| Overlay: **Discard** | Cancel and discard |
+
+The recording overlay does not take keyboard focus when clicked. Review the inserted text before sending it.
 
 ## Languages
 
-The default is **English**. **Auto-detect** remains available, and the bundled multilingual Whisper `base` model supports the original **99 Whisper languages**. Recognition quality varies by language and audio conditions.
-
-Language selection is available from the settings gear or from the Command Palette:
-
-```text
-Universal Dictate: Select Language
-```
+English is selected by default. Choose another language or **Auto-detect** from the settings gear or **Universal Dictate: Select Language** in the Command Palette (`Ctrl+Shift+P`). Recognition quality varies by language and audio conditions.
 
 **Note:** Select the language you intend to speak, or use Auto-detect. If you select a different language from the one being spoken, Whisper can translate the speech into the selected language. This translation is performed entirely offline by the local multilingual Whisper model; no audio or text is sent to an online translation service.
 
-The extension uses the Windows default microphone, records 16 kHz mono PCM16 WAV through miniaudio and transcribes it locally with a bundled, pinned `whisper.cpp` runtime.
+## Clipboard and transcript recovery
 
-## Privacy
+Automatic insertion does not require the clipboard. With **Overwrite clipboard Off**, automatic dictation leaves the clipboard untouched. With it **On**, the exact final transcript is also copied before insertion, replacing the previous clipboard contents. There is no later restoration, and a subsequent copy from another application takes precedence.
 
-Normal dictation is local. Microphone audio is written to a temporary local WAV file, sent only to the bundled `whisper.cpp` worker over the local loopback interface, transcribed locally and deleted after transcription. Audio and transcripts are not sent to a remote transcription service.
+Use **Universal Dictate: Copy Last Transcript** from the Command Palette to copy the latest successful final transcript again. This explicit command replaces the clipboard regardless of the automatic setting. The retained transcript stays in this window's extension memory only; it is lost when the extension reloads or VS Code restarts.
 
-The only network operation required for normal setup is the initial Whisper model download.
+With no usable focused input, insertion may do nothing. The clipboard option provides a manual-paste backup. Provisional preview text is never inserted or copied. Direct insertion converts line breaks and tabs to spaces to avoid triggering input commands; an explicit or enabled clipboard copy retains the original final text.
 
-## Implementation and attribution
+## Local processing and privacy
 
-- TypeScript: VS Code integration, commands, state, settings, model management and transcription orchestration.
-- C++20: native Windows microphone process, non-activating recording overlay and clipboard-free Unicode input helper.
-- OpenAI Whisper: MIT-licensed speech-recognition model and model weights.
-- whisper.cpp: MIT-licensed local Whisper inference runtime.
-- miniaudio: permissively licensed microphone/audio backend.
-- OpenWhispr: MIT-licensed historical source lineage for the focused-input Windows paste helper; the historical clipboard-paste helper was retired; its attribution is retained for that source history.
+Universal Dictate uses the Windows default microphone. On first use, it downloads the multilingual Whisper `base` model (about 148 MB), verifies the download's SHA-256 checksum and stores it locally. **After model setup, normal dictation and live preview can run offline.** No API key or cloud account is required.
 
-See [`docs/DEPENDENCIES.md`](docs/DEPENDENCIES.md), [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) and `third_party/` for pinned versions, provenance and license notices.
+Speech recognition runs on the CPU through the bundled `whisper.cpp` runtime. Its worker communicates over the computer's local loopback interface, not a remote transcription service. Audio and transcripts are not uploaded for transcription or translation. The complete recording is a temporary local WAV file that is cleaned up after processing; preview uses a bounded in-memory audio buffer.
 
-## Support
+For **Remote - WSL**, the extension runs in the local Windows VS Code host while your workspace stays in WSL. It is not a native Linux extension and does not need a separate WSL-side microphone setup.
 
-Use [GitHub Issues](https://github.com/gcalpay/vscode-universal-dictate/issues) for bugs, compatibility problems and feature requests. See [`SUPPORT.md`](SUPPORT.md) for useful diagnostic information.
+## Known insertion-target limitation
+
+Clicking VS Code's status-bar Dictate or Stop control can move focus away from inputs such as the Codex composer, so insertion may miss the intended caret. Use the keyboard shortcut or overlay controls where appropriate, or enable **Overwrite clipboard** to retain a manual-paste backup. [Issue #38](https://github.com/gcalpay/vscode-universal-dictate/issues/38) tracks this limitation; clipboard recovery does not fix focus preservation.
+
+## Attribution
+
+Universal Dictate uses OpenAI Whisper, whisper.cpp and miniaudio, and retains attribution for the historical OpenWhispr input-helper lineage. See [third-party notices](THIRD_PARTY_NOTICES.md) and [dependency details](docs/DEPENDENCIES.md) for licenses and provenance.
+
+## Support and release notes
+
+Report problems or request features through [GitHub Issues](https://github.com/gcalpay/vscode-universal-dictate/issues). See [support information](SUPPORT.md) for useful diagnostic details and the [Changelog](CHANGELOG.md) for version history.
 
 ## License
 
-Universal Dictate is MIT licensed. See [LICENSE](LICENSE).
+MIT licensed. See [LICENSE](LICENSE).
