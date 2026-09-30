@@ -97,26 +97,37 @@ private:
         format_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
         // Keep natural line metrics so fallback fonts/diacritics are not cropped by
         // a guessed Latin baseline. Count only complete lines that fit the viewport.
-        if (FAILED(writeFactory_->CreateTextLayout(text.data(), static_cast<UINT32>(text.size()),
-            format_.Get(), static_cast<float>(width), 100000.0f, layout_.ReleaseAndGetAddressOf()))) return false;
-        UINT32 count = 0;
-        const auto measured = layout_->GetLineMetrics(nullptr, 0, &count);
-        if ((FAILED(measured) && measured != E_NOT_SUFFICIENT_BUFFER) || count == 0 || count > 2049) return false;
-        std::vector<DWRITE_LINE_METRICS> lines(count);
-        if (FAILED(layout_->GetLineMetrics(lines.data(), count, &count))) return false;
-        float used = 0;
-        UINT32 first = count;
-        while (first > 0 && count - first < geometry.maxLines && used + lines[first-1].height <= height + 0.01f) {
-            used += lines[--first].height;
+        std::size_t start = 0;
+        skippedLines_ = 0;
+        for (;;) {
+            if (FAILED(writeFactory_->CreateTextLayout(text.data() + start, static_cast<UINT32>(text.size() - start),
+                format_.Get(), static_cast<float>(width), 100000.0f, layout_.ReleaseAndGetAddressOf()))) return false;
+            UINT32 count = 0;
+            const auto measured = layout_->GetLineMetrics(nullptr, 0, &count);
+            if ((FAILED(measured) && measured != E_NOT_SUFFICIENT_BUFFER) || count == 0 || count > 2049) return false;
+            std::vector<DWRITE_LINE_METRICS> lines(count);
+            if (FAILED(layout_->GetLineMetrics(lines.data(), count, &count))) return false;
+            float used = 0;
+            UINT32 first = count;
+            while (first > 0 && count - first < geometry.maxLines && used + lines[first-1].height <= height + 0.01f) {
+                used += lines[--first].height;
+            }
+            if (first == count) return false; // Do not display a vertically clipped line.
+            if (first == 0) {
+                inset_ = (height - used) / 2.0f;
+                offset_ = -inset_;
+                visibleLines_ = count;
+                break;
+            }
+            // DirectWrite's shaped line boundaries preserve clusters/surrogates.
+            // Re-layout only that suffix: clipping a translated full layout can
+            // leak overhanging ink from the preceding, supposedly hidden line.
+            std::size_t removed = 0;
+            for (UINT32 i = 0; i < first; ++i) removed += lines[i].length;
+            if (!removed || removed > text.size() - start) return false;
+            start += removed; // Strictly advances, bounded by the 2048-unit input.
+            skippedLines_ += first;
         }
-        if (first == count) return false; // Do not display a vertically clipped line.
-        offset_ = 0;
-        for (UINT32 i = 0; i < first; ++i) offset_ += lines[i].height;
-        // Center the complete visible block vertically. Drawing the original shaped
-        // layout (rather than slicing UTF-16) preserves clusters, RTL and joining.
-        inset_ = (height - used) / 2.0f;
-        offset_ -= inset_;
-        skippedLines_ = first; visibleLines_ = count - first;
         text_ = text; width_ = width; height_ = height;
         fontHeight_ = geometry.fontHeight; maxLines_ = geometry.maxLines;
         return true;

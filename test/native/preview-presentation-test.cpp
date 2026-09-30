@@ -132,6 +132,19 @@ void renderCases(const std::filesystem::path& output, OverlaySize size, unsigned
         canvas.save(output / (prefix + "-" + std::to_string(i) + ".bmp"));
         ++count;
     }
+    // Hidden-line descenders and fallback glyph overhang must not leak into the
+    // visible suffix. Use enough explicit lines to exceed every preset.
+    Canvas hidden(normal.width, normal.height), suffix(normal.width, normal.height);
+    const std::wstring tail = L"TAIL";
+    const std::wstring full = L"Hidden gjpqy 👨‍👩‍👧‍👦 नमस्ते\nHidden gjpqy\nHidden gjpqy\n" + tail;
+    const auto oneLine = [&]() { auto result = preview; result.maxLines = 1; return result; }();
+    check(g_overlay.previewRenderer.draw(hidden.dc, oneLine, full), "hidden-line regression draw");
+    check(g_overlay.previewRenderer.skippedLines() > 0, "hidden-line fixture must truncate");
+    check(g_overlay.previewRenderer.draw(suffix.dc, oneLine, tail), "suffix-only regression draw");
+    const auto hiddenPixels = hidden.snapshot(), suffixPixels = suffix.snapshot();
+    for (std::size_t i = 0; i < hiddenPixels.size(); ++i)
+        check((hiddenPixels[i] & 0x00ffffff) == (suffixPixels[i] & 0x00ffffff), "hidden-line ink leaked into visible suffix");
+
     // An isolated text draw must not write outside its DC-bound rectangle.
     Canvas guard(normal.width, normal.height);
     check(g_overlay.previewRenderer.draw(guard.dc, preview, L"LATEST safe clipped text"), "guard draw");

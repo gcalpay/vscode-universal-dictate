@@ -27,8 +27,9 @@ this follow-up: Live preview remains Off by default; continue implementation.
   APIs, not new downloaded dependencies or network services. No font download
   queue is used. Glyph availability still depends on installed system fonts.
 - Shaped layouts are cached between waveform repaints. DPI-scaled geometry/font
-  sizes are applied once. The final viewport is clipped; line selection does not
-  splice UTF-16 or break shaping. Host payload limiting now preserves whole
+  sizes are applied once. The final viewport is clipped; a suffix selected at shaped DirectWrite line
+  boundaries is re-laid out without cutting UTF-16 clusters. Hidden-line ink is
+  excluded rather than translated into the viewport. Host payload limiting now preserves whole
   grapheme clusters, including combining marks and joined emoji.
 - Rendering failure shows a fixed `Preview unavailable` label; it cannot stop
   recording or final transcription. New rendering objects are lazy and are
@@ -47,7 +48,8 @@ includes the production renderer but does not call recorder main or open the
 microphone/model/clipboard. It requires an explicit disposable-desktop flag.
 It renders scripted German, Arabic, CJK, combining/emoji/Indic and long-token
 samples at 100%, 125%, 150% and 200% in all three sizes. It checks pixel clipping,
-cache stability, complete-line limits and default-Off lazy initialization.
+cache stability, complete-line limits, hidden-line ink exclusion and default-Off
+lazy initialization. Medium includes a two-line German regression at 125% scaling.
 Own-overlay clicks test the text area and Insert/Discard while checking a scratch
 EDIT's focus and selection. Clicks are refused unless the point belongs to the
 process's own overlay. No global hook or user-PC access is involved.
