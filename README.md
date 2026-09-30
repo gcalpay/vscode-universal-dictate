@@ -111,7 +111,7 @@ Keyboard controls and the native recording overlay remain available, but they do
 
 ## Languages
 
-The default is **Auto-detect**. The bundled multilingual Whisper `base` model supports the original **99 Whisper languages**. Recognition quality varies by language and audio conditions.
+The default is **English**. **Auto-detect** remains available, and the bundled multilingual Whisper `base` model supports the original **99 Whisper languages**. Recognition quality varies by language and audio conditions.
 
 Language selection is available from the settings gear or from the Command Palette:
 

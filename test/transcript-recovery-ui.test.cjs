@@ -147,3 +147,13 @@ test('Language is snapshotted at recording preparation for final transcription',
   const h=extensionFixture();h.config.language='de';await h.options.prepare();h.config.language='en';
   await h.options.transcribe('complete.wav');assert.equal(h.calls.transcription[2],'de');h.cleanup();
 });
+
+
+test('English is the manifest and runtime default language', async () => {
+  const h=extensionFixture();
+  assert.equal(manifest.contributes.configuration.properties['universalDictate.language'].default,'en');
+  await h.options.prepare();
+  await h.options.transcribe('complete.wav');
+  assert.equal(h.calls.transcription[2],'en');
+  h.cleanup();
+});
