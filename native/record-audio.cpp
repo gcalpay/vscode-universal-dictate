@@ -37,6 +37,9 @@
 
 #include "miniaudio.h"
 #include "overlay-layout.h"
+#include "preview-bridge.h"
+#include "preview-text.h"
+#include <memory>
 
 #include <algorithm>
 #include <array>
@@ -157,6 +160,7 @@ int calculateEnhancedBucketTargetFrames(int waveformTimeSpanMs) {
 
 struct CaptureState {
     Encoder* encoder = nullptr;
+    universal_dictate::preview::Bridge* preview = nullptr;
     std::atomic<int> peakMilli{0};
 
     // Lock-free bounded PCM visualization ring. The capture callback is the
@@ -191,6 +195,7 @@ void captureCallback(
     }
 
     ma_encoder_write_pcm_frames(state->encoder->get(), input, frameCount, nullptr);
+    if (state->preview) state->preview->audio.push(static_cast<const std::int16_t*>(input), frameCount);
 
     const auto* samples = static_cast<const ma_int16*>(input);
     int peak = 0;
@@ -270,6 +275,9 @@ struct OverlayState {
     std::array<int, kSignalPoints> levelHistory{};
     std::array<int, kEnhancedSignalPoints> enhancedSignalHistory{};
     bool enhanced = false;
+    bool previewEnabled = false;
+    std::wstring previewText;
+    universal_dictate::preview::TextRenderer previewRenderer;
     OverlaySize overlaySize = OverlaySize::Medium;
     UINT dpi = kLogicalDpi;
     EnhancedOverlayLayout enhancedLayout =
@@ -493,17 +501,22 @@ void drawSignalField(HDC dc, const RECT& client) {
 }
 
 void drawEnhancedWaveform(HDC dc) {
-    const OverlayRect& waveform = g_overlay.enhancedLayout.waveform;
+    const OverlayRect waveform = g_overlay.previewEnabled
+        ? universal_dictate::preview::calculateTextLayout(g_overlay.overlaySize, g_overlay.dpi).waveform
+        : g_overlay.enhancedLayout.waveform;
     const int left = waveform.left;
     const int right = waveform.right;
     const int top = waveform.top;
     const int bottom = waveform.bottom;
     const int centerY = (top + bottom) / 2;
     const int width = std::max(1, right - left);
-    const int maxAmplitude = std::max(scaleLogical(6, g_overlay.dpi), (bottom - top) / 2 - scaleLogical(4, g_overlay.dpi));
+    const int maxAmplitude = g_overlay.previewEnabled
+        ? std::max(1, (bottom - top) / 2 - scaleLogical(1, g_overlay.dpi))
+        : std::max(scaleLogical(6, g_overlay.dpi), (bottom - top) / 2 - scaleLogical(4, g_overlay.dpi));
 
     Gdiplus::Graphics graphics(dc);
     graphics.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+    if (g_overlay.previewEnabled) graphics.SetClip(Gdiplus::Rect(left, top, right-left, bottom-top));
     graphics.SetPixelOffsetMode(Gdiplus::PixelOffsetModeHighQuality);
 
     const Gdiplus::Color axisColor(115, 41, 82, 58);
@@ -614,10 +627,11 @@ void drawEnhancedOverlay(HDC dc, const RECT& client) {
     SetBkMode(dc, TRANSPARENT);
     SetTextColor(dc, RGB(244, 246, 250));
     HFONT previousFont = reinterpret_cast<HFONT>(SelectObject(dc, g_overlay.enhancedTitleFont));
-    RECT title = winRect(layout.title);
+    const auto previewLayout = universal_dictate::preview::calculateTextLayout(g_overlay.overlaySize, g_overlay.dpi);
+    RECT title = winRect(g_overlay.previewEnabled ? previewLayout.title : layout.title);
     DrawTextW(dc, L"Listening", -1, &title, DT_LEFT | DT_SINGLELINE | DT_VCENTER);
 
-    if (layout.showSubtitle) {
+    if (layout.showSubtitle && !g_overlay.previewEnabled) {
         SelectObject(dc, g_overlay.enhancedSubtitleFont);
         SetTextColor(dc, RGB(151, 164, 184));
         RECT subtitle = winRect(layout.subtitle);
@@ -625,6 +639,23 @@ void drawEnhancedOverlay(HDC dc, const RECT& client) {
     }
 
     drawEnhancedWaveform(dc);
+
+    if (g_overlay.previewEnabled) {
+        const std::wstring& text = g_overlay.previewText;
+        const bool rendered = g_overlay.previewRenderer.draw(dc, previewLayout,
+            text.empty() ? L"Listening…" : text);
+        SelectObject(dc, g_overlay.enhancedSubtitleFont);
+        SetTextColor(dc, RGB(151, 164, 184));
+        RECT label = winRect(previewLayout.label);
+        DrawTextW(dc, rendered && g_overlay.previewRenderer.skippedLines() > 0 ? L"Live preview · latest" : L"Live preview",
+            -1, &label, DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_NOPREFIX | DT_END_ELLIPSIS);
+        if (!rendered) {
+            // Normal recording/final transcription continues even if text rendering fails.
+            RECT caption = winRect(previewLayout.text);
+            DrawTextW(dc, L"Preview unavailable", -1, &caption,
+                DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX | DT_END_ELLIPSIS);
+        }
+    }
 
     HPEN dividerPen = CreatePen(
         PS_SOLID,
@@ -1023,6 +1054,9 @@ bool createOverlay(HMONITOR targetMonitor, bool enhanced, OverlaySize overlaySiz
 }
 
 void destroyOverlay() noexcept {
+    g_overlay.previewRenderer.reset();
+    g_overlay.previewText.clear();
+    g_overlay.previewEnabled = false;
     if (g_overlay.window != nullptr) {
         DestroyWindow(g_overlay.window);
         g_overlay.window = nullptr;
@@ -1180,6 +1214,16 @@ int main(int argc, char** argv) {
     const bool enhancedOverlay = hasFlag(argc, argv, "--enhanced-overlay");
     const OverlaySize overlaySize = parseOverlaySize(argc, argv);
     const int waveformTimeSpanMs = parseWaveformTimeSpanMs(argc, argv);
+    std::unique_ptr<universal_dictate::preview::Bridge> preview;
+    if (overlayEnabled && enhancedOverlay) {
+        for (int i = 1; i + 1 < argc; ++i) {
+            if (std::string_view(argv[i]) == "--preview-session" && universal_dictate::preview::validSession(argv[i + 1])) {
+                try { preview = std::make_unique<universal_dictate::preview::Bridge>(argv[i + 1]); }
+                catch (...) { std::cerr << "WARNING preview allocation failed; normal recording remains available\n"; }
+                break;
+            }
+        }
+    }
 
     if (overlayEnabled && enhancedOverlay) {
         enableEnhancedOverlayDpiAwareness();
@@ -1195,6 +1239,7 @@ int main(int argc, char** argv) {
     }
 
     CaptureState captureState{&encoder};
+    captureState.preview = preview.get();
     captureState.enhancedBucketTargetFrames = calculateEnhancedBucketTargetFrames(waveformTimeSpanMs);
     for (auto& sample : captureState.enhancedSignal) {
         sample.store(0, std::memory_order_relaxed);
@@ -1219,9 +1264,18 @@ int main(int argc, char** argv) {
     }
 
     std::atomic<RecorderCommand> command{RecorderCommand::Record};
-    std::thread commandThread([&command]() {
+    std::thread commandThread([&command, &preview]() {
         std::string line;
-        while (std::getline(std::cin, line)) {
+        // Bound nonterminal text commands. STOP/CANCEL still use the same pipe.
+        char c = 0;
+        bool dropping = false;
+        while (std::cin.get(c)) {
+            if (c != '\n') {
+                if (!dropping && line.size() < 8448) line.push_back(c);
+                else { line.clear(); dropping = true; }
+                continue;
+            }
+            if (dropping) { dropping = false; line.clear(); continue; }
             if (!line.empty() && line.back() == '\r') {
                 line.pop_back();
             }
@@ -1234,6 +1288,11 @@ int main(int argc, char** argv) {
                 command.store(RecorderCommand::Stop, std::memory_order_release);
                 return;
             }
+            if (preview) {
+                try { preview->command(line); }
+                catch (...) { /* Preview-only command failure must not stop recording. */ }
+            }
+            line.clear();
         }
 
         RecorderCommand expected = RecorderCommand::Record;
@@ -1252,12 +1311,29 @@ int main(int argc, char** argv) {
         }
     }
 
+    g_overlay.previewEnabled = preview != nullptr && overlayAvailable;
+    g_overlay.previewText.clear();
     std::cout << "READY\n" << std::flush;
 
     int previousLevel = -1;
     while (command.load(std::memory_order_acquire) == RecorderCommand::Record) {
         if (overlayAvailable) {
             pumpOverlayMessages();
+        }
+
+        if (preview) {
+            // PCM serialization and pipe writes occur here, never in the audio callback.
+            const auto response = preview->snapshot(overlayAvailable);
+            if (!response.empty()) std::cout << response << std::flush;
+            std::string text;
+            if (overlayAvailable && preview->takeText(text)) {
+                const int size = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), nullptr, 0);
+                if (size > 0 && size <= 2048) {
+                    std::wstring wide(static_cast<std::size_t>(size), L'\0');
+                    if (MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), wide.data(), size))
+                        g_overlay.previewText = std::move(wide);
+                }
+            }
         }
 
         const int level = captureState.peakMilli.exchange(0, std::memory_order_relaxed);

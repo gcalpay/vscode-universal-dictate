@@ -1,0 +1,88 @@
+name: M3 preview feasibility (diagnostic)
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'test/preview/benchmark.py'
+      - 'test/preview_benchmark_test.py'
+      - '.github/workflows/m3-preview-benchmark.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  preview-feasibility:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Test diagnostic mechanics (not Whisper inference)
+        shell: pwsh
+        run: |
+          python --version
+          python -m unittest discover -s test -p preview_benchmark_test.py -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Fetch existing pinned runtime and model for isolated benchmark
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force .deps/m3 | Out-Null
+          $zip = '.deps/m3/whisper-bin-x64.zip'
+          Invoke-WebRequest 'https://github.com/ggml-org/whisper.cpp/releases/download/v1.9.1/whisper-bin-x64.zip' -OutFile $zip
+          if ((Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant() -ne '7d8be46ecd31828e1eb7a2ecdd0d6b314feafd82163038ab6092594b0a063539') {
+            throw 'Pinned runtime checksum mismatch'
+          }
+          Expand-Archive -Path $zip -DestinationPath .deps/m3/runtime -Force
+          Invoke-WebRequest 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin' -OutFile .deps/m3/ggml-base.bin
+          if ((Get-FileHash .deps/m3/ggml-base.bin -Algorithm SHA256).Hash.ToLowerInvariant() -ne '60ed5bc3dd14eea856493d334349b405782ddcaf0028d4b5df4088345fba2efe') {
+            throw 'Pinned multilingual base model checksum mismatch'
+          }
+          if (-not (Test-Path .deps/m3/runtime/Release/whisper-server.exe)) {
+            throw 'Pinned whisper-server executable missing'
+          }
+
+      - name: Generate synthetic English speech locally (no microphone)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Add-Type -AssemblyName System.Speech
+          $synth = [System.Speech.Synthesis.SpeechSynthesizer]::new()
+          try {
+            $voices = @($synth.GetInstalledVoices() | Where-Object { $_.Enabled -and $_.VoiceInfo.Culture.Name.StartsWith('en-') })
+            if ($voices.Count -eq 0) { throw 'No installed English SAPI voice; benchmark not performed' }
+            $voice = $voices[0].VoiceInfo
+            $synth.SelectVoice($voice.Name)
+            $synth.Rate = 0
+            $format = [System.Speech.AudioFormat.SpeechAudioFormatInfo]::new(16000, [System.Speech.AudioFormat.AudioBitsPerSample]::Sixteen, [System.Speech.AudioFormat.AudioChannel]::Mono)
+            $synth.SetOutputToWaveFile((Join-Path $pwd '.deps/m3/fixture-en.wav'), $format)
+            $sentence = 'This is a synthetic test of local dictation. The pump pressure is five bar, and the water temperature is twenty degrees. Do not submit the message. We are checking whether provisional words remain responsive during a longer recording. '
+            $synth.Speak($sentence * 8)
+            $synth.SetOutputToNull()
+            @{ kind = 'synthetic repeated English'; voice = $voice.Name; culture = $voice.Culture.Name; rate = 0; naturalSpeech = $false } | ConvertTo-Json | Set-Content -Encoding utf8 .deps/m3/fixture-provenance.json
+          } finally {
+            $synth.Dispose()
+          }
+          Get-CimInstance Win32_Processor | Select-Object Name, NumberOfCores, NumberOfLogicalProcessors | ConvertTo-Json | Set-Content -Encoding utf8 .deps/m3/runner-cpu.json
+
+      - name: Measure prefix versus bounded snapshots and Stop contention
+        shell: pwsh
+        run: |
+          python test/preview/benchmark.py --server .deps/m3/runtime/Release/whisper-server.exe --model .deps/m3/ggml-base.bin --wav .deps/m3/fixture-en.wav --output .deps/m3/preview-results.json --languages en auto --repeats 2 --allow-local-inference
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Upload numeric benchmark evidence (never a VSIX)
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: m3-preview-feasibility
+          path: |
+            .deps/m3/preview-results.json
+            .deps/m3/fixture-provenance.json
+            .deps/m3/runner-cpu.json
+          if-no-files-found: warn
+          retention-days: 14

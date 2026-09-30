@@ -36,6 +36,9 @@ jobs:
       - name: M2 recovery, clipboard and lifecycle tests
         run: node --test test/transcript-recovery.test.cjs test/transcript-recovery-ui.test.cjs test/text-input.test.cjs test/lifecycle.test.cjs test/recorder-lifecycle.test.cjs
 
+      - name: M3 preview scheduling and PCM snapshot tests
+        run: node --unhandled-rejections=strict --test test/preview-pipeline.test.cjs test/preview-recorder.test.cjs test/preview-runtime.test.cjs
+
       - name: Unicode input policy tests
         run: |
           g++ -std=c++20 -Wall -Wextra -Werror -pedantic test/native/unicode-input-test.cpp -o .deps-unicode-input-test
@@ -45,3 +48,17 @@ jobs:
         run: |
           g++ -std=c++20 -Wall -Wextra -pedantic test/native/overlay-layout-test.cpp -o overlay-layout-test
           ./overlay-layout-test
+
+      - name: Bounded native PCM and protocol tests
+        run: |
+          mkdir -p .deps
+          g++ -std=c++20 -Wall -Wextra -Werror -pedantic -pthread test/native/preview-buffer-test.cpp -o .deps/preview-buffer-test
+          .deps/preview-buffer-test
+          g++ -std=c++20 -Wall -Wextra -Werror -pedantic -pthread test/native/preview-bridge-test.cpp -o .deps/preview-bridge-test
+          .deps/preview-bridge-test
+          node --unhandled-rejections=strict test/preview-native-ipc.cjs ./.deps/preview-bridge-test
+
+      - name: Preview geometry regression
+        run: |
+          g++ -std=c++20 -Wall -Wextra -Werror -pedantic test/native/preview-layout-test.cpp -o .deps/preview-layout-test
+          .deps/preview-layout-test

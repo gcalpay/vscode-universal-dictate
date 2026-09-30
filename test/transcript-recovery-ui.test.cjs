@@ -44,12 +44,13 @@ function extensionFixture() {
     'node:fs': fs, vscode: h.vscode,
     './core/dictation': { DictationEngine: class { constructor(o) { options = o; } dispose() {} } },
     './transcript-recovery': { TranscriptRecoveryController },
+    './core/preview-coordinator': require('../dist/core/preview-coordinator'),
     './core/overlay-size': { normalizeOverlaySize: s => s, OVERLAY_SIZES: ['small', 'medium', 'large'] },
     './languages': { normalizeWhisperLanguage: v => v, getWhisperLanguageName: v => v, WHISPER_LANGUAGES: [] },
     './model': { ensureModel: async () => {} },
     './paste': { pasteIntoFocusedControl: async (...args) => { insertions.push(args); } },
     './recorder': { RecorderSession: { start: async () => ({}) } },
-    './whisper': { warmWhisper: async () => {}, disposeWhisper() {} }
+    './whisper': { warmWhisper: async () => {}, disposeWhisper() {}, transcribe: async (...args) => { h.calls.transcription = args; return 'final'; } }
   }); const context = { subscriptions: [] }; extension.activate(context);
   return { ...h, get options() { return options; }, insertions, cleanup() { context.subscriptions.forEach(d => d.dispose()); } };
 }
@@ -76,7 +77,7 @@ test('disposed controller refuses a retained command callback', async () => {
 });
 test('fifth gear entry is Overwrite clipboard Off, with exactly two status-bar items', async () => {
   const h = extensionFixture(); await h.commands.get('universalDictate.openSettings')();
-  assert.equal(h.calls.status.length, 2); assert.equal(h.calls.menus[0].length, 5);
+  assert.equal(h.calls.status.length, 2); assert.equal(h.calls.menus[0].length, 6);
   assert.equal(h.calls.menus[0][4].action, 'overwriteClipboard'); assert.match(h.calls.menus[0][4].description, /Off/);
   assert.ok(!JSON.stringify(h.calls.menus).includes('Last transcript'));
   assert.equal(manifest.contributes.configuration.properties['universalDictate.overwriteClipboard'].default, false);
@@ -116,4 +117,33 @@ test('adapter chooses new input executable and forwards explicit mode', async ()
   const signal = new AbortController().signal; await adapter.pasteIntoFocusedControl({ extensionUri: {} }, 'text', signal, true);
   assert.equal(received[0][0].helperPath, 'resources/bin/windows-text-input.exe'); assert.equal(received[0][0].overwriteClipboard, true); assert.equal(received[0][0].signal, signal);
   await adapter.pasteIntoFocusedControl({ extensionUri: {} }, 'default'); assert.equal(received[1][0].overwriteClipboard, false);
+});
+
+test('Live preview is the sixth gear toggle and is false in the manifest and effective default', async () => {
+  const h=extensionFixture();await h.commands.get('universalDictate.openSettings')();
+  assert.equal(h.calls.menus[0][5].action,'livePreview');assert.match(h.calls.menus[0][5].description,/Off/);
+  assert.equal(manifest.contributes.configuration.properties['universalDictate.livePreview'].default,false);
+  assert.equal(h.calls.status.length,2);h.cleanup();
+});
+test('Live preview toggles On and Off without affecting clipboard or adding a submenu', async () => {
+  const h=extensionFixture();h.vscode.window.showQuickPick=async items=>{h.calls.menus.push(items);return items[5];};
+  await h.commands.get('universalDictate.openSettings')();assert.equal(h.config.livePreview,true);
+  await h.commands.get('universalDictate.openSettings')();assert.equal(h.config.livePreview,false);
+  assert.deepEqual(h.calls.updates,[['livePreview',true,1],['livePreview',false,1]]);assert.equal(h.calls.copies.length,0);h.cleanup();
+});
+for (const mode of ['enhancedOverlay','both','statusBar','off']) for (const enabled of [false,true,'true']) {
+  test(`preview session snapshots strict toggle ${enabled} and visualization ${mode}`, async () => {
+    const h=extensionFixture();h.config.livePreview=enabled;h.config.visualization=mode;h.config.language='de';await h.options.prepare();
+    // Changes during recording do not create/stop extra preview work midway.
+    h.config.livePreview=!enabled;h.config.language='en';let acquisitions=0;
+    const session={previewSessionId:'test',acquirePreview:async()=>{acquisitions++;return undefined;},showPreview:()=>{}};
+    const handle=h.options.startPreview(session,new AbortController().signal);
+    assert.equal(!!handle,enabled===true && ['enhancedOverlay','both'].includes(mode));
+    await handle?.stop();assert.equal(acquisitions,0);h.cleanup();
+  });
+}
+
+test('Language is snapshotted at recording preparation for final transcription', async () => {
+  const h=extensionFixture();h.config.language='de';await h.options.prepare();h.config.language='en';
+  await h.options.transcribe('complete.wav');assert.equal(h.calls.transcription[2],'de');h.cleanup();
 });

@@ -59,6 +59,19 @@ The Enhanced waveform time span is configurable, so you can choose how much rece
 
 Visualization and waveform time-span changes apply from the next dictation session. Existing persisted legacy `overlay` settings are treated as Enhanced overlay for compatibility.
 
+## Live transcript preview
+
+**Live preview** is optional and defaults to **Off**. Toggle it in the settings gear
+or VS Code Settings (`universalDictate.livePreview`). Changes apply to the next
+recording. Preview runs only with **Enhanced overlay** or **Both** visualization;
+Status bar only and Off do not perform invisible preview decoding.
+
+When enabled, the overlay shows provisional text from recent speech. It may revise
+words and is not a complete transcript history. The full recording is still
+transcribed once after Stop, and only that final transcript is inserted. Preview
+is entirely local and adds CPU work; disabling it removes preview snapshots and
+preview inference without changing normal final dictation.
+
 ## Clipboard behavior
 
 The fifth settings-gear entry is **Overwrite clipboard**, default **Off**.
@@ -86,11 +99,9 @@ Direct input does not synthesize Enter or submit messages. Whisper normalizes
 whitespace; as a further safeguard, the native input helper maps control
 characters such as line breaks and tabs to spaces. The optional clipboard copy
 retains the exact original transcript. Input-event submission is not confirmation
-that an opaque extension composer received it. The corrected M2 candidate has
-positive normal-dictation feedback, and the user confirmed **Overwrite clipboard**
-is working as intended. Static-analysis review and formal merge approval remain
-open. See the [M2 checkpoint](docs/M2_CLIPBOARD_MODE_FIX.md) for exact evidence
-and remaining gates. This is not a new Marketplace release.
+that an opaque extension composer received it. M2 was accepted and merged through
+PR #51; its review is recorded in [M2 triage](docs/M2_CODACY_TRIAGE.md). This branch's
+M3 work is not a new Marketplace release.
 
 ## Known insertion-target limitation
 
@@ -107,6 +118,8 @@ Language selection is available from the settings gear or from the Command Palet
 ```text
 Universal Dictate: Select Language
 ```
+
+**Note:** Select the language you intend to speak, or use Auto-detect. If you select a different language from the one being spoken, Whisper can translate the speech into the selected language. This translation is performed entirely offline by the local multilingual Whisper model; no audio or text is sent to an online translation service.
 
 The extension uses the Windows default microphone, records 16 kHz mono PCM16 WAV through miniaudio and transcribes it locally with a bundled, pinned `whisper.cpp` runtime.
 

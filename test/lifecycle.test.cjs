@@ -255,3 +255,33 @@ test('a failed cleanup is reported without losing transcript or trapping the loc
   await h.engine.toggle(); assert.equal(h.engine.getLastTranscript(), 'retained transcript');
   assert.equal(h.events.errors.length, 1); assert.equal(await h.engine.copyLastTranscript(async () => {}), 'completed');
 });
+
+test('preview Stop invalidates promptly, physical Stop precedes its cleanup, final insertion waits', async t => {
+  const cleanup=deferred();let calls=0;
+  const h=await fixture(t,{startPreview:()=>({stop(){calls++;return cleanup.promise;}})});
+  await h.engine.toggle();const ending=h.engine.toggle();
+  assert.equal(calls,1);assert.equal(h.current().stops,1);
+  await tick();assert.equal(h.events.transcribes.length,0);
+  const duplicate=h.engine.toggle();await duplicate;assert.equal(calls,1);
+  cleanup.resolve();await ending;assert.equal(h.events.inserts.length,1);assert.equal(h.events.transcribes.length,1);
+});
+test('preview startup or shutdown errors never prevent full final dictation', async t => {
+  const h=await fixture(t,{startPreview:()=>{throw Error('preview only');}});
+  await h.engine.toggle();await h.engine.toggle();assert.equal(h.events.inserts.length,1);
+  h.options.startPreview=()=>({stop(){throw Error('preview cleanup');}});
+  await h.engine.toggle();await h.engine.toggle();assert.equal(h.events.inserts.length,2);
+});
+test('cancel and dispose stop preview and never insert a partial result', async t => {
+  let stops=0;const h=await fixture(t,{startPreview:()=>({stop:async()=>{stops++;}})});
+  await h.engine.toggle();await h.engine.cancel();assert.equal(stops,1);assert.equal(h.events.inserts.length,0);
+  await h.engine.toggle();h.engine.dispose();await until(()=>h.current().cancels===1);await tick();
+  assert.equal(stops,2);assert.equal(h.events.inserts.length,0);
+});
+test('early native Stop does not start unnecessary preview', async t => {
+  let previews=0;const h=await fixture(t,{startPreview:()=>{previews++;return {stop:async()=>{}};}});
+  const start=h.options.startRecorder;h.options.startRecorder=async(...args)=>{
+    const session=await start(...args);session.onAction=callback=>callback('stop');return session;
+  };
+  await h.engine.toggle();await until(()=>h.events.states.at(-1)==='idle');
+  assert.equal(previews,0);assert.equal(h.events.inserts.length,1);
+});
