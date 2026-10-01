@@ -505,7 +505,7 @@ void drawEnhancedWaveform(HDC dc) {
 
     Gdiplus::Graphics graphics(dc);
     graphics.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
-    if (g_overlay.previewEnabled) graphics.SetClip(Gdiplus::Rect(left, top, right-left, bottom-top));
+    graphics.SetClip(Gdiplus::Rect(left, top, right-left, bottom-top));
     graphics.SetPixelOffsetMode(Gdiplus::PixelOffsetModeHighQuality);
 
     const Gdiplus::Color axisColor(115, 41, 82, 58);
@@ -557,6 +557,11 @@ void drawEnhancedWaveform(HDC dc) {
     Gdiplus::Pen outerPen(envelopeOuterColor, 0.9f * dpiScale);
     Gdiplus::Pen innerPen(envelopeInnerColor, 0.8f * dpiScale);
     Gdiplus::Pen wavePen(mainWaveColor, 1.55f * dpiScale);
+    // Acute joins between dense opposite-polarity buckets must not grow miter
+    // spikes beyond the measured amplitude or saturate a small waveform viewport.
+    outerPen.SetLineJoin(Gdiplus::LineJoinRound);
+    innerPen.SetLineJoin(Gdiplus::LineJoinRound);
+    wavePen.SetLineJoin(Gdiplus::LineJoinRound);
     graphics.DrawLines(&outerPen, upperOuter.data(), static_cast<INT>(upperOuter.size()));
     graphics.DrawLines(&outerPen, lowerOuter.data(), static_cast<INT>(lowerOuter.size()));
     graphics.DrawLines(&innerPen, upperInner.data(), static_cast<INT>(upperInner.size()));
