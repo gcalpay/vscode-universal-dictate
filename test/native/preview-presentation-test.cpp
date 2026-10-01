@@ -179,14 +179,21 @@ void renderWaveformCases(const std::filesystem::path& output, OverlaySize size, 
         g_overlay.previewText = L"A short preview.";
         const auto box = enabled ? preview.waveform : normal.waveform;
         int previousHeight = 0;
+        bool distinct = true;
         for (double rms : {0.004, 0.025, 0.16}) {
             for (int i = 0; i < kEnhancedSignalPoints; ++i)
                 g_overlay.enhancedSignalHistory[i] = universal_dictate::visualRmsMagnitude(rms) * (i % 2 ? 1 : -1);
             drawEnhancedOverlay(canvas.dc, client);
             const int height = waveformInkHeight(canvas, box);
-            check(height > previousHeight, "quiet/normal/loud waveform heights are indistinguishable");
+            std::cout << "WAVEFORM size=" << static_cast<int>(size) << " dpi=" << dpi
+                      << " preview=" << enabled << " rms=" << rms << " inkHeight=" << height
+                      << " previous=" << previousHeight << '\n' << std::flush;
+            canvas.save(output / ("level-" + std::to_string(static_cast<int>(size)) + "-" +
+                std::to_string(dpi) + (enabled ? "-preview-" : "-off-") + std::to_string(rms) + ".bmp"));
+            distinct = distinct && height > previousHeight;
             previousHeight = height;
         }
+        check(distinct, "quiet/normal/loud waveform heights are indistinguishable");
     }
     g_overlay.previewEnabled = true;
     drawEnhancedOverlay(canvas.dc, client);
