@@ -66,6 +66,7 @@ struct EnhancedOverlayLayout {
     int dividerTop = 0;
     int dividerBottom = 0;
     OverlayRect confirmButton;
+    OverlayRect pauseButton;
     OverlayRect cancelButton;
     int titleFontHeight = 0;
     int subtitleFontHeight = 0;
@@ -82,8 +83,8 @@ constexpr EnhancedOverlaySpec enhancedOverlaySpec(OverlaySize size) {
                 {34, 18, 96, 46},
                 {0, 0, 0, 0},
                 false,
-                98, 116, 8, 8,
-                112, 14, 14,
+                98, 170, 8, 8,
+                166, 14, 14,
                 48, 24, 6, 6, 20,
                 14, 9, 10, 7};
         case OverlaySize::Medium:
@@ -93,8 +94,8 @@ constexpr EnhancedOverlaySpec enhancedOverlaySpec(OverlaySize size) {
                 {40, 17, 112, 39},
                 {40, 39, 112, 58},
                 true,
-                116, 128, 8, 8,
-                122, 18, 18,
+                116, 188, 8, 8,
+                182, 18, 18,
                 54, 28, 6, 6, 30,
                 15, 10, 10, 8};
         case OverlaySize::Large:
@@ -105,8 +106,8 @@ constexpr EnhancedOverlaySpec enhancedOverlaySpec(OverlaySize size) {
                 {50, 39, 143, 63},
                 {50, 64, 143, 84},
                 true,
-                148, 144, 8, 8,
-                140, 30, 30,
+                148, 210, 8, 8,
+                206, 30, 30,
                 60, 30, 6, 6, 49,
                 17, 11, 11, 9};
     }
@@ -164,10 +165,16 @@ inline EnhancedOverlayLayout calculateEnhancedOverlayLayout(
         buttonTop,
         layout.width - buttonRightInset,
         buttonTop + buttonHeight};
-    layout.confirmButton = OverlayRect{
+    layout.pauseButton = OverlayRect{
         layout.cancelButton.left - buttonGap - buttonWidth,
         buttonTop,
         layout.cancelButton.left - buttonGap,
+        buttonTop + buttonHeight};
+
+    layout.confirmButton = OverlayRect{
+        layout.pauseButton.left - buttonGap - buttonWidth,
+        buttonTop,
+        layout.pauseButton.left - buttonGap,
         buttonTop + buttonHeight};
 
     layout.titleFontHeight = scaleLogical(spec.titleFontHeight, dpi);

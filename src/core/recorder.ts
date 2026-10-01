@@ -1,5 +1,6 @@
 import * as childProcess from 'node:child_process';
 import * as fs from 'node:fs';
+import { RecorderPauseChannel } from './recorder-pause';
 import { MAX_PREVIEW_LINE, RecorderLines, RecorderPreviewChannel, validPreviewSession } from './preview-recorder';
 import type { PreviewUpdate } from './preview-coordinator';
 import type { PreviewLease } from './preview-audio';
@@ -9,11 +10,12 @@ const START_TIMEOUT_MS = 10000;
 const STOP_TIMEOUT_MS = 10000;
 const KILL_CONFIRM_TIMEOUT_MS = 2000;
 const MAX_STDERR_CHARS = 4096;
-const DEFAULT_WAVEFORM_TIME_SPAN_SECONDS = 1;
+const DEFAULT_WAVEFORM_TIME_SPAN_SECONDS = 10;
 const MIN_WAVEFORM_TIME_SPAN_SECONDS = 1;
 const MAX_WAVEFORM_TIME_SPAN_SECONDS = 20;
 
-export type RecorderAction = 'stop' | 'cancel';
+export type RecorderAction = 'stop' | 'cancel' | 'pause' | 'resume';
+export type OverlayButtonStyle = 'text' | 'symbols';
 export type RecorderOverlayStyle = 'compact' | 'enhanced';
 
 export interface RecorderStartOptions {
@@ -25,6 +27,7 @@ export interface RecorderStartOptions {
   readonly overlayStyle?: RecorderOverlayStyle;
   readonly waveformTimeSpanSeconds?: number;
   readonly overlaySize?: OverlaySize | string;
+  readonly overlayButtonStyle?: OverlayButtonStyle | string;
 }
 
 /**
@@ -55,6 +58,7 @@ export function buildRecorderArguments(options: RecorderStartOptions): string[] 
 
     args.push('--waveform-timespan-ms', String(Math.round(waveformTimeSpanSeconds * 1000)));
     args.push('--overlay-size', normalizeOverlaySize(options.overlaySize));
+    args.push('--button-style', options.overlayButtonStyle === 'symbols' ? 'symbols' : 'text');
     if (options.previewSessionId && validPreviewSession(options.previewSessionId))
       args.push('--preview-session', options.previewSessionId);
   }
@@ -89,6 +93,8 @@ export class CoreRecorderSession {
   private nativeActionListener: ((action: RecorderAction) => void) | undefined;
   private readonly abortListener: () => void;
   private readonly preview?: RecorderPreviewChannel;
+  private readonly pause: RecorderPauseChannel;
+  private pauseAction?: 'pause' | 'resume';
 
   private constructor(
     private readonly child: childProcess.ChildProcessWithoutNullStreams,
@@ -107,6 +113,12 @@ export class CoreRecorderSession {
     child.stderr.on('data', (chunk: string) => {
       this.stderr = (this.stderr + chunk).slice(-MAX_STDERR_CHARS);
     });
+    this.pause = new RecorderPauseChannel((line, fail) => {
+      if (this.command || this.closed || this.exited || this.failure || child.stdin.destroyed) {
+        fail(new Error('Recorder input closed.')); return;
+      }
+      child.stdin.write(line, (error?: Error | null) => { if (error) fail(error); });
+    });
     if (previewSessionId) this.preview = new RecorderPreviewChannel(previewSessionId, (line, fail) => {
       if (this.command || this.closed || this.exited || child.stdin.destroyed) { fail(new Error('Recorder input closed.')); return; }
       child.stdin.write(line, (error?: Error | null) => { if (error) fail(error); });
@@ -114,7 +126,7 @@ export class CoreRecorderSession {
     child.stdout.setEncoding('utf8');
     const lines = new RecorderLines(previewSessionId ? MAX_PREVIEW_LINE : 4096, (line: string) => {
       if (this.closed || this.exited || this.command || this.failure) return;
-      if (this.preview?.line(line)) return;
+      if (this.pause.line(line) || this.preview?.line(line)) return;
       if (line === 'READY' && !this.readySettled) {
         this.readySettled = true;
         this.becameReady = true;
@@ -122,6 +134,9 @@ export class CoreRecorderSession {
       } else if (line.startsWith('LEVEL ') && this.becameReady) {
         const level = Number(line.slice(6));
         if (Number.isFinite(level)) onLevel(Math.max(0, Math.min(1, level)));
+      } else if (line === 'ACTION PAUSE' || line === 'ACTION RESUME') {
+        this.pauseAction = line === 'ACTION PAUSE' ? 'pause' : 'resume';
+        this.deliverPauseAction();
       } else if (line === 'ACTION STOP') {
         this.queueNativeAction('stop');
       } else if (line === 'ACTION CANCEL') {
@@ -141,6 +156,7 @@ export class CoreRecorderSession {
     child.on('exit', (code: number | null, terminationSignal: NodeJS.Signals | null) => {
       this.exited = true;
       this.preview?.stop();
+      this.pause.stop();
       if (code !== 0 || terminationSignal || !this.command) {
         this.fail(new Error(`Microphone recorder exited unexpectedly (${String(code)}${terminationSignal ? `, ${terminationSignal}` : ''})${this.stderr.trim() ? `: ${this.stderr.trim()}` : ''}`));
       }
@@ -149,6 +165,7 @@ export class CoreRecorderSession {
     child.on('close', (code: number | null) => {
       this.closed = true;
       this.preview?.stop();
+      this.pause.stop();
       this.signal?.removeEventListener('abort', this.abortListener);
       lines.close();
       if (!this.readySettled) this.rejectReady(new Error('Microphone recorder exited before becoming ready.'));
@@ -198,6 +215,11 @@ export class CoreRecorderSession {
   onAction(listener: (action: RecorderAction) => void): void {
     this.nativeActionListener = listener;
     this.deliverNativeAction();
+    this.deliverPauseAction();
+  }
+
+  setPaused(paused: boolean): Promise<void> {
+    return this.pause.setPaused(paused);
   }
 
   onFailure(listener: (error: Error) => void): void {
@@ -241,6 +263,7 @@ export class CoreRecorderSession {
     if (this.command || this.closed) return;
     this.command = command; // First terminal command wins; no repeated writes.
     this.preview?.stop();
+    this.pause.stop();
     if (this.exited) return;
     if (this.child.stdin.destroyed) {
       this.pipeFailure(new Error('Microphone recorder input is closed.'));
@@ -309,6 +332,7 @@ export class CoreRecorderSession {
 
   private fail(error: Error): void {
     this.failure ??= error;
+    this.pause.stop();
     this.rejectReady(error);
     if (!this.command) {
       this.unexpectedFailure ??= error;
@@ -322,6 +346,17 @@ export class CoreRecorderSession {
     if (!listener || !error || this.failureDelivered) return;
     this.failureDelivered = true;
     queueMicrotask(() => listener(error));
+  }
+
+  private deliverPauseAction(): void {
+    const listener = this.nativeActionListener;
+    const action = this.pauseAction;
+    if (!listener || !action) return;
+    this.pauseAction = undefined;
+    queueMicrotask(() => {
+      if (!this.nativeAction && !this.command && !this.closed && !this.exited &&
+          !this.failure && !this.signal?.aborted) listener(action);
+    });
   }
 
   private queueNativeAction(action: RecorderAction): void {

@@ -38,6 +38,9 @@ jobs:
       - name: M3 preview scheduling and PCM snapshot tests
         run: node --unhandled-rejections=strict --test test/preview-pipeline.test.cjs test/preview-recorder.test.cjs test/preview-runtime.test.cjs
 
+      - name: M7 pause/resume state and command tests
+        run: node --unhandled-rejections=strict --test test/pause-controls.test.cjs
+
       - name: Fetch pinned miniaudio header
         shell: pwsh
         run: |
@@ -68,6 +71,8 @@ jobs:
             "if not exist resources\bin mkdir resources\bin",
             "cl /nologo /utf-8 /O2 /std:c++20 /EHsc native\windows-text-input.cpp /Fe:resources\bin\windows-text-input.exe user32.lib",
             "cl /nologo /utf-8 /O2 /std:c++20 /EHsc /I .deps\miniaudio native\record-audio.cpp native\miniaudio-impl.cpp /Fe:resources\bin\universal-dictate-recorder.exe user32.lib gdi32.lib",
+            "cl /nologo /utf-8 /O2 /std:c++20 /EHsc test\native\recording-pause-test.cpp /Fe:.deps\recording-pause-test.exe",
+            "cl /nologo /utf-8 /O2 /std:c++20 /EHsc /I .deps\miniaudio test\native\recorder-pause-capture-test.cpp native\miniaudio-impl.cpp /Fe:.deps\recorder-pause-capture-test.exe user32.lib gdi32.lib",
             "cl /nologo /utf-8 /O2 /std:c++20 /EHsc test\native\overlay-layout-test.cpp /Fe:.deps\overlay-layout-test.exe",
             "cl /nologo /utf-8 /O2 /std:c++20 /EHsc test\native\preview-layout-test.cpp /Fe:.deps\preview-layout-test.exe",
             "cl /nologo /utf-8 /O2 /std:c++20 /EHsc /I .deps\miniaudio test\native\preview-presentation-test.cpp native\miniaudio-impl.cpp /Fe:.deps\preview-presentation-test.exe user32.lib gdi32.lib",
@@ -82,6 +87,18 @@ jobs:
           if ($LASTEXITCODE -ne 0) {
             exit $LASTEXITCODE
           }
+
+      - name: Pause gate, production PCM capture and actual Node pause pipe
+        if: ${{ !cancelled() && steps.native_build.outcome == 'success' }}
+        shell: pwsh
+        timeout-minutes: 3
+        run: |
+          & .deps/recording-pause-test.exe
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & .deps/recorder-pause-capture-test.exe
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node --unhandled-rejections=strict test/pause-native-ipc.cjs .deps/recorder-pause-capture-test.exe
+          exit $LASTEXITCODE
 
       - name: Native overlay layout regression
         if: ${{ !cancelled() && steps.native_build.outcome == 'success' }}
@@ -174,7 +191,7 @@ jobs:
           }
 
       - name: Measure real Node preview adapter (synthetic speech, no microphone)
-        if: github.head_ref == 'feat/live-transcript-preview' || github.head_ref == 'release/next'
+        if: github.head_ref == 'feat/live-transcript-preview' || github.head_ref == 'release/next' || github.head_ref == 'feat/pause-resume-controls'
         shell: pwsh
         timeout-minutes: 6
         run: |
@@ -196,7 +213,7 @@ jobs:
           exit $LASTEXITCODE
 
       - name: Upload Node preview timing evidence
-        if: ${{ always() && (github.head_ref == 'feat/live-transcript-preview' || github.head_ref == 'release/next') }}
+        if: ${{ always() && (github.head_ref == 'feat/live-transcript-preview' || github.head_ref == 'release/next' || github.head_ref == 'feat/pause-resume-controls') }}
         uses: actions/upload-artifact@v7
         with:
           name: m3-preview-adapter-results

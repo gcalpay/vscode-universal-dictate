@@ -21,7 +21,10 @@ void assertInside(const universal_dictate::EnhancedOverlayLayout& layout) {
     assert(layout.cancelButton.right <= layout.width);
     assert(layout.confirmButton.top < layout.confirmButton.bottom);
     assert(layout.cancelButton.top < layout.cancelButton.bottom);
-    assert(layout.confirmButton.right < layout.cancelButton.left);
+    assert(layout.confirmButton.right < layout.pauseButton.left);
+    assert(layout.pauseButton.right < layout.cancelButton.left);
+    assert(layout.pauseButton.top == layout.confirmButton.top);
+    assert(layout.pauseButton.bottom == layout.confirmButton.bottom);
     assert(layout.waveform.right < layout.dividerX);
     assert(layout.dividerX <= layout.confirmButton.left);
     assert(layout.titleFontHeight > 0);
@@ -40,12 +43,12 @@ int main() {
     assert(medium.showSubtitle);
     assert(large.showSubtitle);
 
-    // Large at 96 DPI preserves the existing enhanced-overlay reference geometry.
+    // Preset extents remain fixed; the waveform yields one button-width for Pause.
     assert(large.waveform.left == 148);
-    assert(large.waveform.right == 596);
-    assert(large.dividerX == 600);
-    assert(large.confirmButton.left == 608);
-    assert(large.confirmButton.right == 668);
+    assert(large.waveform.right == 530);
+    assert(large.dividerX == 534);
+    assert(large.confirmButton.left == 542);
+    assert(large.confirmButton.right == 602);
     assert(large.cancelButton.left == 674);
     assert(large.cancelButton.right == 734);
 
@@ -69,7 +72,7 @@ int main() {
 
     const auto large200 = calculateEnhancedOverlayLayout(OverlaySize::Large, 192);
     assert(large200.width == 1480 && large200.height == 256);
-    assert(large200.confirmButton.left == 1216);
+    assert(large200.confirmButton.left == 1084);
     assert(large200.cancelButton.right == 1468);
 
     return 0;

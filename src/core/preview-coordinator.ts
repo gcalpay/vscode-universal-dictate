@@ -54,14 +54,14 @@ type ActivePreview = {
 /**
  * One coordinator per recording, with one acquire/decode/release operation at a
  * time. Missed ticks are skipped; every acquisition requests the latest audio.
- * No connection to the extension yet: the native PCM and HTTP adapters follow.
+ * Pauses retain the sequence/timeline but invalidate active results across Resume.
  */
 export class PreviewCoordinator {
   private readonly options: Readonly<PreviewOptions>;
   private readonly clock: PreviewClock;
   private readonly intervalMs: number;
   private readonly timeoutMs: number;
-  private state: 'idle' | 'running' | 'stopped' | 'failed' = 'idle';
+  private state: 'idle' | 'running' | 'paused' | 'stopped' | 'failed' = 'idle';
   private origin = 0;
   private timer: unknown;
   private active: ActivePreview | undefined;
@@ -87,6 +87,26 @@ export class PreviewCoordinator {
     if (this.state !== 'idle') throw new Error('Preview coordinator is single-use.');
     this.origin = this.clock.now();
     this.state = 'running';
+    this.schedule();
+  }
+
+  /** Suspend scheduling immediately; adapters settle before the slot can be reused. */
+  pause(): Promise<void> {
+    if (this.state !== 'running' && this.state !== 'paused') return Promise.resolve();
+    this.state = 'paused';
+    this.clearScheduled();
+    if (this.active) {
+      this.clearDeadline(this.active);
+      this.active.controller.abort();
+      return this.active.done;
+    }
+    return Promise.resolve();
+  }
+
+  resume(): void {
+    if (this.state !== 'paused') return; // Never revive failed/stopped preview.
+    this.state = 'running';
+    this.origin = this.clock.now(); // Do not catch up ticks missed during Pause.
     this.schedule();
   }
 

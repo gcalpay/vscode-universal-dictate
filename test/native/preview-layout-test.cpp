@@ -17,7 +17,7 @@ int main() {
             for (auto box : boxes) {
                 assert(box.left >= 0 && box.top >= 0 && box.right <= normal.width && box.bottom <= normal.height);
                 assert(box.right > box.left && box.bottom > box.top && box.right < normal.dividerX);
-                assert(!overlaps(box, normal.confirmButton) && !overlaps(box, normal.cancelButton));
+                assert(!overlaps(box, normal.confirmButton) && !overlaps(box, normal.cancelButton) && !overlaps(box, normal.pauseButton));
             }
             for (std::size_t i=0; i<boxes.size(); ++i) for (std::size_t j=i+1; j<boxes.size(); ++j) assert(!overlaps(boxes[i], boxes[j]));
             assert(preview.text.left > normal.indicatorCenterX + normal.indicatorOuterRadius);

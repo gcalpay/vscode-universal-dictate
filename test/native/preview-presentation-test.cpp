@@ -152,6 +152,65 @@ void renderCases(const std::filesystem::path& output, OverlaySize size, unsigned
     for (int y=0; y<normal.height; ++y) for (int x=0; x<normal.width; ++x)
         if (!inside(x,y,preview.text)) check(pixels[y*normal.width+x] == 0x00335577U, "text DC clipping failed");
 }
+
+void renderControlCases(const std::filesystem::path& output, OverlaySize size, unsigned int dpi) {
+    applyEnhancedDpi(dpi);
+    const auto& layout = g_overlay.enhancedLayout;
+    Canvas canvas(layout.width, layout.height);
+    RECT client{0, 0, layout.width, layout.height};
+    const auto previous = SelectObject(canvas.dc, g_overlay.enhancedButtonFont);
+    for (const wchar_t* label : {L"Insert", L"Pause", L"Resume", L"Pausing", L"Resuming", L"Discard"}) {
+        SIZE extent{};
+        check(GetTextExtentPoint32W(canvas.dc, label, static_cast<int>(wcslen(label)), &extent) != 0, "button label metrics");
+        check(extent.cx + scaleLogical(4, dpi) <= layout.pauseButton.right-layout.pauseButton.left, "button label too wide");
+        check(extent.cy <= layout.pauseButton.bottom-layout.pauseButton.top, "button label too tall");
+    }
+    SelectObject(canvas.dc, previous);
+    for (auto style : {universal_dictate::ButtonStyle::Text, universal_dictate::ButtonStyle::Symbols}) {
+        g_overlay.buttonStyle = style;
+        for (bool paused : {false, true}) {
+            applyPauseAcknowledgement({1, paused}, nullptr, true);
+            g_overlay.previewText = L"Recent provisional words stay visible while paused.";
+            drawEnhancedOverlay(canvas.dc, client);
+            canvas.save(output / ("controls-" + std::to_string(static_cast<int>(size)) + "-" + std::to_string(dpi) +
+                (style == universal_dictate::ButtonStyle::Text ? "-text-" : "-symbols-") + (paused ? "paused.bmp" : "recording.bmp")));
+            HWND tooltip = g_overlay.buttonTooltips.window();
+            check(tooltip != nullptr, "labelled control tooltips missing");
+            check((GetWindowLongPtrW(tooltip, GWL_EXSTYLE) & WS_EX_NOACTIVATE) != 0, "tooltip activation policy");
+            wchar_t text[256]{};
+            TOOLINFOW info{}; info.cbSize = sizeof(info); info.hwnd = g_overlay.window; info.uId = 2; info.lpszText = text;
+            SendMessageW(tooltip, TTM_GETTEXTW, std::size(text), reinterpret_cast<LPARAM>(&info));
+            check(std::wstring_view(text).starts_with(paused ? L"Resume recording" : L"Pause recording"), "pause/resume hover label");
+        }
+    }
+    applyPauseAcknowledgement({1, false}, nullptr, true);
+    g_overlay.buttonStyle = universal_dictate::ButtonStyle::Text;
+}
+
+void clickPauseControls(HWND scratch, HWND edit, universal_dictate::ButtonStyle style) {
+    g_overlay.buttonStyle = style;
+    g_overlay.actionSent.store(false);
+    applyPauseAcknowledgement({1, false}, nullptr, true);
+    UpdateWindow(g_overlay.window);
+    clickOwnRect(g_overlay.window, g_overlay.enhancedLayout.pauseButton); checkFocus(scratch, edit);
+    check(g_overlay.pausePending && !g_overlay.paused && !g_overlay.actionSent.load(), "Pause must await capture acknowledgement");
+    clickOwnRect(g_overlay.window, g_overlay.enhancedLayout.pauseButton); checkFocus(scratch, edit);
+    check(g_overlay.pausePending && !g_overlay.actionSent.load(), "duplicate Pause consumed terminal action");
+    applyPauseAcknowledgement({2, true}, nullptr, true); UpdateWindow(g_overlay.window);
+    check(g_overlay.paused && !g_overlay.pausePending, "paused renderer acknowledgement");
+    clickOwnRect(g_overlay.window, g_overlay.enhancedLayout.pauseButton); checkFocus(scratch, edit);
+    check(g_overlay.pausePending && g_overlay.paused && !g_overlay.actionSent.load(), "Resume must await capture acknowledgement");
+    applyPauseAcknowledgement({3, false}, nullptr, true); UpdateWindow(g_overlay.window);
+    check(!g_overlay.paused && !g_overlay.pausePending, "resumed renderer acknowledgement");
+    applyPauseAcknowledgement({4, true}, nullptr, true); UpdateWindow(g_overlay.window);
+    clickOwnRect(g_overlay.window, g_overlay.enhancedLayout.confirmButton); checkFocus(scratch, edit);
+    check(g_overlay.actionSent.load(), "Insert unavailable while paused");
+    g_overlay.actionSent.store(false); UpdateWindow(g_overlay.window);
+    clickOwnRect(g_overlay.window, g_overlay.enhancedLayout.cancelButton); checkFocus(scratch, edit);
+    check(g_overlay.actionSent.load(), "Discard unavailable while paused");
+    g_overlay.actionSent.store(false);
+    applyPauseAcknowledgement({5, false}, nullptr, true);
+}
 } // namespace
 
 int main(int argc, char** argv) {
@@ -179,6 +238,7 @@ int main(int argc, char** argv) {
             check(SendMessageW(g_overlay.window,WM_MOUSEACTIVATE,reinterpret_cast<WPARAM>(scratch),MAKELPARAM(HTCLIENT,WM_LBUTTONDOWN)) == MA_NOACTIVATE, "mouse activation policy");
             for (unsigned int dpi : {96U,120U,144U,192U}) {
                 renderCases(output,size,dpi,count);
+                renderControlCases(output,size,dpi);
                 checkFocus(scratch,edit);
             }
             // Actual mouse clicks on this process's overlay, not synthetic DOM events.
@@ -193,11 +253,13 @@ int main(int argc, char** argv) {
             g_overlay.actionSent.store(false);
             clickOwnRect(g_overlay.window,g_overlay.enhancedLayout.cancelButton); checkFocus(scratch,edit);
             check(g_overlay.actionSent.load(), "Discard button hit area");
+            for (auto style : {universal_dictate::ButtonStyle::Text, universal_dictate::ButtonStyle::Symbols})
+                clickPauseControls(scratch,edit,style);
             destroyOverlay();
         }
         DestroyWindow(scratch); scratch = nullptr;
         SetCursorPos(originalCursor.x,originalCursor.y);
-        std::cout << count << " production-renderer cases passed; 12 Off renders, 12 clipping checks, 9 real own-overlay clicks; no microphone or Codex test\n";
+        std::cout << count << " production-renderer cases passed; 12 Off renders, 12 clipping checks, 48 button-style/state renders, 39 real own-overlay clicks; no microphone or Codex test\n";
         return 0;
     } catch (const std::exception& error) {
         destroyOverlay(); if (scratch) DestroyWindow(scratch);

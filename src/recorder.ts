@@ -5,7 +5,8 @@ import * as vscode from 'vscode';
 import {
   CoreRecorderSession,
   RecorderAction,
-  RecorderOverlayStyle
+  RecorderOverlayStyle,
+  type OverlayButtonStyle
 } from './core/recorder';
 import type { OverlaySize } from './core/overlay-size';
 import type { PreviewLease } from './core/preview-audio';
@@ -39,10 +40,11 @@ export class RecorderSession {
     onLevel: (level: number) => void,
     showOverlay = true,
     overlayStyle: RecorderOverlayStyle = 'compact',
-    waveformTimeSpanSeconds = 1,
+    waveformTimeSpanSeconds = 10,
     overlaySize: OverlaySize = 'medium',
     signal?: AbortSignal,
-    livePreview = false
+    livePreview = false,
+    overlayButtonStyle: OverlayButtonStyle = 'text'
   ): Promise<RecorderSession> {
     signal?.throwIfAborted();
     const recorderPath = getRecorderPath(context);
@@ -64,6 +66,7 @@ export class RecorderSession {
         overlayStyle,
         waveformTimeSpanSeconds,
         overlaySize,
+        overlayButtonStyle,
         signal,
         previewSessionId: livePreview && showOverlay && overlayStyle === 'enhanced' ? sessionId : undefined
       },
@@ -79,6 +82,8 @@ export class RecorderSession {
   onFailure(listener: (error: Error) => void): void {
     this.core.onFailure(listener);
   }
+
+  setPaused(paused: boolean): Promise<void> { return this.core.setPaused(paused); }
 
   async stop(): Promise<string> {
     return await this.core.stop();

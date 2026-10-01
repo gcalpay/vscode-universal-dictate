@@ -1,6 +1,6 @@
 # Manual and release test procedure
 
-This document describes the current 1.0 Windows release behavior. Milestone-specific
+This document describes the 1.1 Windows candidate behavior (user acceptance pending). Milestone-specific
 historical evidence remains in `docs/DICTATION_RELIABILITY_PLAN.md` and its linked
 ledgers. A compile result or mocked control is not a substitute for a real Windows
 interaction test.
@@ -24,7 +24,8 @@ For a clean configuration, verify:
 - Language: English
 - Visualization: Enhanced overlay
 - Overlay size: Medium
-- Waveform time span: 1 second
+- Waveform time span: 10 seconds
+- Overlay button style: Text
 - Overwrite clipboard: Off
 - Live preview: Off
 
@@ -89,6 +90,28 @@ Turn Live preview **On** with Enhanced overlay or Both and verify:
 5. Small/Medium/Large remain within their chosen bounds;
 6. Status bar only / Off do not run invisible preview work.
 
+## Pause/Resume acceptance
+
+For Text and Symbols, with preview Off and On, test each size. Dictate a first
+sentence, Pause, deliberately speak an unrelated sentence while Paused, Resume,
+and dictate a final sentence. Only the first and final sentence should be inserted,
+exactly once, after Stop. The paused period should not lengthen the recorded audio.
+
+Check Pause becomes Resume, the waveform and provisional text freeze, hover help
+names every symbol, and the target caret remains where it was for overlay clicks.
+The microphone-use indicator can remain active: the device stays open.
+
+Repeat with Insert while paused, Discard while paused, repeated middle-button clicks,
+Ctrl+Alt+P while VS Code owns focus, and Stop/Cancel during the pending transition.
+No late acknowledgement may restart capture or cause a second insertion. Check both
+Windows and Remote-WSL workflows and an external compatible focused Windows input.
+Existing Issue #38 is not a failed promise of new status-bar focus preservation.
+
+Run the existing automated checks plus `test/pause-controls.test.cjs`, portable
+`recording-pause-test.cpp`, Windows `recorder-pause-capture-test.cpp`,
+`pause-native-ipc.cjs`, and the extended production renderer/Whisper replay. Synthetic
+PCM and a disposable scratch EDIT are not substitutes for the manual test above.
+
 ## Diagnostics
 
 Run:
@@ -106,7 +129,7 @@ Diagnostics should reflect the effective preview and clipboard settings.
 For the exact final VSIX verify:
 
 - version/publisher/extension identity and win32-x64 target;
-- English / Medium / Live preview Off packaged defaults;
+- English / Medium / Live preview Off / Text buttons / 10-second waveform defaults;
 - all four release screenshots and icon match source;
 - obsolete overview image is absent;
 - only `windows-text-input.exe`, `universal-dictate-recorder.exe`,

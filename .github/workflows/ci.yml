@@ -39,6 +39,15 @@ jobs:
       - name: M3 preview scheduling and PCM snapshot tests
         run: node --unhandled-rejections=strict --test test/preview-pipeline.test.cjs test/preview-recorder.test.cjs test/preview-runtime.test.cjs
 
+      - name: M7 pause/resume state and command tests
+        run: node --unhandled-rejections=strict --test test/pause-controls.test.cjs
+
+      - name: Concurrent capture pause gate
+        run: |
+          mkdir -p .deps
+          g++ -std=c++20 -Wall -Wextra -Werror -pedantic -pthread test/native/recording-pause-test.cpp -o .deps/recording-pause-test
+          .deps/recording-pause-test
+
       - name: Unicode input policy tests
         run: |
           g++ -std=c++20 -Wall -Wextra -Werror -pedantic test/native/unicode-input-test.cpp -o .deps-unicode-input-test

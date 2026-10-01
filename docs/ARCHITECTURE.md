@@ -2,7 +2,7 @@
 
 ## Scope
 
-Universal Dictate 1.0 is a Windows-first VS Code extension for local speech-to-text.
+Universal Dictate 1.1 candidate is a Windows-first VS Code extension for local speech-to-text.
 It runs in the local Windows **UI extension host**, including when the workspace is
 connected through Remote - WSL. It does not depend on Codex, Copilot or another chat
 extension's private UI and does not require a WSL-side microphone/runtime install.
@@ -41,6 +41,22 @@ The warm server binds to loopback only and uses a randomized request path. The
 multilingual Whisper `base` model is downloaded on first use, checksum-verified and
 reused locally. Final transcription falls back to the one-shot CLI if the warm worker
 cannot start or fails.
+
+## Recording pause and controls
+
+`recording-pause.h` gates admission to the production capture callback without
+blocking that callback or reopening the microphone. PAUSED is acknowledged only
+after any admitted callback drains. Paused PCM does not enter WAV/preview/waveform;
+Resume appends to the existing accepted-audio timeline without a silence gap.
+`recorder-pause.ts` correlates nonterminal commands/acknowledgements on stdin/stdout.
+The engine keeps the recording operation alive, so Stop/Cancel/disposal can win
+while paused or transitioning. Unconfirmed Pause/Resume cancels with an error.
+Preview aborts active results and suspends its scheduler; Resume retains revisions
+and the single-operation ownership boundary. The device remains open while paused.
+
+The enhanced overlay shares three DPI-scaled hit rectangles with the renderer:
+Insert, Pause/Resume, Discard. Text is the default, with optional GDI+ vector symbols
+and descriptive non-activating hover help. Waveform history defaults to ten seconds.
 
 ## Dictation and preview lifecycle
 
@@ -138,9 +154,9 @@ helpers run on the Windows side while the project workspace may remain in WSL.
 
 ## Release status
 
-M1 overlay sizes, M2 direct-input/recovery/lifecycle work and M3 live preview are
-complete and merged. M4 translation is skipped for 1.0.0, M5 genuine status-bar
-focus preservation is parked and M6 is release validation/publication work.
+M1/M2/M3/M6 are complete in the accepted 1.0.0 merge. M7 Pause/Resume and overlay
+controls are the current 1.1.0 candidate on PR #54, pending user acceptance. M4 remains
+skipped and M5 focus preservation parked. See M7_PAUSE_RESUME.md for current gates.
 
 ## Dependency and privacy invariants
 

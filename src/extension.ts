@@ -1,6 +1,6 @@
 import * as fs from 'node:fs';
 import * as vscode from 'vscode';
-import { DictationEngine, DictationState, type DictationSession } from './core/dictation';
+import { DictationEngine, DictationState, type DictationSession, type PreviewControl } from './core/dictation';
 import { PreviewCoordinator } from './core/preview-coordinator';
 import { TranscriptRecoveryController } from './transcript-recovery';
 import { normalizeOverlaySize, OVERLAY_SIZES, type OverlaySize } from './core/overlay-size';
@@ -12,6 +12,7 @@ import {
 import { getModelPath, ensureModel } from './model';
 import { getNativePasteHelperPath, pasteIntoFocusedControl } from './paste';
 import { getRecorderPath, RecorderSession } from './recorder';
+import type { OverlayButtonStyle } from './core/recorder';
 import {
   disposeWhisper,
   getWhisperCliPath,
@@ -65,6 +66,11 @@ function getConfiguredOverlaySize(): OverlaySize {
   );
 }
 
+function getConfiguredButtonStyle(): OverlayButtonStyle {
+  return vscode.workspace.getConfiguration('universalDictate').get<unknown>('overlayButtonStyle', 'text') === 'symbols'
+    ? 'symbols' : 'text';
+}
+
 function getConfiguredLivePreview(): boolean {
   return vscode.workspace.getConfiguration('universalDictate').get<unknown>('livePreview', false) === true;
 }
@@ -76,11 +82,11 @@ function getConfiguredOverwriteClipboard(): boolean {
 function getConfiguredWaveformTimeSpanSeconds(): WaveformTimeSpanSeconds {
   const value = vscode.workspace
     .getConfiguration('universalDictate')
-    .get<number>('waveformTimeSpanSeconds', 1);
+    .get<number>('waveformTimeSpanSeconds', 10);
 
   return WAVEFORM_TIME_SPANS.includes(value as WaveformTimeSpanSeconds)
     ? (value as WaveformTimeSpanSeconds)
-    : 1;
+    : 10;
 }
 
 function waveformTimeSpanLabel(seconds: WaveformTimeSpanSeconds): string {
@@ -105,6 +111,9 @@ class DictationController implements vscode.Disposable {
   private activeOverwriteClipboard = false;
   private activeLivePreview = false;
   private activeLanguage = 'en';
+  private activeButtonStyle: OverlayButtonStyle = 'text';
+  private activeOverlaySize: OverlaySize = 'medium';
+  private activeWaveformSpan: WaveformTimeSpanSeconds = 10;
 
   constructor(private readonly context: vscode.ExtensionContext) {
     // Use distinct stable IDs so VS Code can track the Dictate and settings
@@ -136,6 +145,9 @@ class DictationController implements vscode.Disposable {
         this.activeVisualization = getConfiguredVisualization();
         this.activeLivePreview = getConfiguredLivePreview() && showsOverlay(this.activeVisualization);
         this.activeLanguage = normalizeWhisperLanguage(vscode.workspace.getConfiguration('universalDictate').get<string>('language', 'en'));
+        this.activeButtonStyle = getConfiguredButtonStyle();
+        this.activeOverlaySize = getConfiguredOverlaySize();
+        this.activeWaveformSpan = getConfiguredWaveformTimeSpanSeconds();
         await ensureModel(this.context);
       },
       warm: () => warmWhisper(this.context),
@@ -145,10 +157,11 @@ class DictationController implements vscode.Disposable {
           onLevel,
           showsOverlay(this.activeVisualization),
           'enhanced',
-          getConfiguredWaveformTimeSpanSeconds(),
-          getConfiguredOverlaySize(),
+          this.activeWaveformSpan,
+          this.activeOverlaySize,
           signal,
-          this.activeLivePreview
+          this.activeLivePreview,
+          this.activeButtonStyle
         );
       },
       transcribe: (audioPath) => transcribe(this.context, audioPath, this.activeLanguage),
@@ -173,7 +186,7 @@ class DictationController implements vscode.Disposable {
     this.context.subscriptions.push(this.statusBar, this.settingsStatusBar);
   }
 
-  private startPreview(session: DictationSession, signal: AbortSignal): { stop(): Promise<void> } | undefined {
+  private startPreview(session: DictationSession, signal: AbortSignal): PreviewControl | undefined {
     if (!this.activeLivePreview || !session.previewSessionId || !session.acquirePreview || !session.showPreview) return undefined;
     const coordinator = new PreviewCoordinator({ sessionId: session.previewSessionId,
       language: this.activeLanguage,
@@ -186,7 +199,11 @@ class DictationController implements vscode.Disposable {
     signal.addEventListener('abort', abort, { once: true });
     if (signal.aborted) { signal.removeEventListener('abort', abort); return undefined; }
     coordinator.start();
-    return { stop: () => { signal.removeEventListener('abort', abort); return coordinator.stop(); } };
+    return {
+      pause: () => coordinator.pause(),
+      resume: () => coordinator.resume(),
+      stop: () => { signal.removeEventListener('abort', abort); return coordinator.stop(); }
+    };
   }
 
   initialize(): void {
@@ -203,6 +220,8 @@ class DictationController implements vscode.Disposable {
 
     await this.engine.toggle();
   }
+
+  async togglePause(): Promise<void> { await this.engine.togglePause(); }
 
   async cancel(): Promise<void> {
     await this.engine.cancel();
@@ -237,6 +256,15 @@ class DictationController implements vscode.Disposable {
         } else {
           this.showStaticRecordingStatus();
         }
+        return;
+      case 'pausing':
+      case 'resuming':
+      case 'paused':
+        this.statusBar.command = 'universalDictate.toggle';
+        this.statusBar.text = state === 'paused' ? '$(debug-pause) Paused · Stop (Ctrl+Alt+D)'
+          : `$(loading~spin) ${state === 'pausing' ? 'Pausing' : 'Resuming'} · Stop (Ctrl+Alt+D)`;
+        this.statusBar.tooltip = 'Paused audio is not saved or transcribed; the microphone device stays open. Ctrl+Alt+P to pause/resume, Ctrl+Alt+D to finish, Esc to discard.';
+        this.statusBar.show();
         return;
       case 'cancelling':
         this.statusBar.command = undefined;
@@ -302,7 +330,7 @@ class DictationController implements vscode.Disposable {
 
 type LanguageQuickPickItem = vscode.QuickPickItem & { code: string };
 type SettingsQuickPickItem = vscode.QuickPickItem & {
-  action: 'language' | 'visualization' | 'overlaySize' | 'waveformTimeSpan' | 'overwriteClipboard' | 'livePreview';
+  action: 'language' | 'visualization' | 'overlaySize' | 'waveformTimeSpan' | 'overwriteClipboard' | 'livePreview' | 'buttonStyle';
 };
 type VisualizationQuickPickItem = vscode.QuickPickItem & { mode: VisualizationMode };
 type OverlaySizeQuickPickItem = vscode.QuickPickItem & { size: OverlaySize };
@@ -499,6 +527,12 @@ async function openSettings(): Promise<void> {
       description: getConfiguredLivePreview() ? (showsOverlay(currentVisualization) ? 'On' : 'On (overlay required)') : 'Off (default)',
       detail: 'Show provisional text while recording in the enhanced overlay. Off performs no preview decoding. Click to toggle for the next recording.',
       action: 'livePreview'
+    },
+    {
+      label: '$(symbol-misc) Overlay button style',
+      description: getConfiguredButtonStyle() === 'symbols' ? 'Symbols' : 'Text (default)',
+      detail: 'Toggle text labels or symbols for Insert, Pause/Resume and Discard. Applies to the next recording.',
+      action: 'buttonStyle'
     }
   ];
 
@@ -538,6 +572,14 @@ async function openSettings(): Promise<void> {
     return;
   }
 
+  if (selected.action === 'buttonStyle') {
+    const next = getConfiguredButtonStyle() === 'text' ? 'symbols' : 'text';
+    await configuration.update('overlayButtonStyle', next, vscode.ConfigurationTarget.Global);
+    const effective = getConfiguredButtonStyle();
+    void vscode.window.showInformationMessage(`Universal Dictate button style: ${effective}. Applies from the next recording.${effective !== next ? ' A workspace setting overrides the user setting.' : ''}`);
+    return;
+  }
+
   if (selected.action === 'overwriteClipboard') {
     // Toggle the latest setting, not a stale value from when the picker opened.
     const next = !getConfiguredOverwriteClipboard();
@@ -560,6 +602,10 @@ export function activate(context: vscode.ExtensionContext): void {
 
   const cancel = vscode.commands.registerCommand('universalDictate.cancel', async () => {
     await controller.cancel();
+  });
+
+  const pauseResume = vscode.commands.registerCommand('universalDictate.pauseResume', async () => {
+    await controller.togglePause();
   });
 
   const selectLanguageCommand = vscode.commands.registerCommand(
@@ -593,6 +639,8 @@ export function activate(context: vscode.ExtensionContext): void {
           `extensionKind=${extensionKind}`,
           `language=${configuredLanguage}`,
           `overlaySize=${getConfiguredOverlaySize()}`,
+          `buttonStyle=${getConfiguredButtonStyle()}`,
+          `waveformSeconds=${getConfiguredWaveformTimeSpanSeconds()}`,
           `livePreview=${getConfiguredLivePreview()}`,
           `previewEffective=${getConfiguredLivePreview() && showsOverlay(getConfiguredVisualization())}`,
           `overwriteClipboard=${getConfiguredOverwriteClipboard()}`,
@@ -614,6 +662,7 @@ export function activate(context: vscode.ExtensionContext): void {
     controller,
     toggle,
     cancel,
+    pauseResume,
     selectLanguageCommand,
     openSettingsCommand,
     showDiagnostics,

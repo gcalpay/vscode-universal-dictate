@@ -56,10 +56,11 @@ public:
         }
     }
     // Only the recorder main/UI thread writes stdout, including these messages.
-    std::string snapshot(bool available = true) {
+    std::string snapshot(bool available = true, bool paused = false) {
         const auto id = requested_.exchange(0, std::memory_order_acq_rel);
         if (!id) return {};
         if (!available) return "PREVIEW_ERROR " + session + " " + std::to_string(id) + "\n";
+        if (paused) return "PREVIEW_EMPTY " + session + " " + std::to_string(id) + "\n";
         try {
             Snapshot copy;
             if (!audio.copy(copy) || copy.pcm.empty())

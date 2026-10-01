@@ -73,7 +73,9 @@ try {
     Assert-Valid ($manifest.contributes.configuration.properties.'universalDictate.overlaySize'.default -eq 'medium') 'Medium overlay is not the default'
     Assert-Valid ($manifest.contributes.configuration.properties.'universalDictate.overwriteClipboard'.default -eq $false) 'Overwrite clipboard must default Off'
     Assert-Valid ($manifest.contributes.configuration.properties.'universalDictate.livePreview'.default -eq $false) 'Live preview must default Off'
-    foreach ($command in @('copyLastTranscript')) {
+    Assert-Valid ($manifest.contributes.configuration.properties.'universalDictate.waveformTimeSpanSeconds'.default -eq 10) 'Ten-second waveform must be the default'
+    Assert-Valid ($manifest.contributes.configuration.properties.'universalDictate.overlayButtonStyle'.default -eq 'text') 'Text buttons must be the default'
+    foreach ($command in @('copyLastTranscript', 'pauseResume')) {
         $id = "universalDictate.$command"
         $commandEntries = @($manifest.contributes.commands | Where-Object { $_.command -eq $id })
         Assert-Valid ($commandEntries.Count -eq 1) "missing/duplicate recovery command $id"
@@ -118,6 +120,7 @@ try {
         $hashes[$entryName] = $actual
     }
     Assert-Valid ((Read-EntryText 'extension/dist/core/input-protocol.js').Contains('--unicode-input-v1')) 'host Unicode input protocol mismatch'
+    Assert-Valid ((Read-EntryText 'extension/dist/core/recorder-pause.js').Contains('PAUSED|RESUMED')) 'host acknowledged pause protocol missing'
 
     foreach ($file in @('windows-text-input.exe', 'universal-dictate-recorder.exe')) {
         $relative = "resources/bin/$file"
