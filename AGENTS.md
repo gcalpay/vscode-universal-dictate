@@ -7,36 +7,52 @@ implementation or acceptance instructions.
 
 ## Current checkpoint and authorization
 
-M1, M2 and M3 are accepted and merged. M3 merged at
-`d1408904409c8636a4ffada6ef342a5d04b6ed3a`. Work continues on `release/next`.
-The user authorized the English default, supplied three real screenshots, approved
-the README rewrite and requested the resulting 1.0.0 VSIX for testing. Routine
-release preparation, its Conventional Commits, package audit and CI are authorized.
-Publication and release-branch merge still wait for explicit user approval.
+M1, M2 and M3 are accepted and merged. M3 merged through PR #52 at
+`d1408904409c8636a4ffada6ef342a5d04b6ed3a`. M4 is skipped, M5 is parked and
+Issue #38 remains unresolved. M6 is the only active 1.0.0 work on `release/next`
+through PR #53.
+
+The user tested the verified 1.0.0 candidate at `02e94d9` and accepted its product
+behavior. On 2026-10-01 the user explicitly authorized the final release sequence:
+replace the enhanced-overlay screenshot, reconcile active docs, run final checks and
+package audit, update/ready PR #53, merge it, tag `v1.0.0`, create the GitHub Release
+and publish the exact final verified VSIX to the VS Code Marketplace. No further
+routine approval is required for those steps.
 
 The final defaults are Language **English**, overlay size **Medium**, Live preview
 **Off**, Overwrite clipboard **Off**, Enhanced overlay visualization and one-second
 waveform history. Preserve explicit user settings; do not reset preferences on
 upgrade. Keep the Language label and the approved offline language note.
 
-Use the three supplied screenshots losslessly, retain the existing waveform-only
-overlay as a fourth screenshot, and remove the obsolete overview graphic. The
-settings image is an example with preview On, not a picture of the default state.
-Do not fabricate screenshots, redraw labels or substitute scripted renderer images.
+## Final presentation change
+
+Replace `media/enhanced-overlay.webp` with the user's final 564 x 113 crop. Convert
+the supplied JPEG to WebP without resizing, cropping, redrawing or changing its
+content; prefer a lossless conversion. The other three 1.0 screenshots are accepted:
+`status-bar-controls.webp`, `settings-menu.webp` and `live-preview.webp`.
+Keep `media/icon.png`; keep the obsolete `universal-dictate-overview.webp` absent.
+
+README.md and CHANGELOG.md are already accepted release text. Do not reintroduce
+VSIX-install instructions, internal milestone commentary or obsolete artwork.
 
 ## Release gates
 
-- Work on this release branch; inspect refs before writes and preserve unrelated work.
-- M4 translation is skipped. M5 focus preservation is parked; Issue #38 stays open.
-- Build the candidate as version **1.0.0** without publishing a tag or release.
-- Verify exact package identity, English/Medium/Off defaults, release media, README,
-  changelog, native x64 helpers and absence of development material and font files.
-- Report automated evidence separately from the user's Windows/VS Code test.
-- Retain the tested VSIX bytes and SHA-256. After final approval, publish those bytes
-  rather than silently rebuilding or incrementing the version.
-- Do not add an update popup, translation toggle, new backend or model.
-- Never request publication credentials in chat. Use an authorized publishing path.
-- No source changes, installations or settings edits occur on the user's PC here.
+- Inspect live refs before writes and preserve unrelated work.
+- Do not reopen accepted M3 runtime work merely because docs/assets changed.
+- Verify source and packaged defaults resolve to English / Medium / Live preview Off.
+  In particular, the runtime fallback for Live preview must remain literal false.
+- Run the release CI/Windows package workflow and inspect the produced VSIX. Verify
+  version 1.0.0, x64 identity, exact release media, four expected executables and
+  absence of source/test/font/model/audio/development material.
+- Record the exact final source head, VSIX filename and SHA-256 in PR #53.
+- Codacy currently remains `action_required`; prior final-head findings were reviewed
+  as false-positive/policy warnings. Do not weaken rules or claim Codacy is green.
+- After final package verification, publish those exact VSIX bytes. Do not silently
+  rebuild a different artifact for the Marketplace.
+- If artifact/source identity, CI/package verification or publication capability is
+  genuinely blocked, stop and report the blocker rather than guessing.
+- Never request publication credentials in chat. Use an already authorized secure
+  publisher path if one is available.
 
 ## Product invariants
 
