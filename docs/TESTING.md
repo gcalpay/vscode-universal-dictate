@@ -1,22 +1,36 @@
 # Manual and release test procedure
 
-This document describes the current shipped baseline. The detailed future acceptance matrix and milestone-specific gates live in `docs/DICTATION_RELIABILITY_PLAN.md`.
-
-Do not turn a compile result or mocked control into a Windows/Codex pass. Use synthetic text in captures and issue reports.
+This document describes the current 1.0 Windows release behavior. Milestone-specific
+historical evidence remains in `docs/DICTATION_RELIABILITY_PLAN.md` and its linked
+ledgers. A compile result or mocked control is not a substitute for a real Windows
+interaction test.
 
 ## Environment record
 
 For every manual run record:
 
-- Windows version
-- VS Code version
-- Universal Dictate branch/commit or VSIX identity
+- Windows version and VS Code version
+- branch/commit or exact VSIX identity
 - local Windows vs Remote - WSL workspace
 - target control
-- visualization mode
-- waveform time span
-- start and finish controls
+- Language, visualization, overlay size, waveform span, clipboard mode and preview
+- start/finish controls
 - display scaling/monitor arrangement when testing the native overlay
+
+## Defaults and upgrade behavior
+
+For a clean configuration, verify:
+
+- Language: English
+- Visualization: Enhanced overlay
+- Overlay size: Medium
+- Waveform time span: 1 second
+- Overwrite clipboard: Off
+- Live preview: Off
+
+A user with an explicit saved value must retain it after upgrade. Do not reset an
+existing non-English language, preview choice or other saved preference merely to
+demonstrate the new default.
 
 ## Basic dictation
 
@@ -25,48 +39,55 @@ For every manual run record:
 3. On first use, allow the model download/checksum verification to finish.
 4. Speak synthetic test text.
 5. Stop with `Ctrl+Alt+D`.
-6. Confirm the produced transcript is pasted once at the current target and no Enter/submission occurs.
-7. Repeat with the enhanced overlay Insert button.
-8. Separately exercise the genuine status-bar Dictate and Stop mouse paths and record focus/placement results; do not assume they preserve the previous target.
+6. Confirm the final transcript is inserted exactly once and no Enter/submission
+   occurs.
+7. Repeat with the enhanced overlay **Insert** button.
+8. Separately exercise the genuine status-bar Dictate/Stop mouse paths and record
+   focus/placement results; do not assume they preserve the previous target.
 
-Subsequent dictation should work without network access after the model exists.
+After the model exists, normal dictation should work without network access.
 
-## Selection semantics
+## Cancellation and duplicate controls
 
-Use:
+While recording, test `Esc` and overlay **Discard** independently. No transcript
+should be inserted, copied automatically or submitted.
 
-```text
-left old right
-```
+Exercise repeated/near-simultaneous Stop/Insert actions. Only one finalization path
+may win; stale callbacks/results must not produce duplicate insertion.
 
-Select only `old`. A correct paste of `UD_TEST` produces:
+## Visualization, size and DPI regression
 
-```text
-left UD_TEST right
-```
+Exercise Both, Enhanced overlay, Status bar only and Off. Verify waveform spans
+1, 3, 5, 10 and 20 seconds do not change recording length or final transcription.
 
-Text outside the selection must remain unchanged.
+Test Small/Medium/Large at 100%, 125%, 150% and 200% scaling and, when available,
+mixed-DPI/multi-monitor placement. Drawing and Insert/Discard hit areas must remain
+aligned and the overlay must stay non-activating.
 
-## Cancellation
+## Clipboard and transcript recovery
 
-While recording:
+With **Overwrite clipboard Off**, automatic dictation must leave existing clipboard
+content untouched. With it **On**, the exact final transcript is copied once before
+the same direct-input attempt and old clipboard contents are not restored. A later
+manual/application copy must win.
 
-- press `Esc`, and separately
-- use overlay Discard when the overlay is enabled.
+After a successful non-empty dictation, **Universal Dictate: Copy Last Transcript**
+must explicitly copy the retained final transcript even when automatic overwrite is
+Off. Empty/cancelled/failed dictation must not erase the latest successful retained
+transcript. Reload/restart clears this memory-only state.
 
-No transcript should be inserted or submitted.
+## Live preview
 
-## Visualization regression
+With the default **Off**, no provisional text or preview decoding should occur.
 
-Exercise Both, Enhanced overlay, Status bar only and Off. For the enhanced overlay, verify waveform spans 1, 3, 5, 10 and 20 seconds do not alter recording length or final transcription behavior.
+Turn Live preview **On** with Enhanced overlay or Both and verify:
 
-When M1 size presets are implemented, test Small/Medium/Large at 100%, 125%, 150% and 200% scaling plus a mixed-DPI/multi-monitor setup. Drawing and Insert/Discard hit areas must remain aligned and the overlay must stay non-activating.
-
-## Clipboard baseline
-
-Copy recognizable plain text before dictation. After insertion, paste manually elsewhere and verify the prior clipboard text was restored.
-
-The current baseline uses delayed string restoration and does not yet establish ownership-aware preservation of every native clipboard format. M2 explicitly tests and improves this; do not overstate current guarantees.
+1. provisional words can appear and revise without being inserted;
+2. Stop transcribes the complete recording and inserts one final transcript;
+3. preview failure leaves recording/final transcription available;
+4. Language/preview settings are snapshotted per session;
+5. Small/Medium/Large remain within their chosen bounds;
+6. Status bar only / Off do not run invisible preview work.
 
 ## Diagnostics
 
@@ -76,26 +97,28 @@ Run:
 Universal Dictate: Show Diagnostics
 ```
 
-A packaged Windows build should report the expected Windows UI-host placement and availability of the native paste helper, recorder and whisper runtime. After setup, the model should report installed.
+A packaged Windows build should report the Windows UI-host placement, direct-input
+helper, recorder and whisper runtime. After setup, the model should report installed.
+Diagnostics should reflect the effective preview and clipboard settings.
+
+## Release package audit
+
+For the exact final VSIX verify:
+
+- version/publisher/extension identity and win32-x64 target;
+- English / Medium / Live preview Off packaged defaults;
+- all four release screenshots and icon match source;
+- obsolete overview image is absent;
+- only `windows-text-input.exe`, `universal-dictate-recorder.exe`,
+  `whisper-cli.exe` and `whisper-server.exe` are executables;
+- no source/test/development directories, font files, model files or audio fixtures
+  are packaged;
+- compiled JavaScript and native helper hashes match the verified build.
 
 ## Failure classification
 
-### Recorder fails to open
-
-Check Windows microphone privacy settings, especially permission for desktop applications.
-
-### Recording works but transcription fails
-
-Check diagnostics, retain the exact error and distinguish warm-server failure from CLI fallback failure.
-
-### Transcript is wrong
-
-Treat as ASR/language/audio quality until evidence indicates otherwise.
-
-### Transcript is correct but appears in the wrong control
-
-Treat as target-preservation/focus behavior. Record whether Start and Stop used the status bar, keyboard or native overlay. Issue #38 specifically concerns the genuine status-bar mouse workflow.
-
-### Transcript appears and is not submitted
-
-That confirms only the exercised path. It does not prove all start/finish combinations or opaque composers.
+Recorder failures are microphone/privacy problems until evidence shows otherwise.
+Transcription failures should distinguish warm-server from CLI fallback. Preview
+failure is separate from final transcription. Wrong text is an ASR/language/audio
+issue until evidence shows otherwise. Correct text in the wrong control is a
+target-preservation/focus issue; Issue #38 concerns the genuine status-bar mouse path.
