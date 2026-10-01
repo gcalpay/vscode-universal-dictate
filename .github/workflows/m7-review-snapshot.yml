@@ -1,0 +1,34 @@
+name: M7 review snapshot (temporary)
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  snapshot:
+    if: github.head_ref == 'feat/pause-resume-controls'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Resolve existing development dependencies
+        run: npm install --no-audit --no-fund
+      - name: Archive exact source and compiler types for offline review
+        run: |
+          mkdir -p .deps/review
+          git archive --format=tar HEAD > .deps/review/source.tar
+          git rev-parse HEAD > .deps/review/source-sha.txt
+          tar -czf .deps/review/compiler-types.tar.gz node_modules/typescript node_modules/@types/node node_modules/@types/vscode node_modules/undici-types
+          sha256sum .deps/review/source.tar .deps/review/compiler-types.tar.gz > .deps/review/SHA256SUMS
+      - uses: actions/upload-artifact@v7
+        with:
+          name: m7-review-snapshot
+          path: .deps/review/
+          if-no-files-found: error
+          retention-days: 3
