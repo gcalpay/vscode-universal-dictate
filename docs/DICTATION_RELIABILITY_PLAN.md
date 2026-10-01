@@ -1,26 +1,26 @@
 # Universal Dictate implementation roadmap
 
-Updated: 2026-09-29. Repository: `gcalpay/vscode-universal-dictate`.
+Updated: 2026-10-01. Repository: `gcalpay/vscode-universal-dictate`.
 
 This is the current implementation handoff. It replaces the earlier out-of-order milestone numbering. Historical planning and focus-diagnostic evidence remain available through pinned commits/branches, but the active milestone numbers below are chronological. M2 follows the user-approved [direct-input / optional-overwrite correction](M2_CLIPBOARD_MODE_FIX.md); the restoration design and recovery submenu are archived, not active requirements.
 
-## Active 1.0.0 scope — approved 2026-09-29
+## Active 1.0.0 scope — final release work authorized 2026-10-01
 
-M1 and M2 are complete and merged. Current base is the M2 merge
-`479ca6be4cd114372d0eece9db9962e42b3e6ba5`. M3 is active on
-`feat/live-transcript-preview`; M3.1 preparation is recorded in
-[M3_1_PREVIEW_FEASIBILITY.md](M3_1_PREVIEW_FEASIBILITY.md).
+M1, M2 and M3 are complete, accepted and merged. Current `main` is the accepted
+M3 merge `d1408904409c8636a4ffada6ef342a5d04b6ed3a` from PR #52. M4 is skipped
+for 1.0.0 and M5 is parked outside 1.0.0. M6 is current on `release/next`
+through PR #53.
 
-The user skipped M4 and parked M5 outside 1.0.0. Clipboard overwrite is the
-accepted recovery workaround; Issue #38 remains unresolved. Keep the Language
-label/behavior and the approved README note. The reported mismatched-language
-output does not require a new language-fix milestone.
+The user tested the verified 1.0.0 candidate at `02e94d9` and accepted its product
+behavior. The only final presentation change is replacement of the waveform-only
+enhanced-overlay screenshot, followed by reconciliation of active internal docs and
+a final package build/audit. Issue #38 remains unresolved; clipboard overwrite
+remains the accepted recovery workaround.
 
-Route: M3.1 measurement -> M3.2 pipeline -> M3.3 overlay -> M3.4 final VSIX/user
-gate -> accepted M3 merge -> M6 integrated 1.0.0 candidate and release approval.
-No release/version bump is authorized by starting M3. Current M2 closeout evidence
-is in [M2_CODACY_TRIAGE.md](M2_CODACY_TRIAGE.md) and PR #51, superseding historical
-pending-review statements below. Do not repeat M2 acceptance.
+The user explicitly authorized the final M6 sequence on 2026-10-01: final asset/doc
+update, checks/package audit, PR #53 update/readiness, merge to main, tag `v1.0.0`,
+GitHub Release and publication of the exact verified 1.0.0 VSIX to the Marketplace.
+No M4/M5 feature work or other runtime change is part of this authorization.
 
 ## 1. Branch and review policy
 
@@ -46,30 +46,31 @@ Workflow for every milestone:
 
 If a milestone is blocked or rejected, do not merge it just to preserve sequence. Continue fixing the same branch, or close/park it after the user's decision and create the next branch from unchanged `main`.
 
-No milestone plan authorizes a release, version bump, Marketplace publication, issue closure or automatic merge.
+Milestone planning alone does not authorize publication. For this release, the user's explicit 2026-10-01 M6 authorization satisfies the merge/tag/release/Marketplace gate unless a genuine blocker requires another decision.
 
-The normalized roadmap is now on `main`. M1 was accepted and merged through PR #50, and M2 was created from that updated `main`. Keep the frozen launcher and Code OSS diagnostic branches isolated from ordinary product work.
+M1, M2 and M3 are accepted and merged through PRs #50, #51 and #52 respectively. M6 is the current release branch/PR. Keep the frozen launcher and Code OSS diagnostic branches isolated from ordinary product work.
 
 ## 2. Verified baseline
 
-Main/M1 baseline and corrected M2 checkpoint, checked 2026-09-29:
+Current release baseline, checked 2026-10-01:
 
-- M3 base / current main: `479ca6be4cd114372d0eece9db9962e42b3e6ba5` (accepted M2 merge), extension 0.1.5. M1 historical base: `481913feb88ad16aca00da744dd2fe72cd90ef98`.
-- M1 PR #50 is merged into `main`; this does not by itself imply a new Marketplace release.
+- Current `main`: `d1408904409c8636a4ffada6ef342a5d04b6ed3a`, the accepted M3 merge from PR #52.
+- M6 release work is on `release/next` / PR #53 at version 1.0.0.
 - Windows UI extension host, including Remote - WSL.
 - Recorder: native miniaudio/WASAPI, 16 kHz mono PCM16 WAV.
 - Enhanced overlay: native non-activating recording panel with waveform, Insert and Discard.
-- Enhanced-overlay sizes: Small ~380 x 64, Medium ~520 x 88, Large 740 x 128; Medium is the default/fallback after user review.
+- Overlay sizes: Small ~380 x 64, Medium ~520 x 88, Large 740 x 128; Medium is the default/fallback.
 - Visualization modes: Both, Enhanced overlay, Status bar only and Off.
-- Enhanced waveform history: 1, 3, 5, 10 or 20 seconds.
+- Enhanced waveform history: 1, 3, 5, 10 or 20 seconds; default 1 second.
 - ASR: multilingual Whisper `base`, warm local `whisper-server`, one-shot `whisper-cli` fallback.
-- On `main` / M1 baseline: clipboard plus native Win32 Ctrl+V helper. This is not the corrected M2 transport.
-- Genuine status-bar Dictate and recording Stop are clickable.
+- M2 direct Unicode input is current. Automatic clipboard overwrite is optional and Off by default; Off does not access the clipboard. Copy Last Transcript is memory-only recovery.
+- M3 live preview is implemented and accepted. It is opt-in and Off by default, uses bounded/coalesced local inference in the enhanced overlay and never inserts provisional text. The complete recording remains authoritative after Stop.
+- The 1.0.0 release default Language is English; Auto-detect and all 99 languages remain selectable. Explicit saved user choices are preserved.
+- M1 PR #50, M2 PR #51 and M3 PR #52 are complete and merged.
+- M4 translation is skipped for 1.0.0. M5 genuine status-bar focus preservation is parked.
 - Issue #38 remains unresolved for the genuine status-bar mouse workflow.
-- Corrected M2 runtime: `eaf0570f1c817229e36177ccff32f50ce396a43f`, accepted and merged through PR #51; the merge changed no runtime relative to that tested candidate.
-- M2 uses direct Unicode input, optional clipboard overwrite (Off by default), memory-only Copy Last Transcript and lifecycle hardening. Restoration and the Insert/Copy/Clear submenu were removed.
-- M2 workflows passed, Codacy findings were triaged and the user accepted M2 without a replacement runtime. Merge is complete; no new M2 test or approval is required.
-- Live preview and deliberate translation are not implemented. Genuine status-bar target preservation is not established.
+
+Historical branches that must not be merged into ordinary feature work:
 
 Historical branches that must not be merged into ordinary feature work:
 
@@ -205,6 +206,11 @@ acceptance work. Any future runtime change needs its own relevant validation.
 
 **Branch:** `feat/live-transcript-preview`, created from updated main after M2 review/merge.
 
+**Status:** complete, accepted and merged through PR #52 at
+`d1408904409c8636a4ffada6ef342a5d04b6ed3a`. The subsections below are the
+historical implementation/acceptance record; their remaining-gate language is not
+current release work.
+
 Goal: show provisional words in the native recording overlay while the user speaks, while still inserting only one authoritative final transcript after Stop.
 
 **v1 must not repeatedly type partial hypotheses into the target input.** Partial Whisper output can change; continuous target insertion would create selection, undo, focus and correction problems that belong to a different feature.
@@ -264,7 +270,7 @@ Historical design remains in the roadmap at the M2 merge commit.
 
 The user accepted clipboard recovery as the current workaround and chose not to
 require this milestone for 1.0.0. Do not create `fix/statusbar-focus-preservation`
-or merge frozen experiments as part of M3.
+or merge frozen experiments as part of the 1.0.0 release.
 
 Issue #38 remains open. Optional clipboard backup does not prevent the genuine
 status-bar item from changing focus and does not restore an opaque composer/caret.
@@ -274,7 +280,7 @@ experiments and acceptance matrix remain available at the M2 merge commit.
 
 ## 9. M6 — Integrated validation and release
 
-**Branch:** `release/next`, created from updated main after accepted M3 merge. M4 is skipped and M5 is parked. Prepare and test an explicitly approved 1.0.0 release candidate before separate publication approval.
+**Branch:** `release/next`, created from updated main after accepted M3 merge. M4 is skipped and M5 is parked. The candidate behavior is accepted; final presentation/doc reconciliation, exact package verification and the authorized release/publication sequence are the remaining M6 work.
 
 ### M6.1 — Integrated regression
 
@@ -284,9 +290,14 @@ Run applicable automated tests and real Windows checks across all merged feature
 
 Inspect the actual VSIX contents. Update README, CHANGELOG, settings help, testing/architecture notes and version metadata to describe only behavior that actually shipped. Keep diagnostic-only code and test shortcuts out of the VSIX.
 
-### M6.3 — Final user gate and publication
+### M6.3 — Final release and publication
 
-Provide the tested artifact and exact evidence to the user. Merge/publish/tag/close issues only after explicit approval.
+The user accepted the candidate behavior and explicitly authorized merge/tag/GitHub
+Release/Marketplace publication after the final presentation/doc update passes
+verification. Publish only the exact verified final VSIX. Stop if artifact/source
+identity, CI/package verification or publication capability is genuinely blocked.
+
+## 10. Acceptance map
 
 ## 10. Acceptance map
 
@@ -315,20 +326,23 @@ Every manual result records commit/artifact, Windows/VS Code/Codex versions, loc
 
 ## 11. Current handoff
 
-M1 and M2 are accepted and merged. M2 merge/base for M3:
-`479ca6be4cd114372d0eece9db9962e42b3e6ba5` (PR #51). The accepted M2 runtime
-remains the corrected `eaf0570` candidate; no replacement test is requested here.
+M1, M2 and M3 are accepted and merged. Current `main` is the M3 merge
+`d1408904409c8636a4ffada6ef342a5d04b6ed3a` (PR #52). M4 is skipped and M5 is
+parked outside 1.0.0; Issue #38 remains unresolved.
 
-M3 branch: `feat/live-transcript-preview`. M3.1 is started: source/protocol review
-and 22 diagnostic mechanics tests passed in the chat sandbox; pinned Windows
-Whisper latency, CPU/RAM and Stop-contention measurements are pending. See
-[M3_1_PREVIEW_FEASIBILITY.md](M3_1_PREVIEW_FEASIBILITY.md) for the prepared
-benchmark, evidence limits and commit/run approval gate. No product live preview,
-new VSIX, M3 merge, version bump or publication has occurred.
+M6 is current on `release/next` / PR #53. The user tested the prior verified
+1.0.0 candidate at `02e94d9` and accepted the product behavior. Its Linux CI
+`36793699565` and Windows package run `36793699560` succeeded. The only final
+presentation change is the user-supplied 564 x 113 replacement for
+`media/enhanced-overlay.webp`, together with reconciliation of stale active docs.
 
-M4 is skipped and M5 is parked outside 1.0.0 by the user's explicit decision.
-Keep Language as-is and include the approved offline note. After M3 acceptance,
-proceed to M6 integrated release validation. Issue #38 stays unresolved.
+After those asset/doc-only changes, run the final checks and inspect the exact VSIX.
+If verification succeeds, the user has already authorized making PR #53 ready,
+merging it to main, tagging `v1.0.0`, creating the GitHub Release and publishing
+that exact verified VSIX to the Marketplace. Do not reopen accepted M3 runtime work
+or start M4/M5 as part of this release.
+
+Historical pre-renumbering plan:
 
 Historical pre-renumbering plan: `3c0c3bc2fd611a3a76835897edc5af3a674bf2df`.
 Archived M2.1-M2.4 ledgers are evidence, not instructions to revive discarded code.
