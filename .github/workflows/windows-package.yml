@@ -66,27 +66,42 @@ jobs:
             throw "vcvars64.bat not found at $vcvars"
           }
 
+          # Embed the common-controls dependency in every executable using the
+          # recorder renderer. A sidecar .exe.manifest works on the runner but is
+          # not part of the VSIX, so the production binary must be self-contained.
           $commands = @(
             "call `"$vcvars`"",
             "if not exist resources\bin mkdir resources\bin",
             "cl /nologo /utf-8 /O2 /std:c++20 /EHsc native\windows-text-input.cpp /Fe:resources\bin\windows-text-input.exe user32.lib",
-            "cl /nologo /utf-8 /O2 /std:c++20 /EHsc /I .deps\miniaudio native\record-audio.cpp native\miniaudio-impl.cpp /Fe:resources\bin\universal-dictate-recorder.exe user32.lib gdi32.lib",
+            "cl /nologo /utf-8 /O2 /std:c++20 /EHsc /I .deps\miniaudio native\record-audio.cpp native\miniaudio-impl.cpp /Fe:resources\bin\universal-dictate-recorder.exe user32.lib gdi32.lib /link /MANIFEST:EMBED",
             "cl /nologo /utf-8 /O2 /std:c++20 /EHsc test\native\recording-pause-test.cpp /Fe:.deps\recording-pause-test.exe",
-            "cl /nologo /utf-8 /O2 /std:c++20 /EHsc /I .deps\miniaudio test\native\recorder-pause-capture-test.cpp native\miniaudio-impl.cpp /Fe:.deps\recorder-pause-capture-test.exe user32.lib gdi32.lib",
+            "cl /nologo /utf-8 /O2 /std:c++20 /EHsc /I .deps\miniaudio test\native\recorder-pause-capture-test.cpp native\miniaudio-impl.cpp /Fe:.deps\recorder-pause-capture-test.exe user32.lib gdi32.lib /link /MANIFEST:EMBED",
             "cl /nologo /utf-8 /O2 /std:c++20 /EHsc test\native\overlay-layout-test.cpp /Fe:.deps\overlay-layout-test.exe",
             "cl /nologo /utf-8 /O2 /std:c++20 /EHsc test\native\preview-layout-test.cpp /Fe:.deps\preview-layout-test.exe",
-            "cl /nologo /utf-8 /O2 /std:c++20 /EHsc /I .deps\miniaudio test\native\preview-presentation-test.cpp native\miniaudio-impl.cpp /Fe:.deps\preview-presentation-test.exe user32.lib gdi32.lib",
+            "cl /nologo /utf-8 /O2 /std:c++20 /EHsc /I .deps\miniaudio test\native\preview-presentation-test.cpp native\miniaudio-impl.cpp /Fe:.deps\preview-presentation-test.exe user32.lib gdi32.lib /link /MANIFEST:EMBED",
             "cl /nologo /utf-8 /O2 /std:c++20 /EHsc test\native\unicode-input-test.cpp /Fe:.deps\unicode-input-test.exe",
             "cl /nologo /utf-8 /O2 /std:c++20 /EHsc test\native\text-input-request-test.cpp /Fe:.deps\text-input-request-test.exe user32.lib gdi32.lib",
             "cl /nologo /utf-8 /O2 /std:c++20 /EHsc test\native\text-input-windows-test.cpp /Fe:.deps\text-input-windows-test.exe user32.lib gdi32.lib",
             "cl /nologo /utf-8 /O2 /std:c++20 /EHsc test\native\preview-buffer-test.cpp /Fe:.deps\preview-buffer-test.exe",
-            "cl /nologo /utf-8 /O2 /std:c++20 /EHsc test\native\preview-bridge-test.cpp /Fe:.deps\preview-bridge-test.exe"
+            "cl /nologo /utf-8 /O2 /std:c++20 /EHsc test\native\preview-bridge-test.cpp /Fe:.deps\preview-bridge-test.exe",
+            "mt.exe -nologo -inputresource:resources\bin\universal-dictate-recorder.exe;#1 -out:.deps\recorder-manifest.xml"
           ) -join ' && '
 
           cmd.exe /D /S /C $commands
           if ($LASTEXITCODE -ne 0) {
             exit $LASTEXITCODE
           }
+
+          # Check the actual embedded resource, not a build-directory sidecar.
+          # The later VSIX audit requires byte-identical packaged/native helpers.
+          $manifest = [System.Xml.XmlDocument]::new()
+          $manifest.XmlResolver = $null
+          $manifest.Load((Join-Path $pwd '.deps/recorder-manifest.xml'))
+          $controls = $manifest.SelectSingleNode("//*[local-name()='assemblyIdentity' and @name='Microsoft.Windows.Common-Controls']")
+          if ($null -eq $controls -or $controls.GetAttribute('version') -ne '6.0.0.0') {
+            throw 'Recorder embedded common-controls v6 manifest is missing'
+          }
+          Write-Output 'Recorder embedded manifest verified: Windows common controls 6.0.0.0'
 
       - name: Pause gate, production PCM capture and actual Node pause pipe
         if: ${{ !cancelled() && steps.native_build.outcome == 'success' }}
