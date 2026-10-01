@@ -1,0 +1,30 @@
+name: M7 compact source snapshot (temporary)
+on:
+  pull_request:
+    paths: ['.github/workflows/m7-compact-snapshot.yml']
+permissions:
+  contents: read
+jobs:
+  snapshot:
+    if: github.repository == 'gcalpay/vscode-universal-dictate' && github.event.pull_request.number == 54 && github.head_ref == 'feat/pause-resume-controls' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - name: Archive tracked source only
+        run: |
+          mkdir -p "$RUNNER_TEMP/m7-source"
+          git archive HEAD > "$RUNNER_TEMP/m7-source/source.tar"
+          git rev-parse HEAD > "$RUNNER_TEMP/m7-source/source-sha.txt"
+          git rev-parse 'HEAD^{tree}' > "$RUNNER_TEMP/m7-source/tree-sha.txt"
+          cd "$RUNNER_TEMP/m7-source"
+          sha256sum source.tar > SHA256SUMS
+      - uses: actions/upload-artifact@v7
+        with:
+          name: m7-compact-source
+          path: ${{ runner.temp }}/m7-source/*
+          if-no-files-found: error
+          retention-days: 7
