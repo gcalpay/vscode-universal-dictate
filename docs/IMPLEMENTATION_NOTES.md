@@ -1,32 +1,57 @@
 # Implementation notes
 
-## Current 0.1.5 baseline
+## Current 1.0 baseline
 
-- The extension runs in the local Windows VS Code UI extension host, including Remote - WSL workspaces.
-- The bundled native recorder captures the Windows default microphone through miniaudio/WASAPI as 16 kHz mono PCM16 WAV.
-- The enhanced native overlay is non-activating and supports Insert/Discard plus waveform feedback.
+- The extension runs in the local Windows VS Code UI extension host, including
+  Remote - WSL workspaces.
+- The bundled native recorder captures the Windows default microphone through
+  miniaudio/WASAPI as 16 kHz mono PCM16 WAV.
+- The enhanced native overlay is non-activating and supports Insert/Discard,
+  waveform feedback and Small/Medium/Large layouts; Medium is the default.
 - Visualization modes are Both, Enhanced overlay, Status bar only and Off.
-- Enhanced waveform history is configurable for 1, 3, 5, 10 or 20 seconds.
+- Enhanced waveform history is configurable for 1, 3, 5, 10 or 20 seconds; the
+  default is 1 second.
+- English is the default language. Auto-detect and all 99 Whisper languages remain
+  selectable. Existing explicit user settings are not reset on upgrade.
 - The official pinned whisper.cpp v1.9.1 x64 runtime is bundled in the VSIX.
-- The multilingual Whisper `base` model is downloaded on first use, SHA-256 verified and reused locally.
-- Recording warms a local `whisper-server`; final transcription uses that worker when available and falls back to `whisper-cli` if needed.
-- The completed transcript is pasted through the clipboard plus the native Win32 `SendInput` helper.
-- Temporary WAV files are removed after completion or cancellation.
-- Dictation never synthesizes Enter or automatically submits a chat/message.
+- The multilingual Whisper `base` model is downloaded on first use, SHA-256
+  verified and reused locally.
+- Recording warms a loopback-only `whisper-server`; final transcription uses that
+  worker when available and falls back to `whisper-cli` if needed.
+- Live preview is implemented and defaults Off. When enabled with an enhanced
+  overlay, bounded/coalesced preview snapshots are decoded locally; stale results
+  are rejected and provisional text is never inserted or copied.
+- Stop always uses the complete recording for one authoritative final transcript.
+- Final insertion uses direct Win32 Unicode input rather than clipboard paste.
+  Control characters are converted to spaces and dictation never synthesizes Enter.
+- **Overwrite clipboard** defaults Off. Off performs no automatic clipboard access;
+  On copies the exact final transcript once before the same direct-input attempt and
+  does not restore prior clipboard contents.
+- The latest successful non-empty final transcript is retained in memory for
+  **Copy Last Transcript**. Reload/restart clears that retained text.
+- Session-generation, cancellation, duplicate-Stop and WAV/native cleanup safeguards
+  are part of the current runtime.
+- Temporary final WAV files are removed after completion or cancellation.
 
 ## Known limitation
 
-The genuine VS Code status-bar Dictate/Stop mouse path can disturb the previously active caret/selection before the extension command runs. This is tracked as Issue #38 and is separate from ASR correctness. The frozen native-launcher experiment and Code OSS focus probe are not shipped product code.
+The genuine VS Code status-bar Dictate/Stop mouse path can disturb the previously
+active caret/selection before the extension command runs. Issue #38 remains open.
+Keyboard/overlay controls and optional clipboard backup are workarounds, not proof of
+focus preservation.
 
-## Active development order
+The frozen native-launcher experiment and Code OSS focus probe are not shipped code.
 
-The current roadmap is `docs/DICTATION_RELIABILITY_PLAN.md`:
+## Milestone status
 
-1. M1 overlay size presets
-2. M2 transcript, clipboard and lifecycle reliability
-3. M3 live transcript preview
-4. M4 optional translation
-5. M5 insertion-target preservation
-6. M6 integrated validation/release
+- M1 — overlay size presets: complete and merged (PR #50).
+- M2 — direct input, optional clipboard overwrite, transcript recovery and lifecycle:
+  complete and merged (PR #51).
+- M3 — live transcript preview: complete and merged (PR #52).
+- M4 — translation milestone: skipped for 1.0.0.
+- M5 — genuine insertion-target preservation: parked outside 1.0.0.
+- M6 — integrated 1.0.0 release validation/publication: current work on
+  `release/next` / PR #53.
 
-Each milestone has one branch; all of its submilestones stay on that branch until the user reviews it.
+Historical M2/M3 ledgers remain evidence of their checkpoints; they are not future
+implementation instructions.

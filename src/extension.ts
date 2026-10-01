@@ -104,7 +104,7 @@ class DictationController implements vscode.Disposable {
   private activeVisualization: VisualizationMode = 'enhancedOverlay';
   private activeOverwriteClipboard = false;
   private activeLivePreview = false;
-  private activeLanguage = 'auto';
+  private activeLanguage = 'en';
 
   constructor(private readonly context: vscode.ExtensionContext) {
     // Use distinct stable IDs so VS Code can track the Dictate and settings
@@ -135,7 +135,7 @@ class DictationController implements vscode.Disposable {
         this.activeOverwriteClipboard = getConfiguredOverwriteClipboard();
         this.activeVisualization = getConfiguredVisualization();
         this.activeLivePreview = getConfiguredLivePreview() && showsOverlay(this.activeVisualization);
-        this.activeLanguage = normalizeWhisperLanguage(vscode.workspace.getConfiguration('universalDictate').get<string>('language', 'auto'));
+        this.activeLanguage = normalizeWhisperLanguage(vscode.workspace.getConfiguration('universalDictate').get<string>('language', 'en'));
         await ensureModel(this.context);
       },
       warm: () => warmWhisper(this.context),
@@ -312,7 +312,7 @@ type WaveformTimeSpanQuickPickItem = vscode.QuickPickItem & {
 
 async function selectLanguage(): Promise<void> {
   const configuration = vscode.workspace.getConfiguration('universalDictate');
-  const current = normalizeWhisperLanguage(configuration.get<string>('language', 'auto'));
+  const current = normalizeWhisperLanguage(configuration.get<string>('language', 'en'));
 
   const items: LanguageQuickPickItem[] = [
     {
@@ -456,7 +456,7 @@ async function selectWaveformTimeSpan(): Promise<void> {
 async function openSettings(): Promise<void> {
   const configuration = vscode.workspace.getConfiguration('universalDictate');
   const currentLanguage = normalizeWhisperLanguage(
-    configuration.get<string>('language', 'auto')
+    configuration.get<string>('language', 'en')
   );
   const currentVisualization = getConfiguredVisualization();
   const currentOverlaySize = getConfiguredOverlaySize();
@@ -582,7 +582,7 @@ export function activate(context: vscode.ExtensionContext): void {
         : String(declaredKinds ?? 'unspecified');
       const remoteName = vscode.env.remoteName ?? 'none';
       const configuredLanguage = normalizeWhisperLanguage(
-        vscode.workspace.getConfiguration('universalDictate').get<string>('language', 'auto')
+        vscode.workspace.getConfiguration('universalDictate').get<string>('language', 'en')
       );
 
       await vscode.window.showInformationMessage(

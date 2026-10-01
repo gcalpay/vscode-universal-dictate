@@ -21,3 +21,26 @@ resources/bin/windows-fast-paste.exe
 resources/bin/windows-clipboard-paste.exe
 dist/core/clipboard-protocol.js
 .deps-unicode-input-test
+
+# Upstream archive examples and tests are not part of the extension runtime.
+resources/whisper/bench.exe
+resources/whisper/command.exe
+resources/whisper/main.exe
+resources/whisper/parakeet-cli.exe
+resources/whisper/parakeet-quantize.exe
+resources/whisper/stream.exe
+resources/whisper/test-common-utf8.exe
+resources/whisper/test-parakeet-full-diffusion.exe
+resources/whisper/test-parakeet-full-gb1.exe
+resources/whisper/test-parakeet-full-jfk.exe
+resources/whisper/test-parakeet.exe
+resources/whisper/test-vad-full.exe
+resources/whisper/test-vad.exe
+resources/whisper/wchess.exe
+resources/whisper/whisper-bench.exe
+resources/whisper/whisper-command.exe
+resources/whisper/whisper-lsp.exe
+resources/whisper/whisper-quantize.exe
+resources/whisper/whisper-stream.exe
+resources/whisper/whisper-talk-llama.exe
+resources/whisper/whisper-vad-speech-segments.exe

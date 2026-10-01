@@ -43,7 +43,7 @@ export async function transcribe(
   sessionLanguage?: string
 ): Promise<string> {
   const configuration = vscode.workspace.getConfiguration('universalDictate');
-  const language = normalizeWhisperLanguage(sessionLanguage ?? configuration.get<string>('language', 'auto'));
+  const language = normalizeWhisperLanguage(sessionLanguage ?? configuration.get<string>('language', 'en'));
   return await getRuntime(context).transcribe(audioPath, language);
 }
 

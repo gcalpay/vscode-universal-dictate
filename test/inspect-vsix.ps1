@@ -58,8 +58,9 @@ try {
         Assert-Valid ($name -notmatch '(^/|\\|(^|/)\.\.(/|$))') "unsafe archive path $name"
         Assert-Valid ($name -notmatch '^extension/(\.git|\.github|\.vscode|\.deps|docs|native|test|src|node_modules)/') "development directory packaged: $name"
         Assert-Valid ($name -notmatch '(^|/)(AGENTS\.md|tsconfig\.json|\.gitignore|windows-fast-paste\.exe|windows-clipboard-paste\.exe|clipboard-protocol\.js)$') "development/legacy file packaged: $name"
-        Assert-Valid ($name -notmatch '\.(ts|map|obj|lib|exp|pdb|vsix)$') "source/debug/build file packaged: $name"
+        Assert-Valid ($name -notmatch '\.(ts|map|obj|lib|exp|pdb|vsix|ttf|otf|woff|woff2)$') "source/debug/build file packaged: $name"
         Assert-Valid ($name -notmatch '(?i)(^|/)[^/]*-test\.exe$') "test executable packaged: $name"
+        Assert-Valid ($name -notmatch '^extension/resources/whisper/.*\.exe$' -or $name -match '^extension/resources/whisper/whisper-(cli|server)\.exe$') "unused upstream executable packaged: $name"
     }
 
     $manifest = Read-EntryText 'extension/package.json' | ConvertFrom-Json -AsHashtable
@@ -68,6 +69,7 @@ try {
     }
     Assert-Valid ($manifest.engines.vscode -eq $source.engines.vscode) 'VS Code engine range differs from source'
     Assert-Valid (@($manifest.extensionKind).Count -eq 1 -and $manifest.extensionKind[0] -eq 'ui') 'extension must run in the UI host'
+    Assert-Valid ($manifest.contributes.configuration.properties.'universalDictate.language'.default -eq 'en') 'English must be the default language'
     Assert-Valid ($manifest.contributes.configuration.properties.'universalDictate.overlaySize'.default -eq 'medium') 'Medium overlay is not the default'
     Assert-Valid ($manifest.contributes.configuration.properties.'universalDictate.overwriteClipboard'.default -eq $false) 'Overwrite clipboard must default Off'
     Assert-Valid ($manifest.contributes.configuration.properties.'universalDictate.livePreview'.default -eq $false) 'Live preview must default Off'
@@ -91,6 +93,21 @@ try {
     [void](Get-Entry ('extension/' + $source.main.TrimStart([char[]]'./')))
 
     $hashes = [ordered]@{}
+    foreach ($relative in @('media/status-bar-controls.webp', 'media/settings-menu.webp', 'media/live-preview.webp', 'media/enhanced-overlay.webp', 'media/icon.png')) {
+        $entryName = "extension/$relative"
+        $actual = Get-EntryHash $entryName
+        Assert-Valid ($actual -eq (Get-FileHash -LiteralPath (Join-Path $root $relative) -Algorithm SHA256).Hash.ToLowerInvariant()) "stale release image: $relative"
+        $hashes[$entryName] = $actual
+    }
+    Assert-Valid ($null -eq $zip.GetEntry('extension/media/universal-dictate-overview.webp')) 'obsolete overview image packaged'
+    $readme = Read-EntryText 'extension/readme.md'
+    $changelog = Read-EntryText 'extension/changelog.md'
+    foreach ($image in @('status-bar-controls.webp', 'settings-menu.webp', 'live-preview.webp', 'enhanced-overlay.webp')) {
+        Assert-Valid ($readme.Contains("media/$image")) "README screenshot missing: $image"
+    }
+    Assert-Valid ($changelog.Contains("## $($manifest.version)")) 'current version missing from changelog'
+    $hashes['extension/readme.md'] = Get-EntryHash 'extension/readme.md'
+    $hashes['extension/changelog.md'] = Get-EntryHash 'extension/changelog.md'
     $compiled = @(Get-ChildItem -LiteralPath (Join-Path $root 'dist') -Filter '*.js' -File -Recurse)
     Assert-Valid ($compiled.Count -gt 0) 'compiled extension modules missing'
     foreach ($file in $compiled) {

@@ -1,5 +1,31 @@
 # Changelog
 
+## 1.0.0
+
+### Added
+
+- Optional **Live preview** in the recording overlay, disabled by default. Recent provisional words appear while speaking; Stop transcribes the complete recording and inserts the final transcript once.
+- **Small, Medium and Large** overlay sizes, with Medium as the default, plus improved text layout and display-scaling support.
+- **Overwrite clipboard**, disabled by default, to keep a manual-paste backup of the final transcript.
+- **Copy Last Transcript** in the Command Palette to recover the latest successful final transcript during the current extension session.
+
+### Changed
+
+- Automatic insertion now uses direct Unicode input instead of temporarily replacing the clipboard. With Overwrite clipboard Off, automatic dictation leaves existing clipboard contents untouched.
+- **English is now the default language.** Auto-detect and all 99 languages remain selectable. Explicitly saved settings are preserved; users who relied on the previous default without saving a choice will now use English.
+- Updated screenshots, settings documentation and the Marketplace overview.
+
+### Fixed
+
+- Improved recording/session cleanup, cancellation, repeated Stop handling and rejection of stale preview results.
+- Improved multilingual preview shaping, clipping and recent-line display without enlarging the selected overlay preset.
+
+### Notes
+
+- Local/offline recognition after the initial model download, Windows/Remote - WSL support and no automatic submission remain unchanged.
+- Live preview adds CPU work and recognition delay; it is not instantaneous captioning or full transcript history.
+- The status-bar focus limitation in Issue #38 remains. Keyboard/overlay controls and clipboard recovery are workarounds, not a focus-preservation fix.
+
 ## 0.1.5
 
 Configurable Enhanced waveform time span.

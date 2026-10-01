@@ -174,7 +174,7 @@ jobs:
           }
 
       - name: Measure real Node preview adapter (synthetic speech, no microphone)
-        if: github.head_ref == 'feat/live-transcript-preview'
+        if: github.head_ref == 'feat/live-transcript-preview' || github.head_ref == 'release/next'
         shell: pwsh
         timeout-minutes: 6
         run: |
@@ -196,7 +196,7 @@ jobs:
           exit $LASTEXITCODE
 
       - name: Upload Node preview timing evidence
-        if: ${{ always() && github.head_ref == 'feat/live-transcript-preview' }}
+        if: ${{ always() && (github.head_ref == 'feat/live-transcript-preview' || github.head_ref == 'release/next') }}
         uses: actions/upload-artifact@v7
         with:
           name: m3-preview-adapter-results
@@ -205,7 +205,16 @@ jobs:
           retention-days: 14
 
       - name: Package win32-x64 VSIX
-        run: npm run package:vsix
+        shell: pwsh
+        run: |
+          # Pin README images/links to the actual built commit, not moving HEAD.
+          # This also makes the unpublished candidate's new screenshots viewable.
+          $sourceCommit = (git rev-parse HEAD).Trim()
+          if ($LASTEXITCODE -ne 0 -or $sourceCommit -notmatch '^[0-9a-f]{40}$') {
+            throw 'Cannot determine package source commit'
+          }
+          npm run package:vsix -- --baseContentUrl "https://github.com/gcalpay/vscode-universal-dictate/blob/$sourceCommit/" --baseImagesUrl "https://raw.githubusercontent.com/gcalpay/vscode-universal-dictate/$sourceCommit/"
+          exit $LASTEXITCODE
 
       - name: Inspect packaged VSIX contents and build identity
         shell: pwsh

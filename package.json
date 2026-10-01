@@ -1,8 +1,8 @@
 {
   "name": "vscode-universal-dictate",
   "displayName": "Universal Dictate",
-  "description": "Local, offline dictation for VS Code on Windows. Dictate into editors and agent/chat prompts such as Codex, then review the transcript before sending. 99 Whisper languages. Remote-WSL.",
-  "version": "0.1.5",
+  "description": "Local, offline dictation for VS Code on Windows and Remote - WSL. 99 languages, optional live transcript preview, clipboard recovery, and no automatic sending.",
+  "version": "1.0.0",
   "license": "MIT",
   "publisher": "gcalpay",
   "icon": "media/icon.png",
@@ -101,8 +101,8 @@
       "properties": {
         "universalDictate.language": {
           "type": "string",
-          "default": "auto",
-          "description": "Whisper language code used for local transcription. Default: auto. Use 'Universal Dictate: Select Language' to choose from all 99 languages supported by the bundled multilingual base model."
+          "default": "en",
+          "description": "Whisper language code used for local transcription. Default: English (`en`). Use 'Universal Dictate: Select Language' to choose Auto-detect or any of the 99 languages supported by the bundled multilingual base model."
         },
         "universalDictate.visualization": {
           "type": "string",
