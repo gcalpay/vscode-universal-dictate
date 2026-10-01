@@ -83,7 +83,7 @@ int main(int argc,char** argv){
         requireCapture(std::all_of(pcm.begin(),pcm.begin()+1600,[](auto x){return x==1111;}),"first speech retained");
         requireCapture(std::all_of(pcm.begin()+1600,pcm.end(),[](auto x){return x==-2222;}),"resumed speech retained; paused sentinel absent");
         char name[]="test";char* args[]{name};requireCapture(parseWaveformTimeSpanMs(1,args)==10000,"native ten-second default");
-        requireCapture(parseButtonStyle(1,args)==universal_dictate::ButtonStyle::Text,"native text default");
+        requireCapture(parseOverlaySize(1,args)==OverlaySize::Medium,"native Medium overlay default");
         verifyWaveform(path);
         std::cout<<"Production WAV/preview/waveform pause and five-span RMS checks passed; synthetic PCM, no microphone\n";return 0;
     }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}
