@@ -1,0 +1,31 @@
+name: M7 waveform source snapshot (temporary)
+
+on:
+  pull_request:
+    paths: ['.github/workflows/m7-waveform-snapshot.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  snapshot:
+    if: github.repository == 'gcalpay/vscode-universal-dictate' && github.head_ref == 'feat/pause-resume-controls' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v7
+      - name: Archive the checked-out source without credentials or build files
+        shell: bash
+        run: |
+          mkdir -p /tmp/m7-source
+          git rev-parse HEAD > /tmp/m7-source/source-sha.txt
+          git rev-parse HEAD^{tree} > /tmp/m7-source/tree-sha.txt
+          git archive --format=tar HEAD > /tmp/m7-source/source.tar
+          cd /tmp/m7-source
+          sha256sum source.tar > SHA256SUMS
+      - uses: actions/upload-artifact@v7
+        with:
+          name: m7-waveform-source
+          path: /tmp/m7-source/*
+          retention-days: 7
+          if-no-files-found: error
