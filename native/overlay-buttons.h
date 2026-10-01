@@ -4,6 +4,13 @@
 #include "overlay-layout.h"
 #pragma comment(lib, "comctl32.lib")
 
+// The current TOOLINFOW layout requires the v6 common-controls assembly.
+// Linking comctl32.lib alone leaves an unmanifested executable on v5, where
+// TTM_ADDTOOLW can reject the structure and silently leave every label absent.
+// Embed the dependency in both the recorder and tests using this header; v6
+// is supplied by Windows, so this does not add a download or bundled DLL.
+#pragma comment(linker, "\"/manifestdependency:type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
+
 namespace universal_dictate {
 enum class ButtonStyle { Text, Symbols };
 enum class ButtonSymbol { Insert, Pause, Resume, Discard };
@@ -56,7 +63,12 @@ public:
             auto tool = info(id);
             tool.uFlags = TTF_SUBCLASS;
             tool.lpszText = const_cast<wchar_t*>(label(id, false));
-            SendMessageW(window_, TTM_ADDTOOLW, 0, reinterpret_cast<LPARAM>(&tool));
+            if (!SendMessageW(window_, TTM_ADDTOOLW, 0, reinterpret_cast<LPARAM>(&tool))) {
+                // A window with missing tools is not a usable tooltip control.
+                // Release partial registration rather than reporting it as ready.
+                reset();
+                return;
+            }
         }
         update(layout, false);
     }
