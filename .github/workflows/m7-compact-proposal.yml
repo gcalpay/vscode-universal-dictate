@@ -1,0 +1,105 @@
+name: M7 verified tree transfer (temporary)
+on:
+  pull_request:
+    paths: ['.github/workflows/m7-compact-proposal.yml']
+permissions: {}
+jobs:
+  propose:
+    if: github.repository == 'gcalpay/vscode-universal-dictate' && github.event.pull_request.number == 54 && github.head_ref == 'feat/pause-resume-controls' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Verify local patch and create unattached tree only
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import base64, gzip, hashlib, json, os, pathlib, subprocess, urllib.request
+          repo = 'gcalpay/vscode-universal-dictate'
+          parent = 'bd192592e10a69cdc07fe1b676f949f6cf4f11d9'
+          expected_tree = '28afbda62e2eb35f38241ab3ed7d146416d65094'
+          expected_patch = '2cfdadc3bb3789aa2d11d444541fe78a54c98cdfedaaf922980cbdae52464de7'
+          def git(*args):
+              return subprocess.check_output(['git', *args])
+          def api(path, data=None):
+              request = urllib.request.Request('https://api.github.com/repos/' + repo + path,
+                  data=None if data is None else json.dumps(data).encode(),
+                  headers={'Authorization': 'Bearer ' + os.environ['GH_TOKEN'],
+                           'Accept': 'application/vnd.github+json',
+                           'Content-Type': 'application/json'})
+              with urllib.request.urlopen(request, timeout=30) as response:
+                  return json.load(response)
+          if git('rev-parse', 'HEAD^').decode().strip() != parent:
+              raise RuntimeError('Source parent moved; refusing transfer')
+          blobs = [
+              'c5b288965cbd57d54d4952656157e9fbbfcdbfbc',
+              '4574ca7a58f93040e9212815909e9057110643d1',
+              '5f2bf0a4ef01aa7e154666e834a7f07483e18267',
+              '5a8c93842918e5af8891258c76f593d409a72610',
+              '422ff91e31922f3091b0275c78671e9638900d31',
+              'c1299abca70098ff09935cef4894c954e4abd9da',
+              'fa725ab44d3614d0bfb9b7d566d36896d6a115e1',
+              '8b6522ddbd39d4581a60018ed571abae0a208acc',
+              'ed1235984d1ea398486c2e9a55a76c1d7b366871',
+              '9c7b031e2f3a87bec50aec686da460ba765c93ac',
+              'e2e4f9054ab21bd9420fbb4fd3c9e5ae40d01e00',
+          ]
+          compressed = bytearray()
+          for sha in blobs:
+              payload = api('/git/blobs/' + sha)
+              content = base64.b64decode(payload['content'])
+              actual = hashlib.sha1(('blob ' + str(len(content)) + '\0').encode() + content).hexdigest()
+              if actual != sha:
+                  raise RuntimeError('Transfer blob identity mismatch')
+              compressed.extend(content)
+          patch = gzip.decompress(compressed)
+          if len(patch) != 57229 or hashlib.sha256(patch).hexdigest() != expected_patch:
+              raise RuntimeError('Local patch identity mismatch')
+          patch_file = pathlib.Path(os.environ['RUNNER_TEMP']) / 'compact.patch'
+          patch_file.write_bytes(patch)
+          subprocess.run(['git', 'apply', '--unidiff-zero', '--index', '--check', str(patch_file)], check=True)
+          subprocess.run(['git', 'apply', '--unidiff-zero', '--index', str(patch_file)], check=True)
+          subprocess.run(['git', 'rm', '--', '.github/workflows/m7-compact-proposal.yml'], check=True)
+          tree = git('write-tree').decode().strip()
+          if tree != expected_tree:
+              raise RuntimeError('Staged source differs from locally tested tree: ' + tree)
+          entries = []
+          for raw_path in git('diff', '--cached', '--name-only', '-z').split(b'\0'):
+              if not raw_path:
+                  continue
+              path = raw_path.decode('utf-8')
+              entry = {'path': path, 'mode': '100644', 'type': 'blob'}
+              staged = git('ls-files', '--stage', '--', path)
+              if not staged:
+                  entry['sha'] = None
+              else:
+                  if not staged.startswith(b'100644 '):
+                      raise RuntimeError('Unexpected file mode')
+                  entry['content'] = git('show', ':' + path).decode('utf-8')
+              entries.append(entry)
+          if len(entries) != 25:
+              raise RuntimeError('Unexpected transfer path count')
+          result = api('/git/trees', {'base_tree': git('rev-parse', 'HEAD^{tree}').decode().strip(), 'tree': entries})
+          if result['sha'] != expected_tree:
+              raise RuntimeError('GitHub tree differs from local tree')
+          report = {'checkout': git('rev-parse', 'HEAD').decode().strip(),
+                    'parent': parent, 'tree': result['sha'], 'patch_sha256': expected_patch,
+                    'paths': [entry['path'] for entry in entries],
+                    'note': 'Unattached tree only. No ref, merge, release or publication changed.'}
+          output = pathlib.Path(os.environ['RUNNER_TEMP']) / 'compact-proposal.json'
+          output.write_text(json.dumps(report, indent=2))
+          print(json.dumps(report, indent=2))
+          PY
+      - uses: actions/upload-artifact@v7
+        with:
+          name: m7-compact-proposal
+          path: ${{ runner.temp }}/compact-proposal.json
+          if-no-files-found: error
+          retention-days: 7
