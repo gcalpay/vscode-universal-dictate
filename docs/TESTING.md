@@ -25,7 +25,7 @@ For a clean configuration, verify:
 - Visualization: Enhanced overlay
 - Overlay size: Medium
 - Waveform time span: 10 seconds
-- Overlay button style: Text
+- Overlay controls: Symbols only (no style setting)
 - Overwrite clipboard: Off
 - Live preview: Off
 
@@ -92,7 +92,7 @@ Turn Live preview **On** with Enhanced overlay or Both and verify:
 
 ## Pause/Resume acceptance
 
-For Text and Symbols, with preview Off and On, test each size. Dictate a first
+With symbol controls and preview Off and On, test each size. Dictate a first
 sentence, Pause, deliberately speak an unrelated sentence while Paused, Resume,
 and dictate a final sentence. Only the first and final sentence should be inserted,
 exactly once, after Stop. The paused period should not lengthen the recorded audio.
@@ -129,7 +129,7 @@ Diagnostics should reflect the effective preview and clipboard settings.
 For the exact final VSIX verify:
 
 - version/publisher/extension identity and win32-x64 target;
-- English / Medium / Live preview Off / Text buttons / 10-second waveform defaults;
+- English / Medium / Live preview Off / symbol controls / 10-second waveform defaults;
 - all four release screenshots and icon match source;
 - obsolete overview image is absent;
 - only `windows-text-input.exe`, `universal-dictate-recorder.exe`,
@@ -154,5 +154,10 @@ show distinct heights and should not rescale old samples or the second quiet par
 Pause should freeze both waveform and preview. A short one-line hypothesis should
 sit directly beneath the waveform instead of being centered in a tall blank area;
 long preview text should show one complete line in Small or up to two in Medium/Large.
-Check 100/125/150/200% scaling where available; buttons must retain their geometry.
+Check 100/125/150/200% scaling where available; symbol ink, clicks and hover help
+must stay aligned. Preview Off uses a shorter window than Preview On. Pause/Resume
+and changing provisional text must not resize the active window. Medium remains the
+default; saved size/span/preview/clipboard values must not be reset.
+The gear has six entries, including Live preview, and no Text/Symbols selector.
+The accepted six-entry menu screenshot stays unchanged.
 Automated RMS/PCM/renderer evidence does not replace this microphone-level check.

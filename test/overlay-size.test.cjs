@@ -37,7 +37,7 @@ test('enhanced recorder arguments propagate overlay size', () => {
       '--waveform-timespan-ms',
       '3000',
       '--overlay-size',
-      'small', '--button-style', 'text'
+      'small'
     ]
   );
 });
@@ -59,7 +59,7 @@ test('enhanced recorder arguments validate invalid size and span', () => {
       '--waveform-timespan-ms',
       '10000',
       '--overlay-size',
-      'medium', '--button-style', 'text'
+      'medium'
     ]
   );
 });

@@ -12,7 +12,7 @@ The user authorized implementation, corresponding Conventional Commits, tests,
 Windows builds and a VSIX for review. **Do not merge, tag or publish this milestone
 until the user accepts the finished Windows candidate and authorizes release.**
 
-Scope: Pause/Resume recording; a middle overlay button; Text (default) or Symbols
+Scope: Pause/Resume recording; a middle overlay button; compact symbol-only
 controls; green Insert, amber Pause/Resume, red Discard; a ten-second waveform
 history default; brief README clarification for compatible external Windows inputs.
 No native Linux/macOS support, model selection/download, global hotkey, translation
@@ -20,10 +20,12 @@ feature or Issue #38 focus workaround is part of this milestone.
 
 ## Current visual correction
 
-The user accepted Pause/Resume in candidate `8778fcd`. Correct only the waveform
-height/preview spacing and fixed-scale RMS amplitude response on this same branch;
-keep the accepted controls and recording/insertion lifecycle unchanged. See the
-waveform correction section in M7. Deliver a new checked Windows VSIX before release.
+The user accepted Pause/Resume in `8778fcd` and tested the waveform correction in
+`1dfaf3c`. Current authorization: narrow the symbol buttons, crop unused vertical
+padding and remove the unreleased Text/Symbols choice. Keep Medium default, fixed
+RMS scaling and recording/insertion lifecycle. Six gear entries remain, including
+Live preview. The existing six-entry menu screenshot can stay; overlay captures
+remain historical until replacements are accepted. Deliver a checked Windows VSIX.
 
 ## Invariants and validation
 
@@ -35,8 +37,9 @@ waveform correction section in M7. Deliver a new checked Windows VSIX before rel
   while paused or transitioning. No stale acknowledgement may revive a session.
 - Suspend preview scheduling and reject in-flight results across Pause/Resume.
   Preserve the single active inference slot, full accepted audio and final insertion.
-- Keep overlay dimensions/DPI alignment and non-activation. Use vector symbols and
-  descriptive hover labels, not bundled fonts or color alone. Default style is Text.
+- Keep preset widths, DPI alignment and non-activation. Use compact vector symbols
+  and descriptive hover labels, not bundled fonts or color alone. Choose the compact
+  or preview-enabled height once at startup; Pause/Resume must not resize it.
 - Preserve explicit saved preferences. Only an absent waveform setting changes to
   ten seconds. English / Medium / Live preview Off / Overwrite clipboard Off /
   Enhanced overlay remain the other defaults.

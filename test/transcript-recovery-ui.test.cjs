@@ -77,7 +77,7 @@ test('disposed controller refuses a retained command callback', async () => {
 });
 test('fifth gear entry is Overwrite clipboard Off, with exactly two status-bar items', async () => {
   const h = extensionFixture(); await h.commands.get('universalDictate.openSettings')();
-  assert.equal(h.calls.status.length, 2); assert.equal(h.calls.menus[0].length, 7);
+  assert.equal(h.calls.status.length, 2); assert.equal(h.calls.menus[0].length, 6);
   assert.equal(h.calls.menus[0][4].action, 'overwriteClipboard'); assert.match(h.calls.menus[0][4].description, /Off/);
   assert.ok(!JSON.stringify(h.calls.menus).includes('Last transcript'));
   assert.equal(manifest.contributes.configuration.properties['universalDictate.overwriteClipboard'].default, false);
@@ -158,34 +158,48 @@ test('English is the manifest and runtime default language', async () => {
   h.cleanup();
 });
 
-test('button style is the seventh setting and defaults to Text; ten-second waveform default', async () => {
-  const h=extensionFixture();await h.commands.get('universalDictate.openSettings')();
-  assert.equal(h.calls.menus[0][6].action,'buttonStyle');assert.match(h.calls.menus[0][6].description,/Text/);
-  assert.equal(manifest.contributes.configuration.properties['universalDictate.overlayButtonStyle'].default,'text');
-  assert.equal(manifest.contributes.configuration.properties['universalDictate.waveformTimeSpanSeconds'].default,10);
-  await h.options.prepare();await h.options.startRecorder(()=>{},new AbortController().signal);
-  assert.equal(h.calls.recorder[4],10);assert.equal(h.calls.recorder[8],'text');assert.deepEqual(h.calls.updates,[]);h.cleanup();
+test('six settings retain Live preview, Medium and ten-second defaults without a style selector', async () => {
+  const h = extensionFixture();
+  await h.commands.get('universalDictate.openSettings')();
+  assert.deepEqual(Array.from(h.calls.menus[0], item => item.action),
+    ['language', 'visualization', 'overlaySize', 'waveformTimeSpan', 'overwriteClipboard', 'livePreview']);
+  const properties = manifest.contributes.configuration.properties;
+  assert.equal(Object.keys(properties).length, 6);
+  assert.equal(properties['universalDictate.overlayButtonStyle'], undefined);
+  assert.equal(properties['universalDictate.overlaySize'].default, 'medium');
+  assert.equal(properties['universalDictate.waveformTimeSpanSeconds'].default, 10);
+  await h.options.prepare();
+  await h.options.startRecorder(() => {}, new AbortController().signal);
+  assert.equal(h.calls.recorder[4], 10); assert.equal(h.calls.recorder[5], 'medium');
+  assert.equal(h.calls.recorder.length, 8); assert.deepEqual(h.calls.updates, []);
+  h.cleanup();
 });
 
-test('button style toggles without a submenu or clipboard changes', async () => {
-  const h=extensionFixture();h.vscode.window.showQuickPick=async items=>items[6];
-  await h.commands.get('universalDictate.openSettings')();assert.equal(h.config.overlayButtonStyle,'symbols');
-  await h.commands.get('universalDictate.openSettings')();assert.equal(h.config.overlayButtonStyle,'text');
-  assert.deepEqual(h.calls.copies,[]);h.cleanup();
+test('retired test-candidate style preferences are not forwarded, deleted or rewritten', async () => {
+  for (const style of ['text', 'symbols', 'emoji']) {
+    const h = extensionFixture(); h.config.overlayButtonStyle = style;
+    await h.commands.get('universalDictate.openSettings')();
+    await h.options.prepare();
+    await h.options.startRecorder(() => {}, new AbortController().signal);
+    assert.equal(h.calls.recorder.length, 8);
+    assert.equal(h.config.overlayButtonStyle, style);
+    assert.deepEqual(h.calls.updates, []); assert.deepEqual(h.calls.copies, []);
+    h.cleanup();
+  }
 });
 
 test('explicit layout preferences survive preparation and are session-stable', async () => {
   const h=extensionFixture();Object.assign(h.config,{overlayButtonStyle:'symbols',waveformTimeSpanSeconds:1,overlaySize:'small',livePreview:true});
   await h.options.prepare();Object.assign(h.config,{overlayButtonStyle:'text',waveformTimeSpanSeconds:20,overlaySize:'large',livePreview:false});
   await h.options.startRecorder(()=>{},new AbortController().signal);
-  assert.equal(h.calls.recorder[4],1);assert.equal(h.calls.recorder[5],'small');assert.equal(h.calls.recorder[7],true);assert.equal(h.calls.recorder[8],'symbols');
+  assert.equal(h.calls.recorder[4],1);assert.equal(h.calls.recorder[5],'small');assert.equal(h.calls.recorder[7],true);assert.equal(h.calls.recorder.length,8);
   assert.deepEqual(h.calls.updates,[]);h.cleanup();
 });
 
 test('invalid preferences fall back; pause command leaves Stop available and requires recording', async () => {
   const h=extensionFixture();h.config.overlayButtonStyle='emoji';h.config.waveformTimeSpanSeconds='10';
   await h.options.prepare();await h.options.startRecorder(()=>{},new AbortController().signal);
-  assert.equal(h.calls.recorder[4],10);assert.equal(h.calls.recorder[8],'text');
+  assert.equal(h.calls.recorder[4],10);assert.equal(h.calls.recorder.length,8);
   await h.commands.get('universalDictate.pauseResume')();assert.equal(h.calls.pauses,1);
   const binding=manifest.contributes.keybindings.find(x=>x.command==='universalDictate.pauseResume');
   assert.equal(binding.key,'ctrl+alt+p');assert.match(binding.when,/universalDictate.recording/);

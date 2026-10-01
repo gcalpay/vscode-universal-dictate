@@ -5,8 +5,7 @@ import * as vscode from 'vscode';
 import {
   CoreRecorderSession,
   RecorderAction,
-  RecorderOverlayStyle,
-  type OverlayButtonStyle
+  RecorderOverlayStyle
 } from './core/recorder';
 import type { OverlaySize } from './core/overlay-size';
 import type { PreviewLease } from './core/preview-audio';
@@ -43,8 +42,7 @@ export class RecorderSession {
     waveformTimeSpanSeconds = 10,
     overlaySize: OverlaySize = 'medium',
     signal?: AbortSignal,
-    livePreview = false,
-    overlayButtonStyle: OverlayButtonStyle = 'text'
+    livePreview = false
   ): Promise<RecorderSession> {
     signal?.throwIfAborted();
     const recorderPath = getRecorderPath(context);
@@ -66,7 +64,6 @@ export class RecorderSession {
         overlayStyle,
         waveformTimeSpanSeconds,
         overlaySize,
-        overlayButtonStyle,
         signal,
         previewSessionId: livePreview && showOverlay && overlayStyle === 'enhanced' ? sessionId : undefined
       },

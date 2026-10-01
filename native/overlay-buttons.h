@@ -12,7 +12,6 @@
 #pragma comment(linker, "\"/manifestdependency:type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
 
 namespace universal_dictate {
-enum class ButtonStyle { Text, Symbols };
 enum class ButtonSymbol { Insert, Pause, Resume, Discard };
 
 inline void drawButtonSymbol(HDC dc, const RECT& box, ButtonSymbol symbol, UINT dpi, COLORREF color) {

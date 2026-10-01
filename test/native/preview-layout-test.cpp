@@ -11,7 +11,7 @@ int main() {
     unsigned int cases = 0;
     for (auto size : {OverlaySize::Small, OverlaySize::Medium, OverlaySize::Large}) {
         for (unsigned int dpi : {0U, 96U, 120U, 144U, 168U, 192U, 240U, 288U}) {
-            const auto normal = calculateEnhancedOverlayLayout(size, dpi);
+            const auto normal = calculateEnhancedOverlayLayout(size, dpi, true);
             const auto preview = calculateTextLayout(size, dpi);
             const std::array<OverlayRect, 4> boxes{preview.title, preview.label, preview.waveform, preview.text};
             for (auto box : boxes) {
@@ -23,7 +23,7 @@ int main() {
             assert(preview.text.left > normal.indicatorCenterX + normal.indicatorOuterRadius);
             assert(preview.fontHeight >= scaleLogical(14, dpi));
             assert(preview.maxLines == (size == OverlaySize::Small ? 1U : 2U));
-            const int minimumWaveform = size == OverlaySize::Small ? 13 : size == OverlaySize::Medium ? 19 : 36;
+            const int minimumWaveform = size == OverlaySize::Small ? 16 : size == OverlaySize::Medium ? 22 : 42;
             assert(preview.waveform.bottom - preview.waveform.top >= scaleLogical(minimumWaveform, dpi) - 1);
             assert(preview.text.top - preview.waveform.bottom <= scaleLogical(3, dpi) + 1);
             ++cases;

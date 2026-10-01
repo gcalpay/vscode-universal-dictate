@@ -47,17 +47,18 @@ test('pause acknowledgement timeout is bounded and clears its timer', async () =
   timeout.run(); await assert.rejects(pending,/not confirmed/); assert.equal(timers.size,0); channel.stop();
 });
 
-test('button style validates to text and waveform defaults to ten seconds without overriding explicit values', () => {
-  for (const style of [undefined,'text','symbols','invalid',true]) {
-    const args=buildRecorderArguments({recorderPath:'r.exe',outputPath:'a.wav',overlayStyle:'enhanced',overlayButtonStyle:style});
-    assert.equal(args[args.indexOf('--button-style')+1],style==='symbols'?'symbols':'text');
-    assert.equal(args[args.indexOf('--waveform-timespan-ms')+1],'10000');
+test('symbol-only arguments ignore retired style values and preserve waveform defaults', () => {
+  for (const style of [undefined, 'text', 'symbols', 'emoji']) {
+    const args = buildRecorderArguments({recorderPath: 'r.exe', outputPath: 'a.wav', overlayStyle: 'enhanced', overlayButtonStyle: style});
+    assert.equal(args.includes('--button-style'), false);
+    assert.equal(args[args.indexOf('--waveform-timespan-ms') + 1], '10000');
+    assert.equal(args[args.indexOf('--overlay-size') + 1], 'medium');
   }
-  for(const seconds of [1,3,5,10,20]) {
-    const args=buildRecorderArguments({recorderPath:'r.exe',outputPath:'a.wav',overlayStyle:'enhanced',waveformTimeSpanSeconds:seconds});
-    assert.equal(args[args.indexOf('--waveform-timespan-ms')+1],String(seconds*1000));
+  for (const span of [1, 3, 5, 10, 20]) {
+    const args = buildRecorderArguments({recorderPath: 'r.exe', outputPath: 'a.wav', overlayStyle: 'enhanced', waveformTimeSpanSeconds: span});
+    assert.equal(args[args.indexOf('--waveform-timespan-ms') + 1], String(span * 1000));
   }
-  assert.deepEqual(buildRecorderArguments({recorderPath:'r.exe',outputPath:'a.wav',showOverlay:false,overlayButtonStyle:'symbols'}),['--output','a.wav','--no-overlay']);
+  assert.deepEqual(buildRecorderArguments({recorderPath: 'r.exe', outputPath: 'a.wav', showOverlay: false}), ['--output', 'a.wav', '--no-overlay']);
 });
 
 async function fixture(t, overrides={}) {

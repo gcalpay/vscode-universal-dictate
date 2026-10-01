@@ -11,7 +11,7 @@ M1/M2/M3/M6 are complete in the accepted 1.0.0 merge
 Marketplace publication. M4 remains skipped and M5 parked; Issue #38 stays open.
 
 Current work: `feat/pause-resume-controls` / PR #54, targeting 1.1.0. Scope is
-Pause/Resume, three semantic overlay buttons, optional Symbols, ten-second waveform
+Pause/Resume, compact symbol-only overlay buttons, efficient vertical layout, ten-second waveform
 default and an external-Windows-input README clarification. See
 [M7_PAUSE_RESUME.md](M7_PAUSE_RESUME.md) for semantics, validation and review gates.
 Implementation/builds are authorized. Merge and publication require user acceptance

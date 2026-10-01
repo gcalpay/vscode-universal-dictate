@@ -4,7 +4,7 @@
 
 **Open source · MIT · [GitHub](https://github.com/gcalpay/vscode-universal-dictate)**
 
-*Screenshots show the 1.0 interface. The current recording controls and defaults are described below.*
+*Overlay screenshots show the earlier interface. The current symbol controls and defaults are described below.*
 
 ![Universal Dictate status-bar controls](media/status-bar-controls.webp)
 
@@ -34,9 +34,8 @@ Open the settings gear next to **Dictate**, or find **Universal Dictate** in VS 
 | **Waveform time span** | Show the latest 1, 3, 5, 10 or 20 seconds of accepted audio in the overlay waveform. This does not limit recording length. | **10 seconds** |
 | **Overwrite clipboard** | Also copy the final transcript to the clipboard, replacing its previous contents. Automatic insertion still uses direct text input. | **Off** |
 | **Live preview** | Show provisional text while speaking. Requires Enhanced overlay or Both. | **Off** |
-| **Overlay button style** | Text labels or symbols, with descriptive hover help. | **Text** |
 
-Change settings before starting a recording. Changes made during a recording apply to the next one. Saved choices take precedence over the defaults.
+Change settings before starting a recording. Changes made during a recording apply to the next one. Saved choices take precedence over the defaults. Medium is the default overlay size. With Live preview Off, the overlay is shorter; enabling preview reserves room for readable text without narrowing the waveform.
 
 ### Live preview
 
@@ -57,7 +56,7 @@ Preview and final transcription both run locally. Preview adds processing work a
 | Overlay: **Pause / Resume** | Pause or continue the same recording |
 | Overlay: **Discard** | Cancel and discard |
 
-The overlay buttons are **Insert / Pause (or Resume) / Discard**, colored green, amber and red. Symbols mode uses **✓ / Ⅱ (or ▶) / ✕**. The recording overlay does not take keyboard focus when clicked. Review the inserted text before sending it.
+The compact overlay buttons are **✓ Insert / Ⅱ Pause (or ▶ Resume) / ✕ Discard**, colored green, amber and red, with descriptive hover labels. The recording overlay does not take keyboard focus when clicked. Review the inserted text before sending it.
 
 ### Pause and resume
 

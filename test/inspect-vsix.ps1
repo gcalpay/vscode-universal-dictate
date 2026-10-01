@@ -74,7 +74,8 @@ try {
     Assert-Valid ($manifest.contributes.configuration.properties.'universalDictate.overwriteClipboard'.default -eq $false) 'Overwrite clipboard must default Off'
     Assert-Valid ($manifest.contributes.configuration.properties.'universalDictate.livePreview'.default -eq $false) 'Live preview must default Off'
     Assert-Valid ($manifest.contributes.configuration.properties.'universalDictate.waveformTimeSpanSeconds'.default -eq 10) 'Ten-second waveform must be the default'
-    Assert-Valid ($manifest.contributes.configuration.properties.'universalDictate.overlayButtonStyle'.default -eq 'text') 'Text buttons must be the default'
+    Assert-Valid ($manifest.contributes.configuration.properties.Count -eq 6) 'Six user settings expected'
+    Assert-Valid (-not $manifest.contributes.configuration.properties.ContainsKey('universalDictate.overlayButtonStyle')) 'Retired style selector packaged'
     foreach ($command in @('copyLastTranscript', 'pauseResume')) {
         $id = "universalDictate.$command"
         $commandEntries = @($manifest.contributes.commands | Where-Object { $_.command -eq $id })

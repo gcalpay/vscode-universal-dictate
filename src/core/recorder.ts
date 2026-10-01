@@ -15,7 +15,6 @@ const MIN_WAVEFORM_TIME_SPAN_SECONDS = 1;
 const MAX_WAVEFORM_TIME_SPAN_SECONDS = 20;
 
 export type RecorderAction = 'stop' | 'cancel' | 'pause' | 'resume';
-export type OverlayButtonStyle = 'text' | 'symbols';
 export type RecorderOverlayStyle = 'compact' | 'enhanced';
 
 export interface RecorderStartOptions {
@@ -27,7 +26,6 @@ export interface RecorderStartOptions {
   readonly overlayStyle?: RecorderOverlayStyle;
   readonly waveformTimeSpanSeconds?: number;
   readonly overlaySize?: OverlaySize | string;
-  readonly overlayButtonStyle?: OverlayButtonStyle | string;
 }
 
 /**
@@ -58,7 +56,6 @@ export function buildRecorderArguments(options: RecorderStartOptions): string[] 
 
     args.push('--waveform-timespan-ms', String(Math.round(waveformTimeSpanSeconds * 1000)));
     args.push('--overlay-size', normalizeOverlaySize(options.overlaySize));
-    args.push('--button-style', options.overlayButtonStyle === 'symbols' ? 'symbols' : 'text');
     if (options.previewSessionId && validPreviewSession(options.previewSessionId))
       args.push('--preview-session', options.previewSessionId);
   }

@@ -243,7 +243,6 @@ struct OverlayState {
     HFONT symbolFont = nullptr;
     HFONT enhancedTitleFont = nullptr;
     HFONT enhancedSubtitleFont = nullptr;
-    HFONT enhancedButtonFont = nullptr;
     ULONG_PTR gdiplusToken = 0;
     int levelMilli = 0;
     std::array<int, kSignalPoints> levelHistory{};
@@ -251,7 +250,6 @@ struct OverlayState {
     bool enhanced = false;
     bool paused = false;
     bool pausePending = false;
-    universal_dictate::ButtonStyle buttonStyle = universal_dictate::ButtonStyle::Text;
     universal_dictate::ButtonTooltips buttonTooltips;
     bool previewEnabled = false;
     std::wstring previewText;
@@ -501,7 +499,7 @@ void drawEnhancedWaveform(HDC dc) {
     const int width = std::max(1, right - left);
     const int maxAmplitude = g_overlay.previewEnabled
         ? std::max(1, (bottom - top) / 2 - scaleLogical(1, g_overlay.dpi))
-        : std::max(scaleLogical(6, g_overlay.dpi), (bottom - top) / 2 - scaleLogical(4, g_overlay.dpi));
+        : std::max(scaleLogical(6, g_overlay.dpi), (bottom - top) / 2 - scaleLogical(1, g_overlay.dpi));
 
     Gdiplus::Graphics graphics(dc);
     graphics.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
@@ -666,26 +664,15 @@ void drawEnhancedOverlay(HDC dc, const RECT& client) {
     const COLORREF fills[]{RGB(17, 54, 37), RGB(72, 51, 15), RGB(66, 25, 31)};
     const COLORREF borders[]{RGB(47, 151, 91), RGB(210, 155, 43), RGB(190, 78, 89)};
     const COLORREF inks[]{RGB(222, 245, 230), RGB(255, 235, 186), RGB(255, 225, 229)};
-    const wchar_t* labels[]{L"Insert", g_overlay.pausePending
-        ? (g_overlay.paused ? L"Resuming" : L"Pausing")
-        : (g_overlay.paused ? L"Resume" : L"Pause"), L"Discard"};
     using universal_dictate::ButtonSymbol;
     const ButtonSymbol symbols[]{ButtonSymbol::Insert,
         g_overlay.paused ? ButtonSymbol::Resume : ButtonSymbol::Pause, ButtonSymbol::Discard};
-    SelectObject(dc, g_overlay.enhancedButtonFont);
     for (int i = 0; i < 3; ++i) {
         const bool disabled = actionSent || (i == 1 && g_overlay.pausePending);
         drawAntialiasedRoundedButton(dc, boxes[i], disabled ? RGB(35,39,46) : fills[i],
             disabled ? RGB(71,75,82) : borders[i], disabled);
         const COLORREF ink = disabled ? RGB(150,150,150) : inks[i];
-        if (g_overlay.buttonStyle == universal_dictate::ButtonStyle::Symbols) {
-            universal_dictate::drawButtonSymbol(dc, boxes[i], symbols[i], g_overlay.dpi, ink);
-        } else {
-            SetTextColor(dc, ink);
-            RECT label = boxes[i];
-            DrawTextW(dc, labels[i], -1, &label,
-                DT_CENTER | DT_SINGLELINE | DT_VCENTER | DT_NOPREFIX);
-        }
+        universal_dictate::drawButtonSymbol(dc, boxes[i], symbols[i], g_overlay.dpi, ink);
     }
 
     SelectObject(dc, previousFont);
@@ -750,7 +737,6 @@ void deleteFont(HFONT& font) noexcept {
 void createEnhancedFonts() {
     deleteFont(g_overlay.enhancedTitleFont);
     deleteFont(g_overlay.enhancedSubtitleFont);
-    deleteFont(g_overlay.enhancedButtonFont);
 
     const EnhancedOverlayLayout& layout = g_overlay.enhancedLayout;
     g_overlay.enhancedTitleFont = CreateFontW(
@@ -759,10 +745,6 @@ void createEnhancedFonts() {
         DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
     g_overlay.enhancedSubtitleFont = CreateFontW(
         -layout.subtitleFontHeight, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
-        OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
-        DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
-    g_overlay.enhancedButtonFont = CreateFontW(
-        -layout.buttonFontHeight, 0, 0, 0, FW_SEMIBOLD, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
         OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
         DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
 }
@@ -789,7 +771,7 @@ void updateEnhancedRegion() {
 void applyEnhancedDpi(UINT dpi) {
     g_overlay.dpi = dpi == 0 ? kLogicalDpi : dpi;
     g_overlay.enhancedLayout =
-        calculateEnhancedOverlayLayout(g_overlay.overlaySize, g_overlay.dpi);
+        calculateEnhancedOverlayLayout(g_overlay.overlaySize, g_overlay.dpi, g_overlay.previewEnabled);
     createEnhancedFonts();
     g_overlay.buttonTooltips.update(g_overlay.enhancedLayout, g_overlay.paused);
 }
@@ -944,7 +926,7 @@ RECT overlayWorkArea(HMONITOR monitor) {
 }
 
 bool createOverlay(HMONITOR targetMonitor, bool enhanced, OverlaySize overlaySize,
-                   universal_dictate::ButtonStyle buttonStyle = universal_dictate::ButtonStyle::Text) {
+                   bool previewEnabled = false) {
     HINSTANCE instance = GetModuleHandleW(nullptr);
 
     WNDCLASSEXW windowClass{};
@@ -962,7 +944,7 @@ bool createOverlay(HMONITOR targetMonitor, bool enhanced, OverlaySize overlaySiz
     g_overlay.enhanced = enhanced;
     g_overlay.paused = false;
     g_overlay.pausePending = false;
-    g_overlay.buttonStyle = buttonStyle;
+    g_overlay.previewEnabled = enhanced && previewEnabled;
     g_overlay.overlaySize = overlaySize;
     g_overlay.levelMilli = 0;
     g_overlay.levelHistory.fill(0);
@@ -979,7 +961,7 @@ bool createOverlay(HMONITOR targetMonitor, bool enhanced, OverlaySize overlaySiz
 
     const RECT initialWorkArea = overlayWorkArea(targetMonitor);
     const int initialWidth = enhanced ? universal_dictate::enhancedOverlaySpec(overlaySize).width : kOverlayWidth;
-    const int initialHeight = enhanced ? universal_dictate::enhancedOverlaySpec(overlaySize).height : kOverlayHeight;
+    const int initialHeight = enhanced ? universal_dictate::enhancedOverlayHeight(overlaySize, g_overlay.previewEnabled) : kOverlayHeight;
     int x = std::max(
         initialWorkArea.left,
         initialWorkArea.right - initialWidth - kOverlayMargin);
@@ -1082,7 +1064,6 @@ void destroyOverlay() noexcept {
     }
     deleteFont(g_overlay.enhancedTitleFont);
     deleteFont(g_overlay.enhancedSubtitleFont);
-    deleteFont(g_overlay.enhancedButtonFont);
     if (g_overlay.gdiplusToken != 0) {
         Gdiplus::GdiplusShutdown(g_overlay.gdiplusToken);
         g_overlay.gdiplusToken = 0;
@@ -1194,15 +1175,6 @@ OverlaySize parseOverlaySize(int argc, char** argv) {
     }
 
     return OverlaySize::Medium;
-}
-
-universal_dictate::ButtonStyle parseButtonStyle(int argc, char** argv) {
-    for (int i = 1; i + 1 < argc; ++i) {
-        if (std::string_view(argv[i]) == "--button-style")
-            return std::string_view(argv[i+1]) == "symbols" ? universal_dictate::ButtonStyle::Symbols
-                                                         : universal_dictate::ButtonStyle::Text;
-    }
-    return universal_dictate::ButtonStyle::Text;
 }
 
 int parseWaveformTimeSpanMs(int argc, char** argv) {
@@ -1344,7 +1316,7 @@ int main(int argc, char** argv) {
 
     bool overlayAvailable = false;
     if (overlayEnabled) {
-        overlayAvailable = createOverlay(overlayMonitor, enhancedOverlay, overlaySize, parseButtonStyle(argc, argv));
+        overlayAvailable = createOverlay(overlayMonitor, enhancedOverlay, overlaySize, preview != nullptr);
         if (!overlayAvailable) {
             std::cerr << "WARNING recording overlay could not be created; keyboard controls remain available\n";
         }

@@ -168,19 +168,6 @@
           "type": "boolean",
           "default": false,
           "description": "Show provisional text while recording in the enhanced overlay. Disabled by default; when disabled no preview audio snapshots or extra inference run. Requires Enhanced overlay or Both visualization. Changes apply from the next recording. The complete recording is still transcribed and inserted once after Stop."
-        },
-        "universalDictate.overlayButtonStyle": {
-          "type": "string",
-          "enum": [
-            "text",
-            "symbols"
-          ],
-          "enumDescriptions": [
-            "Show Insert, Pause/Resume and Discard text labels.",
-            "Show check, pause/play and cross symbols with labelled hover help."
-          ],
-          "default": "text",
-          "description": "Button labels in the enhanced recording overlay. Colors remain green, amber and red in either style. Applies from the next recording."
         }
       }
     }

@@ -8,8 +8,8 @@
   **Ctrl+Alt+P** and a Pause/Resume command within VS Code.
 - Paused audio is excluded from the WAV, preview buffer and waveform. Resume appends
   to the same recording; Stop/Insert and Discard remain usable while paused.
-- **Overlay button style**: Text (default) or Symbols, with green Insert, amber
-  Pause/Resume, red Discard and descriptive hover help.
+- Compact symbol controls with green Insert, amber Pause/Resume, red Discard and
+  descriptive hover help.
 
 ### Changed
 
@@ -17,6 +17,8 @@
   unchanged; English, Medium, Live preview Off and Overwrite clipboard Off remain.
 - Gave the waveform more height with Live preview enabled, compacted preview spacing,
   and preserved quiet-to-loud differences with fixed-scale RMS visualization.
+- Narrowed the controls and removed unused vertical padding. Preview Off uses a
+  shorter overlay; Preview On keeps room for complete text lines.
 - Clarified dictation into compatible focused text fields in other Windows apps.
 
 ### Notes

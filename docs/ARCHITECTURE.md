@@ -55,8 +55,8 @@ Preview aborts active results and suspends its scheduler; Resume retains revisio
 and the single-operation ownership boundary. The device remains open while paused.
 
 The enhanced overlay shares three DPI-scaled hit rectangles with the renderer:
-Insert, Pause/Resume, Discard. Text is the default, with optional GDI+ vector symbols
-and descriptive non-activating hover help. Waveform history defaults to ten seconds.
+Insert, Pause/Resume, Discard. All three use compact GDI+ vector symbols and
+descriptive non-activating hover help. Waveform history defaults to ten seconds.
 
 ## Dictation and preview lifecycle
 
@@ -126,9 +126,12 @@ and Large presets share the same native renderer and DPI-aware layout rules; Med
 is the default. Waveform history is independently configurable for 1, 3, 5, 10 or
 20 seconds and does not limit recording duration.
 
-When live preview is enabled, recent provisional text is rendered inside the chosen
-overlay size rather than enlarging the window. Insert stops/finalizes the recording;
-Discard cancels it. Overlay actions must remain non-activating.
+The selected size and effective preview flag determine the geometry at startup.
+Preview Off uses a shorter window without empty transcript space; Preview On reserves
+one complete text line in Small and up to two in Medium/Large. Neither preview
+updates nor Pause/Resume resize the window. Compact symbol-only controls retain
+labelled hover help. Insert finalizes; Pause/Resume suspends/continues capture;
+Discard cancels. Overlay and tooltip actions remain non-activating.
 
 ## Known status-bar focus limitation
 

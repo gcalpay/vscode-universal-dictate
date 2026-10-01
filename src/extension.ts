@@ -12,7 +12,6 @@ import {
 import { getModelPath, ensureModel } from './model';
 import { getNativePasteHelperPath, pasteIntoFocusedControl } from './paste';
 import { getRecorderPath, RecorderSession } from './recorder';
-import type { OverlayButtonStyle } from './core/recorder';
 import {
   disposeWhisper,
   getWhisperCliPath,
@@ -66,11 +65,6 @@ function getConfiguredOverlaySize(): OverlaySize {
   );
 }
 
-function getConfiguredButtonStyle(): OverlayButtonStyle {
-  return vscode.workspace.getConfiguration('universalDictate').get<unknown>('overlayButtonStyle', 'text') === 'symbols'
-    ? 'symbols' : 'text';
-}
-
 function getConfiguredLivePreview(): boolean {
   return vscode.workspace.getConfiguration('universalDictate').get<unknown>('livePreview', false) === true;
 }
@@ -111,7 +105,6 @@ class DictationController implements vscode.Disposable {
   private activeOverwriteClipboard = false;
   private activeLivePreview = false;
   private activeLanguage = 'en';
-  private activeButtonStyle: OverlayButtonStyle = 'text';
   private activeOverlaySize: OverlaySize = 'medium';
   private activeWaveformSpan: WaveformTimeSpanSeconds = 10;
 
@@ -145,7 +138,6 @@ class DictationController implements vscode.Disposable {
         this.activeVisualization = getConfiguredVisualization();
         this.activeLivePreview = getConfiguredLivePreview() && showsOverlay(this.activeVisualization);
         this.activeLanguage = normalizeWhisperLanguage(vscode.workspace.getConfiguration('universalDictate').get<string>('language', 'en'));
-        this.activeButtonStyle = getConfiguredButtonStyle();
         this.activeOverlaySize = getConfiguredOverlaySize();
         this.activeWaveformSpan = getConfiguredWaveformTimeSpanSeconds();
         await ensureModel(this.context);
@@ -160,8 +152,7 @@ class DictationController implements vscode.Disposable {
           this.activeWaveformSpan,
           this.activeOverlaySize,
           signal,
-          this.activeLivePreview,
-          this.activeButtonStyle
+          this.activeLivePreview
         );
       },
       transcribe: (audioPath) => transcribe(this.context, audioPath, this.activeLanguage),
@@ -330,7 +321,7 @@ class DictationController implements vscode.Disposable {
 
 type LanguageQuickPickItem = vscode.QuickPickItem & { code: string };
 type SettingsQuickPickItem = vscode.QuickPickItem & {
-  action: 'language' | 'visualization' | 'overlaySize' | 'waveformTimeSpan' | 'overwriteClipboard' | 'livePreview' | 'buttonStyle';
+  action: 'language' | 'visualization' | 'overlaySize' | 'waveformTimeSpan' | 'overwriteClipboard' | 'livePreview';
 };
 type VisualizationQuickPickItem = vscode.QuickPickItem & { mode: VisualizationMode };
 type OverlaySizeQuickPickItem = vscode.QuickPickItem & { size: OverlaySize };
@@ -527,12 +518,6 @@ async function openSettings(): Promise<void> {
       description: getConfiguredLivePreview() ? (showsOverlay(currentVisualization) ? 'On' : 'On (overlay required)') : 'Off (default)',
       detail: 'Show provisional text while recording in the enhanced overlay. Off performs no preview decoding. Click to toggle for the next recording.',
       action: 'livePreview'
-    },
-    {
-      label: '$(symbol-misc) Overlay button style',
-      description: getConfiguredButtonStyle() === 'symbols' ? 'Symbols' : 'Text (default)',
-      detail: 'Toggle text labels or symbols for Insert, Pause/Resume and Discard. Applies to the next recording.',
-      action: 'buttonStyle'
     }
   ];
 
@@ -572,13 +557,6 @@ async function openSettings(): Promise<void> {
     return;
   }
 
-  if (selected.action === 'buttonStyle') {
-    const next = getConfiguredButtonStyle() === 'text' ? 'symbols' : 'text';
-    await configuration.update('overlayButtonStyle', next, vscode.ConfigurationTarget.Global);
-    const effective = getConfiguredButtonStyle();
-    void vscode.window.showInformationMessage(`Universal Dictate button style: ${effective}. Applies from the next recording.${effective !== next ? ' A workspace setting overrides the user setting.' : ''}`);
-    return;
-  }
 
   if (selected.action === 'overwriteClipboard') {
     // Toggle the latest setting, not a stale value from when the picker opened.
@@ -639,7 +617,6 @@ export function activate(context: vscode.ExtensionContext): void {
           `extensionKind=${extensionKind}`,
           `language=${configuredLanguage}`,
           `overlaySize=${getConfiguredOverlaySize()}`,
-          `buttonStyle=${getConfiguredButtonStyle()}`,
           `waveformSeconds=${getConfiguredWaveformTimeSpanSeconds()}`,
           `livePreview=${getConfiguredLivePreview()}`,
           `previewEffective=${getConfiguredLivePreview() && showsOverlay(getConfiguredVisualization())}`,

@@ -1,6 +1,6 @@
 # Implementation notes
 
-## Current 1.1 candidate (PR #54, not yet accepted)
+## Current 1.1 candidate (PR #54, compact-layout review pending)
 
 - The extension runs in the local Windows VS Code UI extension host, including
   Remote - WSL workspaces.
@@ -41,9 +41,11 @@ preview and waveform. Resume appends accepted audio to the same file. Stop/Disca
 stay usable while paused or transitioning; acknowledgement errors cancel uncertain
 capture. Preview scheduling suspends and stale results cannot reappear after Resume.
 
-The middle overlay button is Pause/Resume. Text (default) or Symbols is snapshotted
-per recording; native vectors avoid extra fonts. Green/amber/red controls also have
-text or shape distinctions and hover help. Ctrl+Alt+P is VS Code-local, not global.
+The middle overlay button is Pause/Resume. Controls are compact native vectors with
+green/amber/red styling and labelled hover help; there is no Text/Symbols setting.
+Medium remains default. Preview Off uses a shorter window, while Preview On reserves
+readable text space; this choice is fixed per session. No settings are rewritten.
+Ctrl+Alt+P is VS Code-local, not global.
 
 ## Known limitation
 
