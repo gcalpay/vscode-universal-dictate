@@ -19,6 +19,28 @@ std::vector<ma_int16> readPcm(const std::string& path){
     ma_decoder_uninit(&decoder);
     requireCapture(status==MA_SUCCESS||status==MA_AT_END,"read synthetic output");result.resize(static_cast<std::size_t>(read));return result;
 }
+// Verify the production callback uses RMS rather than an early-saturating peak,
+// without altering either WAV samples or the independently published raw peak.
+void verifyWaveform(const std::filesystem::path& path){
+    for(int span : {1000,3000,5000,10000,20000}){
+        Encoder encoder;requireCapture(encoder.open(path.string())==MA_SUCCESS,"waveform encoder");
+        CaptureState state{&encoder};state.enhancedBucketTargetFrames=calculateEnhancedBucketTargetFrames(span);
+        const auto frames=static_cast<ma_uint32>(state.enhancedBucketTargetFrames);
+        int previous=0;std::vector<ma_int16> expected;
+        for(ma_int16 sample : {128,819,5243}){
+            feed(state,sample,frames);expected.insert(expected.end(),frames,sample);
+            const auto written=state.enhancedWriteCount.load();
+            const int level=state.enhancedSignal[(written-1)%kEnhancedSignalPoints].load();
+            requireCapture(level>previous&&level<950,"capture waveform lacks RMS headroom");previous=level;
+            requireCapture(state.peakMilli.load()==sample*1000/32767,"visualization changed raw peak reporting");
+        }
+        const auto before=state.enhancedWriteCount.load();state.gate.pause();
+        feed(state,32767,frames*3);requireCapture(state.enhancedWriteCount.load()==before,"paused signal changed waveform");
+        state.gate.resume();feed(state,128,frames);expected.insert(expected.end(),frames,128);
+        requireCapture(state.enhancedSignal[before%kEnhancedSignalPoints].load()==state.enhancedSignal[0].load(),"loud input renormalized later quiet input");
+        encoder.close();requireCapture(readPcm(path.string())==expected,"visualization changed accepted WAV samples");
+    }
+}
 // Uses the actual CoreRecorderSession pipe arguments for the Node integration test.
 int syntheticRecorder(const std::string& output){
     Encoder encoder;requireCapture(encoder.open(output)==MA_SUCCESS,"synthetic encoder");
@@ -62,6 +84,7 @@ int main(int argc,char** argv){
         requireCapture(std::all_of(pcm.begin()+1600,pcm.end(),[](auto x){return x==-2222;}),"resumed speech retained; paused sentinel absent");
         char name[]="test";char* args[]{name};requireCapture(parseWaveformTimeSpanMs(1,args)==10000,"native ten-second default");
         requireCapture(parseButtonStyle(1,args)==universal_dictate::ButtonStyle::Text,"native text default");
-        std::cout<<"Production WAV/preview/waveform pause checks passed; synthetic PCM, no microphone\n";return 0;
+        verifyWaveform(path);
+        std::cout<<"Production WAV/preview/waveform pause and five-span RMS checks passed; synthetic PCM, no microphone\n";return 0;
     }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}
 }

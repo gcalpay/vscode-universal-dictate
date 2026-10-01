@@ -44,6 +44,7 @@
 #include "preview-text.h"
 #include "recording-pause.h"
 #include "overlay-buttons.h"
+#include "waveform-level.h"
 #include <memory>
 
 #include <algorithm>
@@ -74,8 +75,6 @@ constexpr int kEnhancedSignalPoints = 256;
 constexpr int kDefaultWaveformTimeSpanMs = 10000;
 constexpr int kMinWaveformTimeSpanMs = 1000;
 constexpr int kMaxWaveformTimeSpanMs = 20000;
-constexpr double kEnhancedPcmNoiseFloor = 0.001;
-constexpr double kEnhancedPcmReference = 0.045;
 constexpr wchar_t kOverlayClassName[] = L"UniversalDictateRecordingOverlay";
 
 enum class RecorderCommand : int {
@@ -131,31 +130,6 @@ private:
     bool open_ = false;
 };
 
-int enhancedVisualSample(int sample) {
-    const int clamped = std::clamp(sample, -32767, 32767);
-    const int magnitude = std::abs(clamped);
-    if (magnitude == 0) {
-        return 0;
-    }
-
-    const double normalizedPcm = static_cast<double>(magnitude) / 32767.0;
-    if (normalizedPcm <= kEnhancedPcmNoiseFloor) {
-        return 0;
-    }
-
-    const double normalized = std::clamp(
-        (normalizedPcm - kEnhancedPcmNoiseFloor) /
-            (kEnhancedPcmReference - kEnhancedPcmNoiseFloor),
-        0.0,
-        1.0);
-    const double shaped = std::pow(normalized, 0.62);
-    const int visualMagnitude = std::clamp(
-        static_cast<int>(std::lround(shaped * 1000.0)),
-        0,
-        1000);
-    return clamped < 0 ? -visualMagnitude : visualMagnitude;
-}
-
 int calculateEnhancedBucketTargetFrames(int waveformTimeSpanMs) {
     const double target =
         static_cast<double>(kSampleRate) * static_cast<double>(waveformTimeSpanMs) /
@@ -175,12 +149,10 @@ struct CaptureState {
     std::array<std::atomic<int>, kEnhancedSignalPoints> enhancedSignal{};
     std::atomic<std::uint64_t> enhancedWriteCount{0};
     int enhancedBucketTargetFrames = calculateEnhancedBucketTargetFrames(kDefaultWaveformTimeSpanMs);
-    int enhancedBucketFrames = 0;
-    int enhancedBucketPeak = 0;
+    universal_dictate::WaveformBucket enhancedBucket;
 };
 
-void pushEnhancedSignalPoint(CaptureState& state, int signedPcmPeak) {
-    const int visualSample = enhancedVisualSample(signedPcmPeak);
+void pushEnhancedSignalPoint(CaptureState& state, int visualSample) {
     const std::uint64_t writeIndex =
         state.enhancedWriteCount.load(std::memory_order_relaxed);
     state.enhancedSignal[static_cast<std::size_t>(writeIndex % kEnhancedSignalPoints)]
@@ -214,15 +186,9 @@ void captureCallback(
         const int magnitude = std::abs(sample);
         peak = std::max(peak, magnitude);
 
-        if (magnitude > std::abs(state->enhancedBucketPeak)) {
-            state->enhancedBucketPeak = sample;
-        }
-        ++state->enhancedBucketFrames;
-
-        if (state->enhancedBucketFrames >= state->enhancedBucketTargetFrames) {
-            pushEnhancedSignalPoint(*state, state->enhancedBucketPeak);
-            state->enhancedBucketFrames = 0;
-            state->enhancedBucketPeak = 0;
+        if (const auto level = state->enhancedBucket.push(samples[i],
+                static_cast<std::uint32_t>(state->enhancedBucketTargetFrames))) {
+            pushEnhancedSignalPoint(*state, *level);
         }
     }
 
@@ -585,9 +551,9 @@ void drawEnhancedWaveform(HDC dc) {
             Gdiplus::PointF(x, static_cast<Gdiplus::REAL>(centerY) + envelopeAmplitude * 0.56f);
     }
 
-    // All geometry is derived directly from stored visual PCM samples. No
-    // neighbor smoothing, rolling normalization, phase animation or per-frame
-    // modulation is applied, so old samples never change shape in place.
+    // Magnitude is a fixed-scale bucket RMS; peak polarity supplies the center
+    // trace direction only. No rolling normalization or per-frame modulation:
+    // old samples keep their shape, and quiet speech stays quiet after loud speech.
     Gdiplus::Pen outerPen(envelopeOuterColor, 0.9f * dpiScale);
     Gdiplus::Pen innerPen(envelopeInnerColor, 0.8f * dpiScale);
     Gdiplus::Pen wavePen(mainWaveColor, 1.55f * dpiScale);

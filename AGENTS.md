@@ -18,6 +18,13 @@ history default; brief README clarification for compatible external Windows inpu
 No native Linux/macOS support, model selection/download, global hotkey, translation
 feature or Issue #38 focus workaround is part of this milestone.
 
+## Current visual correction
+
+The user accepted Pause/Resume in candidate `8778fcd`. Correct only the waveform
+height/preview spacing and fixed-scale RMS amplitude response on this same branch;
+keep the accepted controls and recording/insertion lifecycle unchanged. See the
+waveform correction section in M7. Deliver a new checked Windows VSIX before release.
+
 ## Invariants and validation
 
 - Inspect live refs before writes; preserve unrelated work and the 1.0.0 release.

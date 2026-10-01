@@ -22,7 +22,10 @@ int main() {
             for (std::size_t i=0; i<boxes.size(); ++i) for (std::size_t j=i+1; j<boxes.size(); ++j) assert(!overlaps(boxes[i], boxes[j]));
             assert(preview.text.left > normal.indicatorCenterX + normal.indicatorOuterRadius);
             assert(preview.fontHeight >= scaleLogical(14, dpi));
-            assert(preview.maxLines == static_cast<unsigned int>(size) + 1);
+            assert(preview.maxLines == (size == OverlaySize::Small ? 1U : 2U));
+            const int minimumWaveform = size == OverlaySize::Small ? 13 : size == OverlaySize::Medium ? 19 : 36;
+            assert(preview.waveform.bottom - preview.waveform.top >= scaleLogical(minimumWaveform, dpi) - 1);
+            assert(preview.text.top - preview.waveform.bottom <= scaleLogical(3, dpi) + 1);
             ++cases;
         }
     }

@@ -72,3 +72,29 @@ No cross-platform work, model selection, global hotkey or Issue #38 fix is inclu
 
 Automated results and user acceptance must be recorded separately. No merge or
 Marketplace publication is implied by compilation or by a scripted renderer test.
+
+## Waveform correction after the first user review
+
+The user tested the `8778fcd` 1.1.0 VSIX and accepted Pause/Resume and its controls.
+The remaining correction is visual: live-preview layout gives the waveform too little
+height, a short hypothesis is vertically centered in unused preview space, and the
+old signed-peak mapping saturates at just 0.045 full scale. Keep the accepted pause,
+clipboard, model and insertion behavior unchanged; no release approval is implied.
+
+Preview-on waveform heights are now 13 / 19 / 36 logical pixels for Small / Medium /
+Large (previously 6 / 10 / 12). Text follows after a 2 / 2 / 3 pixel gap, is top-aligned
+and shows at most one / two / two complete naturally shaped lines. The windows,
+control geometry, font sizes and preview-off layout stay unchanged.
+
+Visualization uses per-bucket PCM RMS on a fixed -60 to -6 dBFS display range. Peak
+polarity only supplies the center-trace direction. There is no adaptive gain,
+normalization, time-dependent reshaping or change to recorded/transcribed samples.
+This measures relative digital input level, not calibrated acoustic loudness; OS or
+microphone gain processing remains outside the extension's control. Ten-second
+history and all saved settings are unchanged.
+
+Additional regressions cover monotonic level mapping, silence, equal peaks with
+different energy, signed extrema, five history spans, quiet-after-loud stability,
+production-callback WAV identity/pause exclusion, visible level separation in the
+production renderer, compact preview spacing and one-line top alignment at all four
+DPI scales. Scripted images are evidence, not replacement public screenshots.

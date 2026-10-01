@@ -145,3 +145,14 @@ Transcription failures should distinguish warm-server from CLI fallback. Preview
 failure is separate from final transcription. Wrong text is an ASR/language/audio
 issue until evidence shows otherwise. Correct text in the wrong control is a
 target-preservation/focus issue; Issue #38 concerns the genuine status-bar mouse path.
+
+## Waveform visibility regression (1.1.0)
+
+In each overlay size, test Live preview On and Off. Speak quietly, normally and
+loudly, then quietly again without changing microphone gain. The waveform should
+show distinct heights and should not rescale old samples or the second quiet part.
+Pause should freeze both waveform and preview. A short one-line hypothesis should
+sit directly beneath the waveform instead of being centered in a tall blank area;
+long preview text should show one complete line in Small or up to two in Medium/Large.
+Check 100/125/150/200% scaling where available; buttons must retain their geometry.
+Automated RMS/PCM/renderer evidence does not replace this microphone-level check.

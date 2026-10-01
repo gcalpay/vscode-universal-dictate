@@ -153,6 +153,68 @@ void renderCases(const std::filesystem::path& output, OverlaySize size, unsigned
         if (!inside(x,y,preview.text)) check(pixels[y*normal.width+x] == 0x00335577U, "text DC clipping failed");
 }
 
+// The actual production renderer must preserve visible quiet/normal/loud differences
+// and must place a one-line hypothesis directly beneath the waveform.
+int waveformInkHeight(const Canvas& canvas, const OverlayRect& box) {
+    const auto pixels = canvas.snapshot();
+    int first = box.bottom, last = box.top - 1;
+    for (int y = box.top; y < box.bottom; ++y) for (int x = box.left + 3; x < box.right - 3; ++x) {
+        const auto pixel = pixels[y * canvas.width + x];
+        const int red = (pixel >> 16) & 255, green = (pixel >> 8) & 255, blue = pixel & 255;
+        if (green > 110 && green > red + 20 && green > blue + 10) {
+            first = std::min(first, y); last = std::max(last, y);
+        }
+    }
+    return std::max(0, last - first + 1);
+}
+
+void renderWaveformCases(const std::filesystem::path& output, OverlaySize size, unsigned int dpi) {
+    applyEnhancedDpi(dpi);
+    const auto& normal = g_overlay.enhancedLayout;
+    const auto preview = universal_dictate::preview::calculateTextLayout(size, dpi);
+    RECT client{0, 0, normal.width, normal.height};
+    Canvas canvas(normal.width, normal.height);
+    for (bool enabled : {false, true}) {
+        g_overlay.previewEnabled = enabled;
+        g_overlay.previewText = L"A short preview.";
+        const auto box = enabled ? preview.waveform : normal.waveform;
+        int previousHeight = 0;
+        for (double rms : {0.004, 0.025, 0.16}) {
+            for (int i = 0; i < kEnhancedSignalPoints; ++i)
+                g_overlay.enhancedSignalHistory[i] = universal_dictate::visualRmsMagnitude(rms) * (i % 2 ? 1 : -1);
+            drawEnhancedOverlay(canvas.dc, client);
+            const int height = waveformInkHeight(canvas, box);
+            check(height > previousHeight, "quiet/normal/loud waveform heights are indistinguishable");
+            previousHeight = height;
+        }
+    }
+    g_overlay.previewEnabled = true;
+    drawEnhancedOverlay(canvas.dc, client);
+    const auto pixels = canvas.snapshot();
+    int firstInk = preview.text.bottom;
+    for (int y = preview.text.top; y < preview.text.bottom; ++y)
+        for (int x = preview.text.left; x < preview.text.right; ++x) {
+            const auto pixel = pixels[y * normal.width + x];
+            if (((pixel >> 16) & 255) > 100 && ((pixel >> 8) & 255) > 100 && (pixel & 255) > 100)
+                firstInk = std::min(firstInk, y);
+        }
+    check(firstInk - preview.text.top <= scaleLogical(8, dpi), "short preview leaves a centered blank gap");
+    // Deterministic low/medium/high energy envelopes, not microphone acceptance.
+    for (int i = 0; i < kEnhancedSignalPoints; ++i) {
+        const double rms = i < 20 ? 0 : i < 90 ? 0.004 : i < 170 ? 0.025 : 0.16;
+        const double variation = 0.75 + 0.25 * std::sin(i * 0.45);
+        g_overlay.enhancedSignalHistory[i] = universal_dictate::visualRmsMagnitude(rms * variation) * (i % 2 ? 1 : -1);
+    }
+    for (bool enabled : {false, true}) {
+        g_overlay.previewEnabled = enabled;
+        drawEnhancedOverlay(canvas.dc, client);
+        canvas.save(output / ("waveform-" + std::to_string(static_cast<int>(size)) + "-" + std::to_string(dpi) +
+            (enabled ? "-preview.bmp" : "-off.bmp")));
+    }
+    g_overlay.previewEnabled = true;
+    g_overlay.enhancedSignalHistory.fill(0);
+}
+
 void renderControlCases(const std::filesystem::path& output, OverlaySize size, unsigned int dpi) {
     applyEnhancedDpi(dpi);
     const auto& layout = g_overlay.enhancedLayout;
@@ -239,6 +301,7 @@ int main(int argc, char** argv) {
             for (unsigned int dpi : {96U,120U,144U,192U}) {
                 renderCases(output,size,dpi,count);
                 renderControlCases(output,size,dpi);
+                renderWaveformCases(output,size,dpi);
                 checkFocus(scratch,edit);
             }
             // Actual mouse clicks on this process's overlay, not synthetic DOM events.
@@ -259,7 +322,7 @@ int main(int argc, char** argv) {
         }
         DestroyWindow(scratch); scratch = nullptr;
         SetCursorPos(originalCursor.x,originalCursor.y);
-        std::cout << count << " production-renderer cases passed; 12 Off renders, 12 clipping checks, 48 button-style/state renders, 39 real own-overlay clicks; no microphone or Codex test\n";
+        std::cout << count << " production-renderer cases passed; 12 Off renders, 12 clipping checks, 48 button-style/state renders, 24 waveform renders with 72 level checks, 12 top-alignment checks, 39 real own-overlay clicks; no microphone or Codex test\n";
         return 0;
     } catch (const std::exception& error) {
         destroyOverlay(); if (scratch) DestroyWindow(scratch);

@@ -15,6 +15,8 @@
 
 - Waveform history now defaults to **10 seconds**. Explicit saved preferences remain
   unchanged; English, Medium, Live preview Off and Overwrite clipboard Off remain.
+- Gave the waveform more height with Live preview enabled, compacted preview spacing,
+  and preserved quiet-to-loud differences with fixed-scale RMS visualization.
 - Clarified dictation into compatible focused text fields in other Windows apps.
 
 ### Notes
