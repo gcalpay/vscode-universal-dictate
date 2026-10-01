@@ -45,11 +45,11 @@ int main() {
 
     // Preset extents remain fixed; the waveform yields one button-width for Pause.
     assert(large.waveform.left == 148);
-    assert(large.waveform.right == 530);
-    assert(large.dividerX == 534);
-    assert(large.confirmButton.left == 542);
-    assert(large.confirmButton.right == 602);
-    assert(large.cancelButton.left == 674);
+    assert(large.waveform.right == 518);
+    assert(large.dividerX == 522);
+    assert(large.confirmButton.left == 530);
+    assert(large.confirmButton.right == 594);
+    assert(large.cancelButton.left == 670);
     assert(large.cancelButton.right == 734);
 
     const std::array<OverlaySize, 3> sizes{
@@ -72,7 +72,7 @@ int main() {
 
     const auto large200 = calculateEnhancedOverlayLayout(OverlaySize::Large, 192);
     assert(large200.width == 1480 && large200.height == 256);
-    assert(large200.confirmButton.left == 1084);
+    assert(large200.confirmButton.left == 1060);
     assert(large200.cancelButton.right == 1468);
 
     return 0;

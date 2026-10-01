@@ -18,17 +18,17 @@ inline TextLayout calculateTextLayout(OverlaySize size, std::uint32_t dpi) {
     TextLayout result{};
     switch (size) {
         case OverlaySize::Small:
-            result = {{34, 6, 108, 23}, {112, 6, 210, 23},
-                      {34, 26, 210, 32}, {34, 35, 210, 59}, 14, 1};
+            result = {{34, 6, 108, 23}, {112, 6, 186, 23},
+                      {34, 26, 186, 32}, {34, 35, 186, 59}, 14, 1};
             break;
         case OverlaySize::Medium:
-            result = {{40, 8, 122, 27}, {128, 8, 332, 27},
-                      {40, 30, 332, 40}, {40, 43, 332, 83}, 14, 2};
+            result = {{40, 8, 122, 27}, {128, 8, 320, 27},
+                      {40, 30, 320, 40}, {40, 43, 320, 83}, 14, 2};
             break;
         case OverlaySize::Large:
         default:
-            result = {{50, 10, 150, 32}, {158, 10, 530, 32},
-                      {50, 37, 530, 49}, {50, 55, 530, 120}, 16, 3};
+            result = {{50, 10, 150, 32}, {158, 10, 518, 32},
+                      {50, 37, 518, 49}, {50, 55, 518, 120}, 16, 3};
             break;
     }
     result.title = scaleRect(result.title, dpi);

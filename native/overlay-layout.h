@@ -83,9 +83,9 @@ constexpr EnhancedOverlaySpec enhancedOverlaySpec(OverlaySize size) {
                 {34, 18, 96, 46},
                 {0, 0, 0, 0},
                 false,
-                98, 170, 8, 8,
-                166, 14, 14,
-                48, 24, 6, 6, 20,
+                98, 194, 8, 8,
+                190, 14, 14,
+                56, 24, 6, 6, 20,
                 14, 9, 10, 7};
         case OverlaySize::Medium:
             return EnhancedOverlaySpec{
@@ -94,9 +94,9 @@ constexpr EnhancedOverlaySpec enhancedOverlaySpec(OverlaySize size) {
                 {40, 17, 112, 39},
                 {40, 39, 112, 58},
                 true,
-                116, 188, 8, 8,
-                182, 18, 18,
-                54, 28, 6, 6, 30,
+                116, 200, 8, 8,
+                194, 18, 18,
+                58, 28, 6, 6, 30,
                 15, 10, 10, 8};
         case OverlaySize::Large:
         default:
@@ -106,9 +106,9 @@ constexpr EnhancedOverlaySpec enhancedOverlaySpec(OverlaySize size) {
                 {50, 39, 143, 63},
                 {50, 64, 143, 84},
                 true,
-                148, 210, 8, 8,
-                206, 30, 30,
-                60, 30, 6, 6, 49,
+                148, 222, 8, 8,
+                218, 30, 30,
+                64, 30, 6, 6, 49,
                 17, 11, 11, 9};
     }
 }
