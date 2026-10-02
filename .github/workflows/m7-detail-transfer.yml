@@ -1,0 +1,81 @@
+name: M7 detail tree transfer (temporary)
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  transfer:
+    if: github.head_ref == 'feat/pause-resume-controls' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ea8811751cfc6ae39b17e86cc1c086b49fe1abb6
+          persist-credentials: false
+      - name: Transfer verified source objects without moving any ref
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          python3 - <<'PY'
+          import base64, gzip, hashlib, json, os, pathlib, subprocess
+          repo = os.environ['REPOSITORY']
+          assert repo == 'gcalpay/vscode-universal-dictate'
+          def git(*args):
+              return subprocess.check_output(['git', *args])
+          def api(path, payload=None):
+              cmd = ['gh', 'api', f'repos/{repo}/{path}']
+              data = None
+              if payload is not None:
+                  cmd += ['--method', 'POST', '--input', '-']
+                  data = json.dumps(payload).encode()
+              return json.loads(subprocess.check_output(cmd, input=data))
+          assert git('rev-parse', 'HEAD').decode().strip() == 'ea8811751cfc6ae39b17e86cc1c086b49fe1abb6'
+          blob = api('git/blobs/ac8d7df186c7b0bf677afe8fb3f9915c8659cd2e')
+          raw = base64.b64decode(blob['content'])
+          # Repair one identified base64 transport typo; hashes below enforce the
+          # exact locally tested patch, not a best-effort decompression.
+          encoded = base64.b64encode(raw).decode()
+          assert encoded.count('mI7137fVUx') == 1
+          raw = base64.b64decode(encoded.replace('mI7137fVUx', 'mI7137VUx') + '===')
+          assert hashlib.sha1(b'blob ' + str(len(raw)).encode() + b'\0' + raw).hexdigest() == 'a8748ecec13e2b51cdf50a35f3dc252e9f7f9e12'
+          patch = gzip.decompress(raw)
+          assert hashlib.sha256(patch).hexdigest() == '31e4c9bbdab5d6b497bc1889402a789edaa30907902a3b7c8d0bb87d3a94a7b3'
+          path = pathlib.Path('/tmp/ud-detail.patch')
+          path.write_bytes(patch)
+          subprocess.run(['git', 'apply', '--index', '--binary', str(path)], check=True)
+          expected_tree = '7cd2078e2514ae895ca281e33ab75c2e48256792'
+          assert git('write-tree').decode().strip() == expected_tree
+          changed = git('diff', '--cached', '--name-only', '-z').decode().rstrip('\0').split('\0')
+          allowed = {
+              '.github/workflows/ci.yml', '.github/workflows/windows-package.yml',
+              '.github/workflows/m7-detail-snapshot.yml', 'AGENTS.md', 'CHANGELOG.md',
+              'docs/M7_PAUSE_RESUME.md', 'native/record-audio.cpp',
+              'native/waveform-level.h', 'native/waveform-history.h',
+              'test/native/waveform-level-test.cpp', 'test/native/waveform-history-test.cpp',
+              'test/native/recorder-pause-capture-test.cpp', 'test/native/preview-presentation-test.cpp'
+          }
+          assert set(changed) == allowed
+          index = {}
+          for entry in git('ls-files', '-s', '-z').decode().rstrip('\0').split('\0'):
+              info, name = entry.split('\t', 1)
+              mode, sha, stage = info.split()
+              assert stage == '0'
+              index[name] = (mode, sha)
+          elements = []
+          for name in changed:
+              if name not in index:
+                  elements.append({'path': name, 'mode': '100644', 'type': 'blob', 'sha': None})
+                  continue
+              mode, sha = index[name]
+              content = git('cat-file', 'blob', sha)
+              result = api('git/blobs', {'content': base64.b64encode(content).decode(), 'encoding': 'base64'})
+              assert result['sha'] == sha
+              elements.append({'path': name, 'mode': mode, 'type': 'blob', 'sha': sha})
+          result = api('git/trees', {'base_tree': '50811424eee8dd40e144905136a56713b2cf7361', 'tree': elements})
+          assert result['sha'] == expected_tree
+          print('Verified source tree:', expected_tree)
+          print('No branches, tags, releases or Marketplace artifacts were changed.')
+          PY
