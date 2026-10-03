@@ -48,17 +48,25 @@ async function main() {
         results.stop.push({language,condition:'abort-eight-second-preview-before-final',elapsedMs:performance.now()-begin,previewOutcome,characters:final.length});
       }
       const beginReplay=performance.now(), updates=[], failures=[];
+      let pausedDuration=0, acquisitions=0;
       const coordinator=new PreviewCoordinator({sessionId:'replay',language,
-        acquire:async signal=>{signal.throwIfAborted();const end=Math.min(20*16000,Math.floor((performance.now()-beginReplay)/1000*16000));
+        acquire:async signal=>{signal.throwIfAborted();acquisitions++;const end=Math.min(20*16000,Math.floor((performance.now()-beginReplay-pausedDuration)/1000*16000));
           if(end<16000)return undefined;
           const start=Math.max(0,end-8*16000);return {audio:createPreviewAudio('replay',end,pcm.subarray(start*2,end*2)),release:async()=>{}};},
         decode:(audio,lang,signal)=>runtime.preview(audio,lang,signal),
         onPreview:update=>updates.push({atMs:performance.now()-beginReplay,endFrame:update.endFrame,characters:update.text.length}),
         onFailure:failure=>failures.push(failure)});
-      coordinator.start();await sleep(20000);const stopped=performance.now();await coordinator.stop();
+      coordinator.start();await sleep(8000);
+      const pauseBegin=performance.now();await coordinator.pause();
+      const acquiredAtPause=acquisitions,updatesAtPause=updates.length;
+      await sleep(2200);
+      if(acquisitions!==acquiredAtPause||updates.length!==updatesAtPause)throw Error('paused preview acquired/displayed new work');
+      pausedDuration=performance.now()-pauseBegin;coordinator.resume();
+      await sleep(12000);const stopped=performance.now();await coordinator.stop();
+      if(acquisitions<=acquiredAtPause||updates.length<=updatesAtPause)throw Error('preview did not recover after Resume');
       const full=path.join(root,`final-${language}.wav`);fs.writeFileSync(full,wav(pcm.subarray(0,20*32000)));
       final=await runtime.transcribe(full,language);
-      results.replay.push({language,durationSeconds:20,updates,failures,stopToFinalMs:performance.now()-stopped,finalCharacters:final.length});
+      results.replay.push({language,durationSeconds:20,pausedDurationMs:pausedDuration,acquiredAtPause,updatesAtPause,acquisitions,updates,failures,stopToFinalMs:performance.now()-stopped,finalCharacters:final.length});
       if(failures.length||!updates.length||!final.trim())throw Error('synthetic adapter replay failed');
     }
     results.status='completed';

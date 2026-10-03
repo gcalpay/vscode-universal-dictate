@@ -1,5 +1,36 @@
 # Changelog
 
+## 1.1.0
+
+### Added
+
+- **Pause / Resume** between Insert and Discard in the enhanced overlay, plus
+  **Ctrl+Alt+P** and a Pause/Resume command within VS Code.
+- Paused audio is excluded from the WAV, preview buffer and waveform. Resume appends
+  to the same recording; Stop/Insert and Discard remain usable while paused.
+- Compact symbol controls with green Insert, amber Pause/Resume, red Discard and
+  descriptive hover help.
+
+### Changed
+
+- Restore the thin waveform trace and subtle envelopes with immutable display
+  samples: existing segments scroll without wobbling or changing shape.
+
+- Waveform history now defaults to **10 seconds**. Explicit saved preferences remain
+  unchanged; English, Medium, Live preview Off and Overwrite clipboard Off remain.
+- Gave the waveform more height with Live preview enabled, compacted preview spacing,
+  and restored the finer 0.1.5-style signed-peak response with a slightly raised visual-only idle-noise gate.
+- Narrowed the controls and removed unused vertical padding. Preview Off uses a
+  shorter overlay; Preview On keeps room for complete text lines.
+- Clarified dictation into compatible focused text fields in other Windows apps.
+
+### Notes
+
+- The microphone device stays open while paused; paused samples are ignored rather
+  than saved or transcribed. Pause does not act as a hardware microphone mute.
+- No new model download, global hotkey, native platform support or status-bar focus
+  fix is introduced. Issue #38 remains unresolved.
+
 ## 1.0.0
 
 ### Added

@@ -39,7 +39,7 @@ export class RecorderSession {
     onLevel: (level: number) => void,
     showOverlay = true,
     overlayStyle: RecorderOverlayStyle = 'compact',
-    waveformTimeSpanSeconds = 1,
+    waveformTimeSpanSeconds = 10,
     overlaySize: OverlaySize = 'medium',
     signal?: AbortSignal,
     livePreview = false
@@ -79,6 +79,8 @@ export class RecorderSession {
   onFailure(listener: (error: Error) => void): void {
     this.core.onFailure(listener);
   }
+
+  setPaused(paused: boolean): Promise<void> { return this.core.setPaused(paused); }
 
   async stop(): Promise<string> {
     return await this.core.stop();

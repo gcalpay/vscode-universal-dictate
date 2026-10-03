@@ -2,7 +2,7 @@ import * as fs from 'node:fs';
 import type { PreviewLease } from './preview-audio';
 import type { PreviewUpdate } from './preview-coordinator';
 
-export type DictationRecorderAction = 'stop' | 'cancel';
+export type DictationRecorderAction = 'stop' | 'cancel' | 'pause' | 'resume';
 export type TranscriptRecoveryResult = 'completed' | 'empty' | 'busy' | 'disposed';
 
 export interface DictationSession {
@@ -12,13 +12,14 @@ export interface DictationSession {
   showPreview?(update: PreviewUpdate): void;
   onAction(listener: (action: DictationRecorderAction) => void): void;
   onFailure?(listener: (error: Error) => void): void;
+  setPaused?(paused: boolean): Promise<void>;
   stop(): Promise<string>;
   cancel(): Promise<void>;
 }
 
 export type DictationState =
   | 'idle' | 'preparing' | 'opening-microphone' | 'recording'
-  | 'cancelling' | 'transcribing' | 'inserting';
+  | 'pausing' | 'paused' | 'resuming' | 'cancelling' | 'transcribing' | 'inserting';
 
 type Phase = 'preparing' | 'opening-microphone' | 'recording' | 'stopping'
   | 'transcribing' | 'inserting' | 'copying' | 'cancelling' | 'cleaning';
@@ -30,8 +31,16 @@ interface Operation {
   pendingAction?: DictationRecorderAction;
   cancellation?: Promise<void>;
   terminal?: Promise<void>;
-  preview?: { stop(): Promise<void> };
+  paused?: boolean;
+  pauseChange?: Promise<void>;
+  preview?: PreviewControl;
   previewStopping?: Promise<void>;
+}
+
+export interface PreviewControl {
+  stop(): Promise<void>;
+  pause?(): Promise<void>;
+  resume?(): void;
 }
 
 export interface DictationEngineOptions {
@@ -39,7 +48,7 @@ export interface DictationEngineOptions {
   readonly warm: () => Promise<void>;
   readonly startRecorder: (onLevel: (level: number) => void, signal: AbortSignal) => Promise<DictationSession>;
   readonly transcribe: (audioPath: string) => Promise<string>;
-  readonly startPreview?: (session: DictationSession, signal: AbortSignal) => { stop(): Promise<void> } | undefined;
+  readonly startPreview?: (session: DictationSession, signal: AbortSignal) => PreviewControl | undefined;
   readonly insert: (transcript: string, signal: AbortSignal) => Promise<void>;
   readonly onStateChanged?: (state: DictationState) => void;
   readonly onLevel?: (level: number) => void;
@@ -78,6 +87,46 @@ export class DictationEngine {
       return; // No queued restart or recovery paste behind an old operation.
     }
     await this.startRecording(this.begin('preparing'));
+  }
+
+  async togglePause(): Promise<void> {
+    const op = this.operation;
+    if (op) await this.changePause(op, !op.paused);
+  }
+
+  private changePause(op: Operation, paused: boolean): Promise<void> {
+    if (!this.current(op) || op.phase !== 'recording' || op.pauseChange ||
+        !op.session?.setPaused || !!op.paused === paused) return Promise.resolve();
+    // Install ownership before invoking callbacks or the native request.
+    const change = Promise.resolve().then(async () => {
+      if (!this.current(op) || op.phase !== 'recording') return;
+      if (paused) {
+        try { void op.preview?.pause?.().catch(() => this.reportError(new Error('Live preview pause failed.'))); }
+        catch { this.reportError(new Error('Live preview pause failed.')); }
+      }
+      this.emitSafely(op, paused ? 'pausing' : 'resuming');
+      if (!this.current(op) || op.phase !== 'recording') return;
+      try {
+        await op.session!.setPaused!(paused);
+        if (!this.current(op) || op.phase !== 'recording') return;
+        op.paused = paused;
+        op.pauseChange = undefined; // A queued native Resume after this acknowledgement may proceed.
+        if (!paused) {
+          try { op.preview?.resume?.(); }
+          catch { this.reportError(new Error('Live preview resume failed.')); }
+        }
+        if (this.current(op) && op.phase === 'recording') this.emitSafely(op, paused ? 'paused' : 'recording');
+      } catch (error) {
+        if (this.current(op) && op.phase === 'recording') {
+          this.reportError(error);
+          // An unconfirmed pause must not be presented as paused capture.
+          // Cancel rather than leave uncertain capture active or insert unexpectedly.
+          if (this.current(op) && op.phase === 'recording') await this.cancel();
+        }
+      }
+    });
+    op.pauseChange = change;
+    return change.finally(() => { if (op.pauseChange === change) op.pauseChange = undefined; });
   }
 
   async cancel(): Promise<void> {
@@ -156,7 +205,7 @@ export class DictationEngine {
       this.emitState(op, 'opening-microphone');
       if (!this.current(op)) return;
       const session = await this.options.startRecorder((level) => {
-        if (this.current(op) && op.phase === 'recording') {
+        if (this.current(op) && op.phase === 'recording' && !op.paused && !op.pauseChange) {
           try { this.options.onLevel?.(level); } catch (error) { this.reportError(error); }
         }
       }, op.abort.signal);
@@ -172,7 +221,7 @@ export class DictationEngine {
       op.phase = 'recording';
       const pending = op.pendingAction;
       op.pendingAction = undefined;
-      if (!pending && this.current(op)) {
+      if (pending !== 'stop' && pending !== 'cancel' && this.current(op)) {
         try { op.preview = this.options.startPreview?.(session, op.abort.signal); }
         catch { this.reportError(new Error('Live preview unavailable; normal dictation remains available.')); }
         if (!this.current(op)) void this.stopPreview(op);
@@ -193,12 +242,14 @@ export class DictationEngine {
   private handleRecorderAction(op: Operation, action: DictationRecorderAction): void {
     if (!this.current(op)) return;
     if (op.phase === 'opening-microphone') {
-      op.pendingAction ??= action; // Bounded; no retry timers or repeated accepts.
+      // Terminal controls supersede an early pause; never queue repeated actions.
+      if (op.pendingAction !== 'stop' && op.pendingAction !== 'cancel') op.pendingAction = action;
       return;
     }
     if (op.phase !== 'recording') return;
     if (action === 'stop') void this.stopAndTranscribe(op);
-    else void this.cancel();
+    else if (action === 'cancel') void this.cancel();
+    else void this.changePause(op, action === 'pause');
   }
 
   private handleRecorderFailure(op: Operation, error: Error): void {

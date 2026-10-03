@@ -30,6 +30,12 @@ function harness(settings = {}) {
       child.stdout = new PassThrough(); child.stderr = new PassThrough(); child.stdin = new EventEmitter();
       child.stdin.destroyed = false; child.commands = []; child.kills = 0; child.closed = false;
       child.outputPath = args[args.indexOf('--output') + 1];
+      child.controls = [];
+      child.stdin.write = (data, callback) => {
+        child.controls.push(data);
+        callback?.(settings.writeCallbackError ? Error('input callback failure') : undefined);
+        return true;
+      };
       child.stdin.end = (data, callback) => {
         if (settings.writeThrows) throw Error('input write failed');
         child.commands.push(data);
@@ -49,6 +55,7 @@ function harness(settings = {}) {
       if (id === 'node:fs') return filesystem;
       if (id === 'node:readline') return readline;
       if (id === './overlay-size') return overlay;
+      if (id === './recorder-pause') return require('../dist/core/recorder-pause');
       if (id === './preview-recorder') return require('../dist/core/preview-recorder');
       throw Error(`Unexpected require ${id}`);
     }
@@ -240,4 +247,28 @@ test('kill failure cannot recurse through the child error handler', async () => 
   const cancel = session.cancel(); const rejected = assert.rejects(cancel, /shutdown was not confirmed/);
   h.fire(10000); assert.equal(h.children[0].kills, 1); h.fire(12000); await rejected;
   h.exit(1); h.close(1); await tick(); assert.equal(h.removals.length, 1);
+});
+
+test('Pause/Resume uses nonterminal writes, with matching acknowledgements before Stop', async () => {
+  const h=harness();const opening=h.start();const c=h.children[0];c.stdout.write('READY\n');const s=await opening;
+  const pause=s.setPaused(true); assert.deepEqual(c.controls,['PAUSE 1\n']); assert.deepEqual(c.commands,[]);
+  c.stdout.write('PAUSED 1\n');await pause;
+  const resume=s.setPaused(false);c.stdout.write('RESUMED 2\n');await resume;
+  assert.deepEqual(c.controls,['PAUSE 1\n','RESUME 2\n']);
+  const stopping=s.stop();h.close();await stopping;assert.deepEqual(c.commands,['STOP\n']);
+});
+
+test('Stop rejects pending Pause and drops late native controls', async () => {
+  const h=harness();const opening=h.start();const c=h.children[0];c.stdout.write('READY\n');const s=await opening;
+  const actions=[];s.onAction(action=>actions.push(action));const pause=s.setPaused(true);const stopped=s.stop();
+  c.stdout.write('PAUSED 1\nACTION RESUME\n');h.close();await stopped;await assert.rejects(pause,/stopped/);await tick();
+  assert.deepEqual(actions,[]);
+});
+
+test('native pause and resume actions do not consume the one terminal-action slot', async () => {
+  const h=harness();const opening=h.start();const c=h.children[0];c.stdout.write('READY\nACTION PAUSE\n');const s=await opening;
+  const actions=[];s.onAction(a=>actions.push(a));await tick();
+  c.stdout.write('ACTION RESUME\n');await tick();c.stdout.write('ACTION PAUSE\n');await tick();c.stdout.write('ACTION STOP\n');await tick();
+  assert.deepEqual(actions,['pause','resume','pause','stop']);
+  const stopping=s.stop();h.close();await stopping;
 });

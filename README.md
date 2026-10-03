@@ -4,6 +4,8 @@
 
 **Open source · MIT · [GitHub](https://github.com/gcalpay/vscode-universal-dictate)**
 
+*Overlay screenshots show the earlier interface. The current symbol controls and defaults are described below.*
+
 ![Universal Dictate status-bar controls](media/status-bar-controls.webp)
 
 ![Universal Dictate settings menu](media/settings-menu.webp)
@@ -16,6 +18,8 @@
 
 Universal Dictate transcribes locally with the multilingual Whisper `base` model through `whisper.cpp`, including automatic punctuation, and sends the completed transcript as Unicode text to the input that owns keyboard focus at insertion time. It works in VS Code editors and agent/chat prompts and can also insert into compatible text fields in other Windows applications while Universal Dictate is running. **It never submits or sends dictated text automatically.**
 
+**Other Windows applications:** Start dictation from Universal Dictate, then focus a compatible text field in another app. The final text is inserted there while VS Code remains running. The overlay controls work there too; keyboard shortcuts are local to VS Code, not system-wide.
+
 Available from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=gcalpay.vscode-universal-dictate).
 
 ## Settings
@@ -27,11 +31,11 @@ Open the settings gear next to **Dictate**, or find **Universal Dictate** in VS 
 | **Language** | Choose the language you intend to speak, or Auto-detect. All 99 Whisper languages are available. | **English** |
 | **Audio visualization** | Choose Enhanced overlay, Both (overlay and status-bar waveform), Status bar only, or Off. | **Enhanced overlay** |
 | **Overlay size** | Choose Small, Medium or Large. | **Medium** |
-| **Waveform time span** | Show the latest 1, 3, 5, 10 or 20 seconds in the overlay waveform. This does not limit recording length. | **1 second** |
+| **Waveform time span** | Show the latest 1, 3, 5, 10 or 20 seconds of accepted audio in the overlay waveform. This does not limit recording length. | **10 seconds** |
 | **Overwrite clipboard** | Also copy the final transcript to the clipboard, replacing its previous contents. Automatic insertion still uses direct text input. | **Off** |
 | **Live preview** | Show provisional text while speaking. Requires Enhanced overlay or Both. | **Off** |
 
-Change settings before starting a recording. Changes made during a recording apply to the next one. Saved choices take precedence over the defaults.
+Change settings before starting a recording. Changes made during a recording apply to the next one. Saved choices take precedence over the defaults. Medium is the default overlay size. With Live preview Off, the overlay is shorter; enabling preview reserves room for readable text without narrowing the waveform.
 
 ### Live preview
 
@@ -46,11 +50,19 @@ Preview and final transcription both run locally. Preview adds processing work a
 | Status bar: **Dictate** | Start recording |
 | Status bar: **Stop** | Stop, transcribe locally and insert |
 | **Ctrl+Alt+D** | Start or stop dictation |
-| **Esc** | Cancel the current recording |
+| **Ctrl+Alt+P** | Pause or resume recording within VS Code |
+| **Esc** | Cancel the current recording, including while paused |
 | Overlay: **Insert** | Stop, transcribe and insert |
+| Overlay: **Pause / Resume** | Pause or continue the same recording |
 | Overlay: **Discard** | Cancel and discard |
 
-The recording overlay does not take keyboard focus when clicked. Review the inserted text before sending it.
+The compact overlay buttons are **✓ Insert / Ⅱ Pause (or ▶ Resume) / ✕ Discard**, colored green, amber and red, with descriptive hover labels. The recording overlay does not take keyboard focus when clicked. Review the inserted text before sending it.
+
+### Pause and resume
+
+Pause to think, then Resume to continue the same recording. Audio received while paused is ignored: it is not saved in the WAV, added to the waveform or sent to preview recognition. The waveform and provisional text freeze; Stop/Insert still transcribes the accepted speech once, and Discard still cancels. There is no silence gap added for the paused time.
+
+The microphone device stays open while paused, so Windows may continue to show its microphone-use indicator. Pause is not a hardware mute. Use Discard to end the session.
 
 ## Languages
 

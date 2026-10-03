@@ -1,6 +1,6 @@
 # Manual and release test procedure
 
-This document describes the current 1.0 Windows release behavior. Milestone-specific
+This document describes the 1.1 Windows candidate behavior (user acceptance pending). Milestone-specific
 historical evidence remains in `docs/DICTATION_RELIABILITY_PLAN.md` and its linked
 ledgers. A compile result or mocked control is not a substitute for a real Windows
 interaction test.
@@ -24,7 +24,8 @@ For a clean configuration, verify:
 - Language: English
 - Visualization: Enhanced overlay
 - Overlay size: Medium
-- Waveform time span: 1 second
+- Waveform time span: 10 seconds
+- Overlay controls: Symbols only (no style setting)
 - Overwrite clipboard: Off
 - Live preview: Off
 
@@ -89,6 +90,28 @@ Turn Live preview **On** with Enhanced overlay or Both and verify:
 5. Small/Medium/Large remain within their chosen bounds;
 6. Status bar only / Off do not run invisible preview work.
 
+## Pause/Resume acceptance
+
+With symbol controls and preview Off and On, test each size. Dictate a first
+sentence, Pause, deliberately speak an unrelated sentence while Paused, Resume,
+and dictate a final sentence. Only the first and final sentence should be inserted,
+exactly once, after Stop. The paused period should not lengthen the recorded audio.
+
+Check Pause becomes Resume, the waveform and provisional text freeze, hover help
+names every symbol, and the target caret remains where it was for overlay clicks.
+The microphone-use indicator can remain active: the device stays open.
+
+Repeat with Insert while paused, Discard while paused, repeated middle-button clicks,
+Ctrl+Alt+P while VS Code owns focus, and Stop/Cancel during the pending transition.
+No late acknowledgement may restart capture or cause a second insertion. Check both
+Windows and Remote-WSL workflows and an external compatible focused Windows input.
+Existing Issue #38 is not a failed promise of new status-bar focus preservation.
+
+Run the existing automated checks plus `test/pause-controls.test.cjs`, portable
+`recording-pause-test.cpp`, Windows `recorder-pause-capture-test.cpp`,
+`pause-native-ipc.cjs`, and the extended production renderer/Whisper replay. Synthetic
+PCM and a disposable scratch EDIT are not substitutes for the manual test above.
+
 ## Diagnostics
 
 Run:
@@ -106,7 +129,7 @@ Diagnostics should reflect the effective preview and clipboard settings.
 For the exact final VSIX verify:
 
 - version/publisher/extension identity and win32-x64 target;
-- English / Medium / Live preview Off packaged defaults;
+- English / Medium / Live preview Off / symbol controls / 10-second waveform defaults;
 - all four release screenshots and icon match source;
 - obsolete overview image is absent;
 - only `windows-text-input.exe`, `universal-dictate-recorder.exe`,
@@ -122,3 +145,34 @@ Transcription failures should distinguish warm-server from CLI fallback. Preview
 failure is separate from final transcription. Wrong text is an ASR/language/audio
 issue until evidence shows otherwise. Correct text in the wrong control is a
 target-preservation/focus issue; Issue #38 concerns the genuine status-bar mouse path.
+
+## Waveform visibility regression (1.1.0)
+
+In each overlay size, test Live preview On and Off. Speak quietly, normally and
+loudly, then quietly again without changing microphone gain. The waveform should
+show distinct heights and should not rescale old samples or the second quiet part.
+Pause should freeze both waveform and preview. A short one-line hypothesis should
+sit directly beneath the waveform instead of being centered in a tall blank area;
+long preview text should show one complete line in Small or up to two in Medium/Large.
+Check 100/125/150/200% scaling where available; symbol ink, clicks and hover help
+must stay aligned. Preview Off uses a shorter window than Preview On. Pause/Resume
+and changing provisional text must not resize the active window. Medium remains the
+default; saved size/span/preview/clipboard values must not be reset.
+The gear has six entries, including Live preview, and no Text/Symbols selector.
+The accepted six-entry menu screenshot stays unchanged.
+Automated signed-peak/PCM/renderer evidence does not replace this microphone-level check.
+
+### Temporal waveform regression (required before another test VSIX)
+
+Watch an already-created syllable while continuing to speak: it may move left but
+must retain its height and shape. Speak quietly, then louder; older quiet speech
+must not grow, shrink or flip polarity. Check before the history fills, across the
+first full span, through Pause/Resume, and with preview Off/On. Use the saved span;
+there is no requirement to switch to one second to get stable rendering.
+
+Portable CI compares completed samples before/after 3,840 appends and verifies that
+partial buckets change nothing. The Windows renderer test verifies translated
+pixel identity for old strokes and an unchanged frame while the next bucket is
+incomplete. These motion checks supplement, not replace, the existing static
+multilingual, DPI, clipping, loudness and control tests. Scripted captures are not
+public screenshots or a substitute for the user's real-microphone visual review.

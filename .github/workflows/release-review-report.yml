@@ -8,7 +8,7 @@ permissions: {}
 
 jobs:
   collect-report:
-    if: github.repository == 'gcalpay/vscode-universal-dictate' && github.head_ref == 'release/next' && github.event.pull_request.head.repo.full_name == github.repository
+    if: github.repository == 'gcalpay/vscode-universal-dictate' && (github.head_ref == 'release/next' || github.head_ref == 'feat/pause-resume-controls') && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 6
     steps:

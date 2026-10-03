@@ -42,14 +42,14 @@ function extensionFixture() {
   const { TranscriptRecoveryController } = load('transcript-recovery', { vscode: h.vscode });
   const extension = load('extension', {
     'node:fs': fs, vscode: h.vscode,
-    './core/dictation': { DictationEngine: class { constructor(o) { options = o; } dispose() {} } },
+    './core/dictation': { DictationEngine: class { constructor(o) { options = o; } async togglePause() { h.calls.pauses = (h.calls.pauses || 0) + 1; } dispose() {} } },
     './transcript-recovery': { TranscriptRecoveryController },
     './core/preview-coordinator': require('../dist/core/preview-coordinator'),
     './core/overlay-size': { normalizeOverlaySize: s => s, OVERLAY_SIZES: ['small', 'medium', 'large'] },
     './languages': { normalizeWhisperLanguage: v => v, getWhisperLanguageName: v => v, WHISPER_LANGUAGES: [] },
     './model': { ensureModel: async () => {} },
     './paste': { pasteIntoFocusedControl: async (...args) => { insertions.push(args); } },
-    './recorder': { RecorderSession: { start: async () => ({}) } },
+    './recorder': { RecorderSession: { start: async (...args) => { h.calls.recorder = args; return {}; } } },
     './whisper': { warmWhisper: async () => {}, disposeWhisper() {}, transcribe: async (...args) => { h.calls.transcription = args; return 'final'; } }
   }); const context = { subscriptions: [] }; extension.activate(context);
   return { ...h, get options() { return options; }, insertions, cleanup() { context.subscriptions.forEach(d => d.dispose()); } };
@@ -155,5 +155,54 @@ test('English is the manifest and runtime default language', async () => {
   await h.options.prepare();
   await h.options.transcribe('complete.wav');
   assert.equal(h.calls.transcription[2],'en');
+  h.cleanup();
+});
+
+test('six settings retain Live preview, Medium and ten-second defaults without a style selector', async () => {
+  const h = extensionFixture();
+  await h.commands.get('universalDictate.openSettings')();
+  assert.deepEqual(Array.from(h.calls.menus[0], item => item.action),
+    ['language', 'visualization', 'overlaySize', 'waveformTimeSpan', 'overwriteClipboard', 'livePreview']);
+  const properties = manifest.contributes.configuration.properties;
+  assert.equal(Object.keys(properties).length, 6);
+  assert.equal(properties['universalDictate.overlayButtonStyle'], undefined);
+  assert.equal(properties['universalDictate.overlaySize'].default, 'medium');
+  assert.equal(properties['universalDictate.waveformTimeSpanSeconds'].default, 10);
+  await h.options.prepare();
+  await h.options.startRecorder(() => {}, new AbortController().signal);
+  assert.equal(h.calls.recorder[4], 10); assert.equal(h.calls.recorder[5], 'medium');
+  assert.equal(h.calls.recorder.length, 8); assert.deepEqual(h.calls.updates, []);
+  h.cleanup();
+});
+
+test('retired test-candidate style preferences are not forwarded, deleted or rewritten', async () => {
+  for (const style of ['text', 'symbols', 'emoji']) {
+    const h = extensionFixture(); h.config.overlayButtonStyle = style;
+    await h.commands.get('universalDictate.openSettings')();
+    await h.options.prepare();
+    await h.options.startRecorder(() => {}, new AbortController().signal);
+    assert.equal(h.calls.recorder.length, 8);
+    assert.equal(h.config.overlayButtonStyle, style);
+    assert.deepEqual(h.calls.updates, []); assert.deepEqual(h.calls.copies, []);
+    h.cleanup();
+  }
+});
+
+test('explicit layout preferences survive preparation and are session-stable', async () => {
+  const h=extensionFixture();Object.assign(h.config,{overlayButtonStyle:'symbols',waveformTimeSpanSeconds:1,overlaySize:'small',livePreview:true});
+  await h.options.prepare();Object.assign(h.config,{overlayButtonStyle:'text',waveformTimeSpanSeconds:20,overlaySize:'large',livePreview:false});
+  await h.options.startRecorder(()=>{},new AbortController().signal);
+  assert.equal(h.calls.recorder[4],1);assert.equal(h.calls.recorder[5],'small');assert.equal(h.calls.recorder[7],true);assert.equal(h.calls.recorder.length,8);
+  assert.deepEqual(h.calls.updates,[]);h.cleanup();
+});
+
+test('invalid preferences fall back; pause command leaves Stop available and requires recording', async () => {
+  const h=extensionFixture();h.config.overlayButtonStyle='emoji';h.config.waveformTimeSpanSeconds='10';
+  await h.options.prepare();await h.options.startRecorder(()=>{},new AbortController().signal);
+  assert.equal(h.calls.recorder[4],10);assert.equal(h.calls.recorder.length,8);
+  await h.commands.get('universalDictate.pauseResume')();assert.equal(h.calls.pauses,1);
+  const binding=manifest.contributes.keybindings.find(x=>x.command==='universalDictate.pauseResume');
+  assert.equal(binding.key,'ctrl+alt+p');assert.match(binding.when,/universalDictate.recording/);
+  for(const state of ['pausing','paused','resuming']){h.options.onStateChanged(state);assert.equal(h.calls.status[0].command,'universalDictate.toggle');}
   h.cleanup();
 });

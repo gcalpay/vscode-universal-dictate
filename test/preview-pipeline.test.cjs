@@ -344,3 +344,33 @@ test('an independent cleanup failure is reported even after an earlier decoding 
   h.coordinator.start(); await tick(h); await h.coordinator.stop();
   assert.deepEqual(h.errors, ['decode', 'cleanup']); assert.equal(h.clock.tasks.size, 0);
 });
+
+test('paused preview does no work and resumes from a fresh interval without queue catch-up', async () => {
+  const h=setup();h.coordinator.start();await tick(h);assert.equal(h.updates.length,1);
+  await h.coordinator.pause();await tick(h,120000);
+  assert.equal(h.acquired.length,1);assert.equal(h.clock.tasks.size,0);
+  h.coordinator.resume();await tick(h,1999);assert.equal(h.acquired.length,1);
+  await tick(h,1);assert.equal(h.updates.length,2);assert.equal(h.updates[1].revision,2);
+  await h.coordinator.stop();h.coordinator.resume();await tick(h,10000);assert.equal(h.updates.length,2);
+});
+
+test('an abort-ignoring old decode cannot display across Pause/Resume or run concurrently', async () => {
+  const old=deferred();let signal,calls=0;
+  const h=setup({decode:(_audio,_language,s)=>{signal=s;calls++;return calls===1?old.promise:Promise.resolve('fresh');}});
+  h.coordinator.start();await tick(h);const paused=h.coordinator.pause();assert.equal(signal.aborted,true);
+  h.coordinator.resume();await tick(h,10000);assert.equal(calls,1);assert.equal(h.updates.length,0);
+  old.resolve('obsolete');await paused;await flush();assert.equal(h.updates.length,0);
+  await tick(h);assert.equal(calls,2);assert.equal(h.updates[0].text,'fresh');assert.equal(h.errors.length,0);
+  await h.coordinator.stop();
+});
+
+test('Stop while paused waits for snapshot release and never resumes failed preview', async () => {
+  const release=deferred();const h=setup({acquire:async()=>({audio:createPreviewAudio('session-a',32000,Buffer.alloc(64000)),release:()=>release.promise})});
+  h.coordinator.start();await tick(h);const pausing=h.coordinator.pause();let stopped=false;
+  const stop=h.coordinator.stop().then(()=>{stopped=true;});await flush();assert.equal(stopped,false);
+  release.resolve();await Promise.all([pausing,stop]);h.coordinator.resume();await tick(h,10000);
+  assert.equal(h.clock.tasks.size,0);
+  const failed=setup({decode:async()=>{throw Error('failed');}});failed.coordinator.start();await tick(failed);
+  await failed.coordinator.pause();failed.coordinator.resume();await tick(failed,10000);
+  assert.deepEqual(failed.errors,['decode']);assert.equal(failed.acquired.length,1);await failed.coordinator.stop();
+});

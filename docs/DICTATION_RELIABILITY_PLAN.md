@@ -4,23 +4,18 @@ Updated: 2026-10-01. Repository: `gcalpay/vscode-universal-dictate`.
 
 This is the current implementation handoff. It replaces the earlier out-of-order milestone numbering. Historical planning and focus-diagnostic evidence remain available through pinned commits/branches, but the active milestone numbers below are chronological. M2 follows the user-approved [direct-input / optional-overwrite correction](M2_CLIPBOARD_MODE_FIX.md); the restoration design and recovery submenu are archived, not active requirements.
 
-## Active 1.0.0 scope — final release work authorized 2026-10-01
+## Active milestone — M7 approved 2026-10-01
 
-M1, M2 and M3 are complete, accepted and merged. Current `main` is the accepted
-M3 merge `d1408904409c8636a4ffada6ef342a5d04b6ed3a` from PR #52. M4 is skipped
-for 1.0.0 and M5 is parked outside 1.0.0. M6 is current on `release/next`
-through PR #53.
+M1/M2/M3/M6 are complete in the accepted 1.0.0 merge
+`eda02a512d3feb70989b89a3efc6714d12b833e7` (PR #53). The user reports
+Marketplace publication. M4 remains skipped and M5 parked; Issue #38 stays open.
 
-The user tested the verified 1.0.0 candidate at `02e94d9` and accepted its product
-behavior. The only final presentation change is replacement of the waveform-only
-enhanced-overlay screenshot, followed by reconciliation of active internal docs and
-a final package build/audit. Issue #38 remains unresolved; clipboard overwrite
-remains the accepted recovery workaround.
-
-The user explicitly authorized the final M6 sequence on 2026-10-01: final asset/doc
-update, checks/package audit, PR #53 update/readiness, merge to main, tag `v1.0.0`,
-GitHub Release and publication of the exact verified 1.0.0 VSIX to the Marketplace.
-No M4/M5 feature work or other runtime change is part of this authorization.
+Current work: `feat/pause-resume-controls` / PR #54, targeting 1.1.0. Scope is
+Pause/Resume, compact symbol-only overlay buttons, efficient vertical layout, ten-second waveform
+default and an external-Windows-input README clarification. See
+[M7_PAUSE_RESUME.md](M7_PAUSE_RESUME.md) for semantics, validation and review gates.
+Implementation/builds are authorized. Merge and publication require user acceptance
+of the finished candidate; the earlier M6 authorization does not authorize this.
 
 ## 1. Branch and review policy
 
@@ -33,7 +28,8 @@ No M4/M5 feature work or other runtime change is part of this authorization.
 | M3 Live transcript preview | `feat/live-transcript-preview` |
 | M4 Translation | Skipped for 1.0.0; no branch |
 | M5 Insertion-target preservation | Parked outside 1.0.0; no branch |
-| M6 Integrated validation/release | `release/next` |
+| M6 Integrated validation/release | `release/next` (complete) |
+| M7 Pause/Resume and controls | `feat/pause-resume-controls` |
 
 Workflow for every milestone:
 
@@ -46,13 +42,13 @@ Workflow for every milestone:
 
 If a milestone is blocked or rejected, do not merge it just to preserve sequence. Continue fixing the same branch, or close/park it after the user's decision and create the next branch from unchanged `main`.
 
-Milestone planning alone does not authorize publication. For this release, the user's explicit 2026-10-01 M6 authorization satisfies the merge/tag/release/Marketplace gate unless a genuine blocker requires another decision.
+Milestone planning alone does not authorize publication. M7 must remain unmerged and unpublished until the user reviews and accepts its finished Windows VSIX.
 
-M1, M2 and M3 are accepted and merged through PRs #50, #51 and #52 respectively. M6 is the current release branch/PR. Keep the frozen launcher and Code OSS diagnostic branches isolated from ordinary product work.
+M1, M2 and M3 are accepted and merged through PRs #50, #51 and #52 respectively. M6 is complete; M7 is the current branch/PR. Keep the frozen launcher and Code OSS diagnostic branches isolated from ordinary product work.
 
-## 2. Verified baseline
+## 2. Historical 1.0.0 preparation baseline
 
-Current release baseline, checked 2026-10-01:
+The following was recorded before the 1.0.0 merge. Current work is defined above:
 
 - Current `main`: `d1408904409c8636a4ffada6ef342a5d04b6ed3a`, the accepted M3 merge from PR #52.
 - M6 release work is on `release/next` / PR #53 at version 1.0.0.
@@ -69,8 +65,6 @@ Current release baseline, checked 2026-10-01:
 - M1 PR #50, M2 PR #51 and M3 PR #52 are complete and merged.
 - M4 translation is skipped for 1.0.0. M5 genuine status-bar focus preservation is parked.
 - Issue #38 remains unresolved for the genuine status-bar mouse workflow.
-
-Historical branches that must not be merged into ordinary feature work:
 
 Historical branches that must not be merged into ordinary feature work:
 
@@ -278,7 +272,7 @@ Document that limitation in the release; do not advertise universal target
 preservation. Reopening M5 requires a separate product decision. Historical
 experiments and acceptance matrix remain available at the M2 merge commit.
 
-## 9. M6 — Integrated validation and release
+## 9. M6 — Integrated validation and release (historical, complete)
 
 **Branch:** `release/next`, created from updated main after accepted M3 merge. M4 is skipped and M5 is parked. The candidate behavior is accepted; final presentation/doc reconciliation, exact package verification and the authorized release/publication sequence are the remaining M6 work.
 
@@ -296,8 +290,6 @@ The user accepted the candidate behavior and explicitly authorized merge/tag/Git
 Release/Marketplace publication after the final presentation/doc update passes
 verification. Publish only the exact verified final VSIX. Stop if artifact/source
 identity, CI/package verification or publication capability is genuinely blocked.
-
-## 10. Acceptance map
 
 ## 10. Acceptance map
 
@@ -326,23 +318,14 @@ Every manual result records commit/artifact, Windows/VS Code/Codex versions, loc
 
 ## 11. Current handoff
 
-M1, M2 and M3 are accepted and merged. Current `main` is the M3 merge
-`d1408904409c8636a4ffada6ef342a5d04b6ed3a` (PR #52). M4 is skipped and M5 is
-parked outside 1.0.0; Issue #38 remains unresolved.
+Continue M7 on `feat/pause-resume-controls` / draft PR #54. Main remains the accepted
+1.0.0 merge `eda02a512d3feb70989b89a3efc6714d12b833e7`. The initial M7 snapshot
+workflow was temporary development equipment; remove it from the finished candidate.
 
-M6 is current on `release/next` / PR #53. The user tested the prior verified
-1.0.0 candidate at `02e94d9` and accepted the product behavior. Its Linux CI
-`36793699565` and Windows package run `36793699560` succeeded. The only final
-presentation change is the user-supplied 564 x 113 replacement for
-`media/enhanced-overlay.webp`, together with reconciliation of stale active docs.
-
-After those asset/doc-only changes, run the final checks and inspect the exact VSIX.
-If verification succeeds, the user has already authorized making PR #53 ready,
-merging it to main, tagging `v1.0.0`, creating the GitHub Release and publishing
-that exact verified VSIX to the Marketplace. Do not reopen accepted M3 runtime work
-or start M4/M5 as part of this release.
-
-Historical pre-renumbering plan:
+Follow [M7_PAUSE_RESUME.md](M7_PAUSE_RESUME.md). Record actual CI/native/package
+results in PR #54, deliver the exact Windows VSIX, and wait for user review before
+merge or publication. Historical M2/M3/M6 ledgers do not authorize further release
+operations. No Linux/macOS, model selector, global hotkey or focus fix is in scope.
 
 Historical pre-renumbering plan: `3c0c3bc2fd611a3a76835897edc5af3a674bf2df`.
 Archived M2.1-M2.4 ledgers are evidence, not instructions to revive discarded code.
