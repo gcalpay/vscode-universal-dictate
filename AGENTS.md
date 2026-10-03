@@ -27,7 +27,7 @@ Select the bucket duration before capture; finalize each value once. Completed
 samples may scroll left but must never be regrouped, rescaled or reshaped by later
 audio. Do not add paint-time decimation, neighbor smoothing or adaptive gain.
 Keep the compact geometry, symbol controls, six settings and ten-second default.
-The original peak response has fixed additional headroom for quiet/loud distinction;
+The peak response stays close to 0.1.5 (reference 0.05, exponent 0.62) with only a slightly raised visual idle gate (0.0015);
 recorded PCM, recognition and Pause/Resume remain unchanged. The reference screenshot
 was NOT necessarily recorded at one second; do not infer its span from old defaults.
 
