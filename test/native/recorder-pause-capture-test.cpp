@@ -19,20 +19,20 @@ std::vector<ma_int16> readPcm(const std::string& path){
     ma_decoder_uninit(&decoder);
     requireCapture(status==MA_SUCCESS||status==MA_AT_END,"read synthetic output");result.resize(static_cast<std::size_t>(read));return result;
 }
-// Verify the production callback uses fixed signed peaks with loudness headroom,
-// without altering either WAV samples or the independently published raw peak.
+// Verify the production callback uses the near-0.1.5 signed-peak response with
+// a slight visual idle gate, without altering WAV samples or raw peak reporting.
 void verifyWaveform(const std::filesystem::path& path){
     for(int span : {1000,3000,5000,10000,20000}){
         Encoder encoder;requireCapture(encoder.open(path.string())==MA_SUCCESS,"waveform encoder");
         CaptureState state{&encoder};state.enhancedBucketTargetFrames=universal_dictate::waveformBucketFrames(span);
         const auto frames=state.enhancedBucketTargetFrames;
         int previous=0;std::vector<ma_int16> expected;
-        for(ma_int16 sample : {128,819,5243}){
+        for(ma_int16 sample : {128,819,1475}){
             feed(state,sample,frames);expected.insert(expected.end(),frames,sample);
             std::array<int,1> latest{};
             requireCapture(state.enhancedHistory.snapshot(latest),"latest visual range");
             const int level=std::abs(latest[0]);
-            requireCapture(level>previous&&level<950,"capture waveform lacks peak headroom");previous=level;
+            requireCapture(level>previous&&level<1000,"capture waveform lost 0.1.5-style level separation");previous=level;
             requireCapture(state.peakMilli.load()==sample*1000/32767,"visualization changed raw peak reporting");
         }
         const auto before=state.enhancedHistory.written();state.gate.pause();
