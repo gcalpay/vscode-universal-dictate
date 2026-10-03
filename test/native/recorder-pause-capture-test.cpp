@@ -24,22 +24,40 @@ std::vector<ma_int16> readPcm(const std::string& path){
 void verifyWaveform(const std::filesystem::path& path){
     for(int span : {1000,3000,5000,10000,20000}){
         Encoder encoder;requireCapture(encoder.open(path.string())==MA_SUCCESS,"waveform encoder");
-        CaptureState state{&encoder};state.enhancedBucketTargetFrames=calculateEnhancedBucketTargetFrames(span);
-        const auto frames=static_cast<ma_uint32>(state.enhancedBucketTargetFrames);
+        CaptureState state{&encoder};state.enhancedHistoryPoints=universal_dictate::waveformHistoryPoints(span);
+        const auto frames=universal_dictate::kWaveformFramesPerPoint;
         int previous=0;std::vector<ma_int16> expected;
         for(ma_int16 sample : {128,819,5243}){
             feed(state,sample,frames);expected.insert(expected.end(),frames,sample);
-            const auto written=state.enhancedWriteCount.load();
-            const int level=state.enhancedSignal[(written-1)%kEnhancedSignalPoints].load();
+            std::array<universal_dictate::WaveformRange,1> latest{};
+            requireCapture(state.enhancedHistory.snapshot(latest),"latest visual range");
+            const int level=latest[0].magnitude();
             requireCapture(level>previous&&level<950,"capture waveform lacks RMS headroom");previous=level;
             requireCapture(state.peakMilli.load()==sample*1000/32767,"visualization changed raw peak reporting");
         }
-        const auto before=state.enhancedWriteCount.load();state.gate.pause();
-        feed(state,32767,frames*3);requireCapture(state.enhancedWriteCount.load()==before,"paused signal changed waveform");
+        const auto before=state.enhancedHistory.written();state.gate.pause();
+        feed(state,32767,frames*3);requireCapture(state.enhancedHistory.written()==before,"paused signal changed waveform");
         state.gate.resume();feed(state,128,frames);expected.insert(expected.end(),frames,128);
-        requireCapture(state.enhancedSignal[before%kEnhancedSignalPoints].load()==state.enhancedSignal[0].load(),"loud input renormalized later quiet input");
+        std::array<universal_dictate::WaveformRange,4> recent{};
+        requireCapture(state.enhancedHistory.snapshot(recent),"resumed visual ranges");
+        requireCapture(recent[3]==recent[0],"loud input renormalized later quiet input");
         encoder.close();requireCapture(readPcm(path.string())==expected,"visualization changed accepted WAV samples");
     }
+}
+void verifyFineCapture(const std::filesystem::path& path){
+    Encoder encoder; requireCapture(encoder.open(path.string())==MA_SUCCESS,"fine encoder");
+    CaptureState capture{&encoder};
+    feed(capture,0,128); feed(capture,819,32); feed(capture,-819,32); feed(capture,0,16000-192);
+    requireCapture(capture.enhancedHistory.written()==250,"one-second production count must be 250 at ten-second history");
+    snapshotEnhancedSignal(capture);
+    requireCapture(g_overlay.enhancedHistoryPoints==2500,"ten-second history capacity");
+    const auto event=g_overlay.enhancedSignalHistory[2252];
+    requireCapture(event.above>0&&event.below==event.above,"production callback lost bipolar 4ms event");
+    requireCapture(g_overlay.enhancedSignalHistory[2251].magnitude()==0&&g_overlay.enhancedSignalHistory[2253].magnitude()==0,"temporal event smeared");
+    const auto before=g_overlay.enhancedSignalHistory;
+    capture.gate.pause(); feed(capture,32767,16000); snapshotEnhancedSignal(capture);
+    requireCapture(g_overlay.enhancedSignalHistory==before,"paused detailed waveform changed");
+    encoder.close();
 }
 // Uses the actual CoreRecorderSession pipe arguments for the Node integration test.
 int syntheticRecorder(const std::string& output){
@@ -70,12 +88,12 @@ int main(int argc,char** argv){
         Encoder encoder;requireCapture(encoder.open(path.string())==MA_SUCCESS,"encoder open");
         CaptureState state{&encoder};universal_dictate::preview::Bridge preview("synthetic");state.preview=&preview;
         universal_dictate::RecordingPause pause(state.gate);feed(state,1111);
-        const auto waveBefore=state.enhancedWriteCount.load();
+        const auto waveBefore=state.enhancedHistory.written();
         pause.command("PAUSE 1");requireCapture(pause.poll().paused,"pause confirmed");
         feed(state,9999,16000*20); // A long thinking pause must add neither zeros nor speech.
         universal_dictate::preview::Snapshot snapshot;requireCapture(preview.audio.copy(snapshot),"paused preview copy");
         requireCapture(snapshot.end==1600&&snapshot.pcm.size()==1600,"paused PCM excluded from preview");
-        requireCapture(state.enhancedWriteCount.load()==waveBefore,"waveform freezes");
+        requireCapture(state.enhancedHistory.written()==waveBefore,"waveform freezes");
         pause.command("RESUME 2");requireCapture(pause.poll().id==2,"resume confirmed");feed(state,-2222);
         pause.command("PAUSE 3");requireCapture(pause.poll().paused,"second pause");feed(state,9999);
         encoder.close(); // Stop while paused is a normal final WAV, no implicit Resume.
@@ -85,6 +103,7 @@ int main(int argc,char** argv){
         char name[]="test";char* args[]{name};requireCapture(parseWaveformTimeSpanMs(1,args)==10000,"native ten-second default");
         requireCapture(parseOverlaySize(1,args)==OverlaySize::Medium,"native Medium overlay default");
         verifyWaveform(path);
+        verifyFineCapture(path);
         std::cout<<"Production WAV/preview/waveform pause and five-span RMS checks passed; synthetic PCM, no microphone\n";return 0;
     }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}
 }

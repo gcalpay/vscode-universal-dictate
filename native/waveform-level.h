@@ -14,24 +14,38 @@ inline int visualRmsMagnitude(double rms) noexcept {
     return static_cast<int>(std::lround(fraction * 1000.0));
 }
 
+struct WaveformRange {
+    int below = 0;
+    int above = 0;
+    int magnitude() const noexcept { return std::max(below, above); }
+    bool operator==(const WaveformRange&) const = default;
+};
+
 class WaveformBucket {
 public:
-    // Called only for admitted PCM, so a pause leaves even a partial bucket intact.
-    // O(1) storage; the RMS/log mapping runs once per completed bucket, not per sample.
-    std::optional<int> push(std::int16_t sample, std::uint32_t targetFrames) noexcept {
+    // Visual-only statistics. Each completed bucket retains both measured extrema;
+    // the fixed RMS scale controls its height, not an arbitrary peak sign.
+    std::optional<WaveformRange> push(std::int16_t sample, std::uint32_t targetFrames) noexcept {
         const int value = sample;
         sumSquares_ += static_cast<double>(value) * value;
-        if (std::abs(value) > std::abs(peak_)) peak_ = value;
+        negativePeak_ = std::max(negativePeak_, -value);
+        positivePeak_ = std::max(positivePeak_, value);
         if (++frames_ < std::max(1U, targetFrames)) return std::nullopt;
         const double rms = std::sqrt(sumSquares_ / frames_) / 32768.0;
         const int magnitude = visualRmsMagnitude(rms);
-        const int result = peak_ < 0 ? -magnitude : magnitude;
-        frames_ = 0; sumSquares_ = 0; peak_ = 0;
+        const int peak = std::max(1, std::max(negativePeak_, positivePeak_));
+        // Preserve the measured positive/negative proportions within the RMS height.
+        // This changes only drawing coordinates, never PCM or the fixed level scale.
+        const WaveformRange result{
+            (magnitude * negativePeak_ + peak / 2) / peak,
+            (magnitude * positivePeak_ + peak / 2) / peak};
+        frames_ = 0; sumSquares_ = 0; negativePeak_ = 0; positivePeak_ = 0;
         return result;
     }
 private:
     std::uint32_t frames_ = 0;
     double sumSquares_ = 0;
-    int peak_ = 0;
+    int negativePeak_ = 0;
+    int positivePeak_ = 0;
 };
 } // namespace universal_dictate

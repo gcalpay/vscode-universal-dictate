@@ -125,3 +125,32 @@ Both startup paths and DPI changes must agree with drawing, hit testing and tool
 rectangles. Tests explicitly cover the retired setting without mutating saved values.
 Keep the actual six-entry menu image. Do not delete Live preview to match an older
 five-entry screenshot or present scripted overlay renders as user captures.
+
+## Fine temporal detail after compact-layout acceptance
+
+The user accepted the compact controls/layout at `1eab79d`, but rejected the coarse
+polygonal waveform in subsequent captures. Capture previously summarized ten seconds
+into 256 signed RMS buckets (~39 ms each). The default remains ten seconds; detail
+acquisition is now fixed at 64 PCM frames / 4 ms, independent of history span. The
+1 / 3 / 5 / 10 / 20-second choices use 250 / 750 / 1,250 / 2,500 / 5,000 ranges.
+
+Each visual range uses the same fixed -60 to -6 dBFS RMS height and both measured
+positive/negative peak proportions. A strongest sample no longer assigns its sign
+to a whole energy bucket. A sequence-tagged lock-free ring retains at most twenty
+seconds (5,000 atomic slots; 40 kB slot storage) without storing additional audio.
+Pause admits no frames and leaves a partial range/history intact.
+
+The renderer preserves extrema when several 4 ms ranges occupy one physical pixel,
+and paints independent thin filaments plus an anti-aliased outline instead of
+connecting arbitrary signs. It does not interpolate invented detail, normalize to
+recent loudness or filter the recorded PCM. Ten seconds cannot have the same visible
+horizontal resolution as one second in the same number of pixels; the improvement
+preserves brief events and removes coarse signed-energy zigzags within that limit.
+
+Additional tests cover exact temporal counts at all spans, isolated 4 ms events,
+positive/negative ranges, pixel aggregation without skipped transients, ring wrap,
+concurrent snapshots, partial Pause/Resume, unchanged production-callback audio,
+all compact/preview layouts and measured synthetic-PCM renderer/clipping fixtures.
+All prior lifecycle, clipboard, input and preview tests remain applicable. New user
+waveform review and public replacement screenshots remain pending; run and artifact
+identities belong in PR #54 rather than a post-build source change.

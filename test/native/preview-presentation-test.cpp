@@ -187,7 +187,7 @@ void renderWaveformLevels(const std::filesystem::path& output, OverlaySize size,
     int previousHeight = 0;
     for (double rms : {0.004, 0.025, 0.16}) {
         for (int i = 0; i < kEnhancedSignalPoints; ++i)
-            g_overlay.enhancedSignalHistory[i] = universal_dictate::visualRmsMagnitude(rms) * (i % 2 ? 1 : -1);
+            g_overlay.enhancedSignalHistory[i] = {universal_dictate::visualRmsMagnitude(rms), universal_dictate::visualRmsMagnitude(rms)};
         drawEnhancedOverlay(canvas.dc, client);
         const int height = waveformInkHeight(canvas, box);
         std::cout << "WAVEFORM size=" << static_cast<int>(size) << " dpi=" << dpi
@@ -197,6 +197,40 @@ void renderWaveformLevels(const std::filesystem::path& output, OverlaySize size,
             std::to_string(dpi) + (enabled ? "-preview-" : "-off-") + std::to_string(rms) + ".bmp"));
         check(height > previousHeight, "quiet/normal/loud waveform heights are indistinguishable");
         previousHeight = height;
+    }
+}
+
+void renderFinePcmDetail(const std::filesystem::path& output, OverlaySize size, unsigned int dpi) {
+    // Ten seconds of deterministic speech-like bursts, varying energy and harmonics.
+    // Both positive and negative extrema come from PCM through the production bucket.
+    CaptureState capture{};
+    for (int frame = 0; frame < 160000; ++frame) {
+        const double t = frame / 16000.0;
+        const double syllable = std::max(0.0, std::sin(t * 3.141592653589793 * 2.4));
+        const double amplitude = (t < 3 ? 0.008 : t < 6 ? 0.04 : 0.18) * syllable * syllable;
+        const auto pcm = static_cast<std::int16_t>(32767 * amplitude *
+            (0.7 * std::sin(t * 3.141592653589793 * 360) + 0.3 * std::sin(t * 3.141592653589793 * 890)));
+        if (const auto range = capture.enhancedBucket.push(pcm, universal_dictate::kWaveformFramesPerPoint))
+            capture.enhancedHistory.publish(*range);
+    }
+    check(capture.enhancedHistory.written() == 2500, "ten-second PCM detail count");
+    snapshotEnhancedSignal(capture);
+    for (bool preview : {false, true}) {
+        const auto layout = configurePresentation(size, dpi, preview);
+        Canvas canvas(layout.width, layout.height);
+        const RECT client{0, 0, layout.width, layout.height};
+        g_overlay.previewText = L"Fine waveform detail; recording and controls unchanged.";
+        drawEnhancedOverlay(canvas.dc, client);
+        canvas.save(output / ("fine-pcm-" + std::to_string(static_cast<int>(size)) + "-" +
+            std::to_string(dpi) + (preview ? "-preview.bmp" : "-off.bmp")));
+        const auto box = preview ? universal_dictate::preview::calculateTextLayout(size, dpi).waveform : layout.waveform;
+        check(waveformInkHeight(canvas, box) > 2, "measured detail missing");
+        // Isolated waveform paint must not leak into controls/text after densification.
+        Canvas guard(layout.width, layout.height);
+        drawEnhancedWaveform(guard.dc);
+        const auto pixels = guard.snapshot();
+        for (int y = 0; y < layout.height; ++y) for (int x = 0; x < layout.width; ++x)
+            if (!inside(x, y, box)) check(pixels[y * layout.width + x] == 0x00335577U, "fine waveform escaped viewport");
     }
 }
 
@@ -222,9 +256,10 @@ void renderWaveformCases(const std::filesystem::path& output, OverlaySize size, 
     checkPreviewTopAlignment(size, dpi);
     // Deterministic low/medium/high energy envelopes, not microphone acceptance.
     for (int i = 0; i < kEnhancedSignalPoints; ++i) {
-        const double rms = i < 20 ? 0 : i < 90 ? 0.004 : i < 170 ? 0.025 : 0.16;
+        const auto fraction = static_cast<double>(i) / g_overlay.enhancedHistoryPoints;
+        const double rms = fraction < 0.08 ? 0 : fraction < 0.35 ? 0.004 : fraction < 0.67 ? 0.025 : 0.16;
         const double variation = 0.75 + 0.25 * std::sin(i * 0.45);
-        g_overlay.enhancedSignalHistory[i] = universal_dictate::visualRmsMagnitude(rms * variation) * (i % 2 ? 1 : -1);
+        g_overlay.enhancedSignalHistory[i] = {universal_dictate::visualRmsMagnitude(rms * variation), universal_dictate::visualRmsMagnitude(rms * variation)};
     }
     for (bool enabled : {false, true}) {
         const auto layout = configurePresentation(size, dpi, enabled);
@@ -234,7 +269,7 @@ void renderWaveformCases(const std::filesystem::path& output, OverlaySize size, 
         canvas.save(output / ("waveform-" + std::to_string(static_cast<int>(size)) + "-" + std::to_string(dpi) +
             (enabled ? "-preview.bmp" : "-off.bmp")));
     }
-    g_overlay.enhancedSignalHistory.fill(0);
+    g_overlay.enhancedSignalHistory.fill({});
 }
 
 void checkControlSymbols(const universal_dictate::EnhancedOverlayLayout& layout, unsigned int dpi) {
@@ -343,6 +378,7 @@ int main(int argc, char** argv) {
                 renderCases(output,size,dpi,count);
                 renderControlCases(output,size,dpi);
                 renderWaveformCases(output,size,dpi);
+                renderFinePcmDetail(output,size,dpi);
                 checkFocus(scratch,edit);
             }
             // Actual clicks at both heights, not synthetic DOM events.
@@ -369,7 +405,7 @@ int main(int argc, char** argv) {
         }
         DestroyWindow(scratch); scratch = nullptr;
         SetCursorPos(originalCursor.x,originalCursor.y);
-        std::cout << count << " production-renderer cases passed; 12 Off renders, 12 clipping checks, 48 preview/control-state renders, 96 symbol bounds checks, 24 waveform renders with 72 level checks, 12 top-alignment checks, 48 real own-overlay clicks; no microphone or Codex test\n";
+        std::cout << count << " production-renderer cases passed; 12 Off renders, 12 clipping checks, 48 preview/control-state renders, 96 symbol bounds checks, 24 waveform renders with 72 level checks, 12 top-alignment checks, 24 measured fine-PCM renders/clipping checks, 48 real own-overlay clicks; no microphone or Codex test\n";
         return 0;
     } catch (const std::exception& error) {
         destroyOverlay(); if (scratch) DestroyWindow(scratch);

@@ -44,7 +44,7 @@
 #include "preview-text.h"
 #include "recording-pause.h"
 #include "overlay-buttons.h"
-#include "waveform-level.h"
+#include "waveform-history.h"
 #include <memory>
 
 #include <algorithm>
@@ -71,7 +71,7 @@ constexpr int kOverlayHeight = 110;
 constexpr int kOverlayMargin = 18;
 constexpr int kSignalPoints = 64;
 constexpr int kNoiseFloorMilli = 6;
-constexpr int kEnhancedSignalPoints = 256;
+constexpr int kEnhancedSignalPoints = static_cast<int>(universal_dictate::kWaveformHistoryCapacity);
 constexpr int kDefaultWaveformTimeSpanMs = 10000;
 constexpr int kMinWaveformTimeSpanMs = 1000;
 constexpr int kMaxWaveformTimeSpanMs = 20000;
@@ -130,35 +130,16 @@ private:
     bool open_ = false;
 };
 
-int calculateEnhancedBucketTargetFrames(int waveformTimeSpanMs) {
-    const double target =
-        static_cast<double>(kSampleRate) * static_cast<double>(waveformTimeSpanMs) /
-        (1000.0 * static_cast<double>(kEnhancedSignalPoints));
-    return std::max(1, static_cast<int>(std::lround(target)));
-}
-
 struct CaptureState {
     Encoder* encoder = nullptr;
     universal_dictate::CaptureGate gate;
     universal_dictate::preview::Bridge* preview = nullptr;
     std::atomic<int> peakMilli{0};
 
-    // Lock-free bounded PCM visualization ring. The capture callback is the
-    // sole writer. The overlay thread snapshots completed entries via the
-    // monotonically increasing write counter.
-    std::array<std::atomic<int>, kEnhancedSignalPoints> enhancedSignal{};
-    std::atomic<std::uint64_t> enhancedWriteCount{0};
-    int enhancedBucketTargetFrames = calculateEnhancedBucketTargetFrames(kDefaultWaveformTimeSpanMs);
+    universal_dictate::WaveformHistory enhancedHistory;
+    std::size_t enhancedHistoryPoints = universal_dictate::waveformHistoryPoints(kDefaultWaveformTimeSpanMs);
     universal_dictate::WaveformBucket enhancedBucket;
 };
-
-void pushEnhancedSignalPoint(CaptureState& state, int visualSample) {
-    const std::uint64_t writeIndex =
-        state.enhancedWriteCount.load(std::memory_order_relaxed);
-    state.enhancedSignal[static_cast<std::size_t>(writeIndex % kEnhancedSignalPoints)]
-        .store(visualSample, std::memory_order_relaxed);
-    state.enhancedWriteCount.store(writeIndex + 1, std::memory_order_release);
-}
 
 void captureCallback(
     ma_device* device,
@@ -187,8 +168,8 @@ void captureCallback(
         peak = std::max(peak, magnitude);
 
         if (const auto level = state->enhancedBucket.push(samples[i],
-                static_cast<std::uint32_t>(state->enhancedBucketTargetFrames))) {
-            pushEnhancedSignalPoint(*state, *level);
+                universal_dictate::kWaveformFramesPerPoint)) {
+            state->enhancedHistory.publish(*level);
         }
     }
 
@@ -246,7 +227,8 @@ struct OverlayState {
     ULONG_PTR gdiplusToken = 0;
     int levelMilli = 0;
     std::array<int, kSignalPoints> levelHistory{};
-    std::array<int, kEnhancedSignalPoints> enhancedSignalHistory{};
+    std::array<universal_dictate::WaveformRange, kEnhancedSignalPoints> enhancedSignalHistory{};
+    std::size_t enhancedHistoryPoints = universal_dictate::waveformHistoryPoints(kDefaultWaveformTimeSpanMs);
     bool enhanced = false;
     bool paused = false;
     bool pausePending = false;
@@ -506,65 +488,39 @@ void drawEnhancedWaveform(HDC dc) {
     graphics.SetClip(Gdiplus::Rect(left, top, right-left, bottom-top));
     graphics.SetPixelOffsetMode(Gdiplus::PixelOffsetModeHighQuality);
 
-    const Gdiplus::Color axisColor(115, 41, 82, 58);
-    const Gdiplus::Color envelopeOuterColor(130, 36, 118, 72);
-    const Gdiplus::Color envelopeInnerColor(85, 45, 145, 88);
-    const Gdiplus::Color mainWaveColor(245, 66, 205, 118);
-
     const Gdiplus::REAL dpiScale =
         static_cast<Gdiplus::REAL>(g_overlay.dpi) / static_cast<Gdiplus::REAL>(kLogicalDpi);
-    Gdiplus::Pen axisPen(axisColor, 0.8f * dpiScale);
-    graphics.DrawLine(
-        &axisPen,
-        Gdiplus::PointF(static_cast<Gdiplus::REAL>(left), static_cast<Gdiplus::REAL>(centerY)),
-        Gdiplus::PointF(static_cast<Gdiplus::REAL>(right), static_cast<Gdiplus::REAL>(centerY)));
+    Gdiplus::Pen axisPen(Gdiplus::Color(115, 41, 82, 58), 0.8f * dpiScale);
+    graphics.DrawLine(&axisPen, Gdiplus::PointF(static_cast<float>(left), static_cast<float>(centerY)),
+        Gdiplus::PointF(static_cast<float>(right), static_cast<float>(centerY)));
 
-    std::array<Gdiplus::PointF, kEnhancedSignalPoints> wave{};
-    std::array<Gdiplus::PointF, kEnhancedSignalPoints> upperOuter{};
-    std::array<Gdiplus::PointF, kEnhancedSignalPoints> lowerOuter{};
-    std::array<Gdiplus::PointF, kEnhancedSignalPoints> upperInner{};
-    std::array<Gdiplus::PointF, kEnhancedSignalPoints> lowerInner{};
-
-    for (int index = 0; index < kEnhancedSignalPoints; ++index) {
-        const int storedSample =
-            g_overlay.enhancedSignalHistory[static_cast<std::size_t>(index)];
-        const int storedMagnitude = std::abs(storedSample);
-        const Gdiplus::REAL x = static_cast<Gdiplus::REAL>(left) +
-            static_cast<Gdiplus::REAL>(index * width) /
-                static_cast<Gdiplus::REAL>(kEnhancedSignalPoints - 1);
-        const Gdiplus::REAL signedAmplitude =
-            static_cast<Gdiplus::REAL>(maxAmplitude * storedSample) / 1000.0f;
-        const Gdiplus::REAL envelopeAmplitude =
-            static_cast<Gdiplus::REAL>(maxAmplitude * storedMagnitude) / 1000.0f;
-
-        wave[static_cast<std::size_t>(index)] =
-            Gdiplus::PointF(x, static_cast<Gdiplus::REAL>(centerY) - signedAmplitude);
-        upperOuter[static_cast<std::size_t>(index)] =
-            Gdiplus::PointF(x, static_cast<Gdiplus::REAL>(centerY) - envelopeAmplitude);
-        lowerOuter[static_cast<std::size_t>(index)] =
-            Gdiplus::PointF(x, static_cast<Gdiplus::REAL>(centerY) + envelopeAmplitude);
-        upperInner[static_cast<std::size_t>(index)] =
-            Gdiplus::PointF(x, static_cast<Gdiplus::REAL>(centerY) - envelopeAmplitude * 0.56f);
-        lowerInner[static_cast<std::size_t>(index)] =
-            Gdiplus::PointF(x, static_cast<Gdiplus::REAL>(centerY) + envelopeAmplitude * 0.56f);
+    const auto columns = universal_dictate::waveformColumns(
+        std::span<const universal_dictate::WaveformRange>(g_overlay.enhancedSignalHistory.data(),
+                                                        g_overlay.enhancedHistoryPoints), width);
+    if (columns.empty()) return;
+    std::vector<Gdiplus::PointF> upper(columns.size()), lower(columns.size());
+    Gdiplus::GraphicsPath detail;
+    for (std::size_t i = 0; i < columns.size(); ++i) {
+        const float x = static_cast<float>(left) + 0.5f +
+            static_cast<float>(i * (width - 1)) / static_cast<float>(std::max<std::size_t>(1, columns.size() - 1));
+        upper[i] = {x, static_cast<float>(centerY) - maxAmplitude * columns[i].above / 1000.0f};
+        lower[i] = {x, static_cast<float>(centerY) + maxAmplitude * columns[i].below / 1000.0f};
+        if (columns[i].magnitude() > 0) {
+            // Independent measured ranges, not a polygon joining random RMS signs.
+            detail.StartFigure();
+            detail.AddLine(upper[i], lower[i]);
+        }
     }
-
-    // Magnitude is a fixed-scale bucket RMS; peak polarity supplies the center
-    // trace direction only. No rolling normalization or per-frame modulation:
-    // old samples keep their shape, and quiet speech stays quiet after loud speech.
-    Gdiplus::Pen outerPen(envelopeOuterColor, 0.9f * dpiScale);
-    Gdiplus::Pen innerPen(envelopeInnerColor, 0.8f * dpiScale);
-    Gdiplus::Pen wavePen(mainWaveColor, 1.55f * dpiScale);
-    // Acute joins between dense opposite-polarity buckets must not grow miter
-    // spikes beyond the measured amplitude or saturate a small waveform viewport.
-    outerPen.SetLineJoin(Gdiplus::LineJoinRound);
-    innerPen.SetLineJoin(Gdiplus::LineJoinRound);
-    wavePen.SetLineJoin(Gdiplus::LineJoinRound);
-    graphics.DrawLines(&outerPen, upperOuter.data(), static_cast<INT>(upperOuter.size()));
-    graphics.DrawLines(&outerPen, lowerOuter.data(), static_cast<INT>(lowerOuter.size()));
-    graphics.DrawLines(&innerPen, upperInner.data(), static_cast<INT>(upperInner.size()));
-    graphics.DrawLines(&innerPen, lowerInner.data(), static_cast<INT>(lowerInner.size()));
-    graphics.DrawLines(&wavePen, wave.data(), static_cast<INT>(wave.size()));
+    // One thin filament per column avoids repeatedly painting thousands of
+    // subpixel strokes into an opaque block on a ten/twenty-second history.
+    Gdiplus::Pen detailPen(Gdiplus::Color(225, 66, 205, 118), 0.65f);
+    graphics.DrawPath(&detailPen, &detail);
+    Gdiplus::Pen edgePen(Gdiplus::Color(180, 66, 205, 118), 0.8f * dpiScale);
+    edgePen.SetLineJoin(Gdiplus::LineJoinRound);
+    if (columns.size() > 1) {
+        graphics.DrawLines(&edgePen, upper.data(), static_cast<INT>(upper.size()));
+        graphics.DrawLines(&edgePen, lower.data(), static_cast<INT>(lower.size()));
+    }
 }
 
 void drawEnhancedOverlay(HDC dc, const RECT& client) {
@@ -948,7 +904,8 @@ bool createOverlay(HMONITOR targetMonitor, bool enhanced, OverlaySize overlaySiz
     g_overlay.overlaySize = overlaySize;
     g_overlay.levelMilli = 0;
     g_overlay.levelHistory.fill(0);
-    g_overlay.enhancedSignalHistory.fill(0);
+    g_overlay.enhancedSignalHistory.fill({});
+    g_overlay.enhancedHistoryPoints = universal_dictate::waveformHistoryPoints(kDefaultWaveformTimeSpanMs);
     g_overlay.actionSent.store(false, std::memory_order_release);
 
     if (enhanced) {
@@ -1084,25 +1041,11 @@ void pumpOverlayMessages() {
 }
 
 void snapshotEnhancedSignal(const CaptureState& state) {
-    const std::uint64_t writeCount =
-        state.enhancedWriteCount.load(std::memory_order_acquire);
-    const std::uint64_t available = std::min<std::uint64_t>(
-        writeCount,
-        static_cast<std::uint64_t>(kEnhancedSignalPoints));
-    const std::uint64_t start = writeCount - available;
-    const std::size_t leadingZeros =
-        kEnhancedSignalPoints - static_cast<std::size_t>(available);
-
-    std::fill(
-        g_overlay.enhancedSignalHistory.begin(),
-        g_overlay.enhancedSignalHistory.begin() + static_cast<std::ptrdiff_t>(leadingZeros),
-        0);
-
-    for (std::uint64_t index = 0; index < available; ++index) {
-        const std::size_t ringIndex = static_cast<std::size_t>(
-            (start + index) % static_cast<std::uint64_t>(kEnhancedSignalPoints));
-        g_overlay.enhancedSignalHistory[leadingZeros + static_cast<std::size_t>(index)] =
-            state.enhancedSignal[ringIndex].load(std::memory_order_relaxed);
+    std::array<universal_dictate::WaveformRange, kEnhancedSignalPoints> next{};
+    const auto count = std::clamp<std::size_t>(state.enhancedHistoryPoints, 1, next.size());
+    if (state.enhancedHistory.snapshot(std::span(next.data(), count))) {
+        std::copy_n(next.begin(), count, g_overlay.enhancedSignalHistory.begin());
+        g_overlay.enhancedHistoryPoints = count;
     }
 }
 
@@ -1249,10 +1192,7 @@ int main(int argc, char** argv) {
 
     CaptureState captureState{&encoder};
     captureState.preview = preview.get();
-    captureState.enhancedBucketTargetFrames = calculateEnhancedBucketTargetFrames(waveformTimeSpanMs);
-    for (auto& sample : captureState.enhancedSignal) {
-        sample.store(0, std::memory_order_relaxed);
-    }
+    captureState.enhancedHistoryPoints = universal_dictate::waveformHistoryPoints(waveformTimeSpanMs);
 
     CaptureDevice device;
     const ma_result deviceResult = device.open(&captureState, encoder);

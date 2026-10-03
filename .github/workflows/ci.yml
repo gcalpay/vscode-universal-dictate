@@ -72,6 +72,13 @@ jobs:
           g++ -std=c++20 -Wall -Wextra -Werror -pedantic test/native/waveform-level-test.cpp -o .deps/waveform-level-test
           .deps/waveform-level-test
 
+      - name: Fixed-resolution waveform history
+        run: |
+          g++ -std=c++20 -Wall -Wextra -Werror -pedantic -pthread test/native/waveform-history-test.cpp -o .deps/waveform-history-test
+          .deps/waveform-history-test
+          g++ -std=c++20 -DNDEBUG -Wall -Wextra -Werror -pedantic test/native/waveform-level-test.cpp -o .deps/waveform-level-ndebug-test
+          .deps/waveform-level-ndebug-test
+
       - name: Preview geometry regression
         run: |
           g++ -std=c++20 -Wall -Wextra -Werror -pedantic test/native/preview-layout-test.cpp -o .deps/preview-layout-test

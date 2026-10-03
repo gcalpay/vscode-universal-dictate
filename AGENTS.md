@@ -20,12 +20,13 @@ feature or Issue #38 focus workaround is part of this milestone.
 
 ## Current visual correction
 
-The user accepted Pause/Resume in `8778fcd` and tested the waveform correction in
-`1dfaf3c`. Current authorization: narrow the symbol buttons, crop unused vertical
-padding and remove the unreleased Text/Symbols choice. Keep Medium default, fixed
-RMS scaling and recording/insertion lifecycle. Six gear entries remain, including
-Live preview. The existing six-entry menu screenshot can stay; overlay captures
-remain historical until replacements are accepted. Deliver a checked Windows VSIX.
+The user accepted the compact symbols-only `1eab79d` candidate, then requested finer
+waveform temporal detail after comparing new captures with 1.0. Restore approximately
+4 ms acquisition detail at all history spans and stop connecting arbitrary signed
+RMS buckets. Keep the fixed RMS level scale, ten-second default, compact geometry,
+six settings and accepted Pause/Resume/insertion behavior. A new verified test VSIX
+is authorized, not merge or publication. Do not replace public screenshots before
+the final waveform is reviewed; the supplied images document the previous candidate.
 
 ## Invariants and validation
 

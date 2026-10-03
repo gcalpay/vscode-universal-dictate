@@ -79,6 +79,7 @@ jobs:
             "cl /nologo /utf-8 /O2 /std:c++20 /EHsc test\native\overlay-layout-test.cpp /Fe:.deps\overlay-layout-test.exe",
             "cl /nologo /utf-8 /O2 /std:c++20 /EHsc test\native\preview-layout-test.cpp /Fe:.deps\preview-layout-test.exe",
             "cl /nologo /utf-8 /O2 /std:c++20 /EHsc test\native\waveform-level-test.cpp /Fe:.deps\waveform-level-test.exe",
+            "cl /nologo /utf-8 /O2 /std:c++20 /EHsc test\native\waveform-history-test.cpp /Fe:.deps\waveform-history-test.exe",
             "cl /nologo /utf-8 /O2 /std:c++20 /EHsc /I .deps\miniaudio test\native\preview-presentation-test.cpp native\miniaudio-impl.cpp /Fe:.deps\preview-presentation-test.exe user32.lib gdi32.lib /link /MANIFEST:EMBED",
             "cl /nologo /utf-8 /O2 /std:c++20 /EHsc test\native\unicode-input-test.cpp /Fe:.deps\unicode-input-test.exe",
             "cl /nologo /utf-8 /O2 /std:c++20 /EHsc test\native\text-input-request-test.cpp /Fe:.deps\text-input-request-test.exe user32.lib gdi32.lib",
@@ -167,6 +168,8 @@ jobs:
         timeout-minutes: 3
         run: |
           & .deps/waveform-level-test.exe
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & .deps/waveform-history-test.exe
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & .deps/preview-layout-test.exe
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

@@ -13,6 +13,9 @@
 
 ### Changed
 
+- Restore fine waveform detail with fixed 4 ms visual ranges at every history span,
+  preserving brief events and both signal polarities without coarse zigzag strokes.
+
 - Waveform history now defaults to **10 seconds**. Explicit saved preferences remain
   unchanged; English, Medium, Live preview Off and Overwrite clipboard Off remain.
 - Gave the waveform more height with Live preview enabled, compacted preview spacing,
