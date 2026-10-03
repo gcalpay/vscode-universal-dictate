@@ -19,45 +19,52 @@ std::vector<ma_int16> readPcm(const std::string& path){
     ma_decoder_uninit(&decoder);
     requireCapture(status==MA_SUCCESS||status==MA_AT_END,"read synthetic output");result.resize(static_cast<std::size_t>(read));return result;
 }
-// Verify the production callback uses RMS rather than an early-saturating peak,
+// Verify the production callback uses fixed signed peaks with loudness headroom,
 // without altering either WAV samples or the independently published raw peak.
 void verifyWaveform(const std::filesystem::path& path){
     for(int span : {1000,3000,5000,10000,20000}){
         Encoder encoder;requireCapture(encoder.open(path.string())==MA_SUCCESS,"waveform encoder");
-        CaptureState state{&encoder};state.enhancedHistoryPoints=universal_dictate::waveformHistoryPoints(span);
-        const auto frames=universal_dictate::kWaveformFramesPerPoint;
+        CaptureState state{&encoder};state.enhancedBucketTargetFrames=universal_dictate::waveformBucketFrames(span);
+        const auto frames=state.enhancedBucketTargetFrames;
         int previous=0;std::vector<ma_int16> expected;
         for(ma_int16 sample : {128,819,5243}){
             feed(state,sample,frames);expected.insert(expected.end(),frames,sample);
-            std::array<universal_dictate::WaveformRange,1> latest{};
+            std::array<int,1> latest{};
             requireCapture(state.enhancedHistory.snapshot(latest),"latest visual range");
-            const int level=latest[0].magnitude();
-            requireCapture(level>previous&&level<950,"capture waveform lacks RMS headroom");previous=level;
+            const int level=std::abs(latest[0]);
+            requireCapture(level>previous&&level<950,"capture waveform lacks peak headroom");previous=level;
             requireCapture(state.peakMilli.load()==sample*1000/32767,"visualization changed raw peak reporting");
         }
         const auto before=state.enhancedHistory.written();state.gate.pause();
         feed(state,32767,frames*3);requireCapture(state.enhancedHistory.written()==before,"paused signal changed waveform");
         state.gate.resume();feed(state,128,frames);expected.insert(expected.end(),frames,128);
-        std::array<universal_dictate::WaveformRange,4> recent{};
+        std::array<int,4> recent{};
         requireCapture(state.enhancedHistory.snapshot(recent),"resumed visual ranges");
         requireCapture(recent[3]==recent[0],"loud input renormalized later quiet input");
         encoder.close();requireCapture(readPcm(path.string())==expected,"visualization changed accepted WAV samples");
     }
 }
-void verifyFineCapture(const std::filesystem::path& path){
-    Encoder encoder; requireCapture(encoder.open(path.string())==MA_SUCCESS,"fine encoder");
+void verifyStableCapture(const std::filesystem::path& path){
+    Encoder encoder; requireCapture(encoder.open(path.string())==MA_SUCCESS,"stable encoder");
     CaptureState capture{&encoder};
-    feed(capture,0,128); feed(capture,819,32); feed(capture,-819,32); feed(capture,0,16000-192);
-    requireCapture(capture.enhancedHistory.written()==250,"one-second production count must be 250 at ten-second history");
+    const auto frames=capture.enhancedBucketTargetFrames;
+    feed(capture,0,frames*2); feed(capture,819,1); feed(capture,0,frames-1);
     snapshotEnhancedSignal(capture);
-    requireCapture(g_overlay.enhancedHistoryPoints==2500,"ten-second history capacity");
-    const auto event=g_overlay.enhancedSignalHistory[2252];
-    requireCapture(event.above>0&&event.below==event.above&&event.trace!=0,"production callback lost bipolar 4ms event or signed trace");
-    requireCapture(g_overlay.enhancedSignalHistory[2251].magnitude()==0&&g_overlay.enhancedSignalHistory[2253].magnitude()==0,"temporal event smeared");
+    requireCapture(capture.enhancedHistory.written()==3,"one value per fixed bucket");
+    requireCapture(g_overlay.enhancedSignalHistory.back()==universal_dictate::visualPeakSample(819),"short transient lost");
     const auto before=g_overlay.enhancedSignalHistory;
+    feed(capture,-32767,frames-1); snapshotEnhancedSignal(capture);
+    requireCapture(g_overlay.enhancedSignalHistory==before,"unfinished loud audio reshaped history");
     capture.gate.pause(); feed(capture,32767,16000); snapshotEnhancedSignal(capture);
-    requireCapture(g_overlay.enhancedSignalHistory==before,"paused detailed waveform changed");
+    requireCapture(g_overlay.enhancedSignalHistory==before,"paused waveform changed");
+    capture.gate.resume(); feed(capture,0,1); snapshotEnhancedSignal(capture);
+    for(std::size_t i=0;i+1<before.size();++i)
+        requireCapture(g_overlay.enhancedSignalHistory[i]==before[i+1],"production waveform morphed while scrolling");
+    requireCapture(g_overlay.enhancedSignalHistory.back()==-1000,"partial resumed peak lost");
     encoder.close();
+    const auto pcm=readPcm(path.string());
+    requireCapture(pcm.size()==frames*4,"stable visualization changed recording length");
+    requireCapture(pcm[frames*2]==819&&pcm[frames*3]==-32767&&pcm.back()==0,"stable visualization changed PCM");
 }
 // Uses the actual CoreRecorderSession pipe arguments for the Node integration test.
 int syntheticRecorder(const std::string& output){
@@ -103,7 +110,7 @@ int main(int argc,char** argv){
         char name[]="test";char* args[]{name};requireCapture(parseWaveformTimeSpanMs(1,args)==10000,"native ten-second default");
         requireCapture(parseOverlaySize(1,args)==OverlaySize::Medium,"native Medium overlay default");
         verifyWaveform(path);
-        verifyFineCapture(path);
-        std::cout<<"Production WAV/preview/waveform pause and five-span RMS checks passed; synthetic PCM, no microphone\n";return 0;
+        verifyStableCapture(path);
+        std::cout<<"Production WAV/preview/waveform pause and five-span immutable signed-peak checks passed; synthetic PCM, no microphone\n";return 0;
     }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}
 }

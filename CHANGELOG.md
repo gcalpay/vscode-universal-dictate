@@ -13,13 +13,13 @@
 
 ### Changed
 
-- Restore fine waveform detail with fixed 4 ms visual ranges at every history span,
-  preserving brief events and both signal polarities without coarse zigzag strokes.
+- Restore the thin waveform trace and subtle envelopes with immutable display
+  samples: existing segments scroll without wobbling or changing shape.
 
 - Waveform history now defaults to **10 seconds**. Explicit saved preferences remain
   unchanged; English, Medium, Live preview Off and Overwrite clipboard Off remain.
 - Gave the waveform more height with Live preview enabled, compacted preview spacing,
-  and preserved quiet-to-loud differences with fixed-scale RMS visualization.
+  and preserved quiet-to-loud differences with fixed signed-peak scaling and more headroom.
 - Narrowed the controls and removed unused vertical padding. Preview Off uses a
   shorter overlay; Preview On keeps room for complete text lines.
 - Clarified dictation into compatible focused text fields in other Windows apps.

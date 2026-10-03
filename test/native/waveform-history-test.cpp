@@ -3,93 +3,92 @@
 #include <stdexcept>
 #include <thread>
 using namespace universal_dictate;
+using Frame = std::array<int, kWaveformHistoryCapacity>;
 
 void requireHistory(bool condition, const char* message) {
     if (!condition) throw std::runtime_error(message);
 }
-void checkTemporalResolution() {
-    for (const int span : {1000, 3000, 5000, 10000, 20000}) {
-        WaveformBucket bucket;
-        WaveformHistory history;
-        const int samples = span * 16;
-        for (int frame = 0; frame < samples; ++frame) {
-            // An isolated 4 ms event inside an otherwise silent history must retain
-            // its energy and timing, not be diluted into a 39/78 ms RMS bucket.
-            const std::int16_t value = frame >= 128 && frame < 192 ? (frame % 2 ? 819 : -819) : 0;
-            if (const auto range = bucket.push(value, kWaveformFramesPerPoint)) history.publish(*range);
+void checkAppendOnly(int span, std::uint32_t expectedFrames) {
+    WaveformBucket bucket;
+    WaveformHistory history;
+    Frame before{}, after{};
+    const auto frames = waveformBucketFrames(span);
+    requireHistory(frames == expectedFrames, "original fixed bucket duration changed");
+    // Startup, a full ring and two wraps. Test actual partial/completed buckets,
+    // not just repeated rendering of a static screenshot.
+    for (int event = 0; event < 768; ++event) {
+        requireHistory(history.snapshot(before), "before snapshot");
+        const std::int16_t peak = static_cast<std::int16_t>((event % 2 ? 1 : -1) *
+                                                         (128 + event * 53 % 7000));
+        for (std::uint32_t frame = 0; frame < frames; ++frame) {
+            const auto value = bucket.push(frame == 0 ? peak : 0, frames);
+            if (frame + 1 < frames) {
+                requireHistory(!value, "unfinished bucket was emitted");
+                if (frame % 61 == 0) {
+                    requireHistory(history.snapshot(after), "partial snapshot");
+                    requireHistory(after == before, "partial audio changed an old segment");
+                }
+            } else {
+                requireHistory(value == visualPeakSample(peak), "signed transient changed");
+                history.publish(*value);
+            }
         }
-        std::vector<WaveformRange> snapshot(waveformHistoryPoints(span));
-        requireHistory(history.snapshot(snapshot), "temporal snapshot");
-        requireHistory(history.written() == waveformHistoryPoints(span), "fixed 4 ms rate");
-        requireHistory(history.written() * kWaveformFramesPerPoint == static_cast<unsigned>(samples), "exact history duration");
-        const int eventLevel = visualRmsMagnitude(819 / 32768.0);
-        for (std::size_t i = 0; i < snapshot.size(); ++i) {
-            const int expected = i == 2 ? eventLevel : 0;
-            requireHistory(snapshot[i] == WaveformRange{expected, expected, -expected}, "4 ms event lost or smeared");
-        }
-        // Every display pixel uses all its underlying buckets, including tiny events.
-        for (const int width : {1, 28, 180, 280, 456, 1104}) {
-            const auto columns = waveformColumns(snapshot, width);
-            const auto peak = std::max_element(columns.begin(), columns.end(), [](auto a, auto b) { return a.above < b.above; });
-            requireHistory(peak->above == snapshot[2].above, "pixel reduction lost short transient");
-            requireHistory(columns.size() <= static_cast<unsigned>(width), "unbounded paint columns");
-        }
-        const auto display = waveformDisplayPoints(snapshot);
-        const auto strongest = std::max_element(display.begin(), display.end(), [](auto a, auto b) {
-            return a.magnitude < b.magnitude;
-        });
-        requireHistory(strongest != display.end() && strongest->magnitude == eventLevel,
-                       "legacy display reduction lost transient magnitude");
-        requireHistory(strongest->trace == -eventLevel,
-                       "legacy display reduction lost measured polarity");
+        requireHistory(history.snapshot(after), "after snapshot");
+        requireHistory(history.written() == static_cast<unsigned>(event + 1), "wrong append count");
+        for (std::size_t i = 0; i + 1 < after.size(); ++i)
+            requireHistory(after[i] == before[i + 1], "emitted waveform morphed during scrolling");
+        requireHistory(after.back() == visualPeakSample(peak), "newest point incorrect");
+        Frame again{};
+        requireHistory(history.snapshot(again) && again == after, "repaint changed old waveform");
     }
 }
-void checkRingAndPartialBucket() {
+void checkPauseAndBounds() {
     WaveformHistory history;
-    std::array<WaveformRange, 5> last{};
-    history.publish({12, 25});
-    requireHistory(history.snapshot(last), "short initial snapshot");
-    requireHistory(last[0] == WaveformRange{} && last.back() == WaveformRange{12, 25}, "right-aligned startup");
-    for (int i = 0; i < 12345; ++i) history.publish({i % 1001, (i + 9) % 1001});
-    requireHistory(history.snapshot(last), "wrapped snapshot");
-    for (int i = 0; i < 5; ++i)
-        requireHistory(last[i] == WaveformRange{(12340+i) % 1001, (12349+i) % 1001}, "wrapped chronological order");
+    Frame before{}, after{};
     WaveformBucket bucket;
-    for (int i = 0; i < 32; ++i) requireHistory(!bucket.push(-819, 64), "early partial bucket");
-    // Pause feeds no samples; the existing 32 frames survive until Resume.
-    for (int i = 0; i < 31; ++i) requireHistory(!bucket.push(819, 64), "early resumed bucket");
-    const auto range = bucket.push(819, 64);
-    const auto level = visualRmsMagnitude(819 / 32768.0);
-    requireHistory(range == WaveformRange{level, level, -level}, "partial bucket resume changed waveform");
+    for (int i = 0; i < 312; ++i) requireHistory(!bucket.push(-819, 625), "partial bucket");
+    requireHistory(history.snapshot(before), "paused initial snapshot");
+    // Pause admits no PCM: no synthetic silence, and the partial bucket survives.
+    requireHistory(history.snapshot(after) && after == before, "pause changed waveform");
+    for (int i = 312; i < 624; ++i) requireHistory(!bucket.push(128, 625), "resumed partial");
+    const auto point = bucket.push(128, 625);
+    requireHistory(point == visualPeakSample(-819), "resume lost pre-pause peak");
+    history.publish(*point);
+    requireHistory(history.snapshot(after) && after.back() == *point, "resume append");
     requireHistory(!history.snapshot({}), "empty snapshot accepted");
-    requireHistory(waveformColumns({}, 100).empty(), "empty projection");
-    requireHistory(waveformColumns(last, 0).empty(), "zero-width projection");
+    std::array<int, 257> oversized{};
+    requireHistory(!history.snapshot(oversized), "oversized snapshot accepted");
+    requireHistory(waveformBucketFrames(-1) == 63 && waveformBucketFrames(99999) == 1250,
+                   "history duration bounds");
 }
 void checkConcurrentSnapshots() {
     WaveformHistory history;
     std::atomic<bool> done{false};
     std::thread producer([&] {
-        for (int i = 0; i < 30000; ++i) history.publish({i % 1001, 1000 - i % 1001});
+        for (int i = 0; i < 30000; ++i) history.publish(i % 1999 - 999);
         done.store(true);
     });
-    std::array<WaveformRange, 5000> scratch{};
+    Frame scratch{};
     bool valid = true;
     do {
-        if (!history.snapshot(scratch)) continue; // A lapped reader intentionally retries next frame.
-        int previous = -1;
-        for (auto range : scratch) {
-            if (range == WaveformRange{}) continue; // Leading startup silence.
-            valid = valid && range.below + range.above == 1000;
-            valid = valid && (previous < 0 || range.below == (previous + 1) % 1001);
-            previous = range.below;
+        if (!history.snapshot(scratch)) continue;
+        bool started = false;
+        int previous = 0;
+        for (int value : scratch) {
+            if (!started && value == 0) continue;
+            valid = valid && (!started || value == (previous == 999 ? -999 : previous + 1));
+            previous = value;
+            started = true;
         }
     } while (!done.load());
     producer.join();
     requireHistory(valid, "torn or nonchronological concurrent history");
 }
 int main() {
-    checkTemporalResolution();
-    checkRingAndPartialBucket();
+    const int spans[]{1000, 3000, 5000, 10000, 20000};
+    const std::uint32_t frames[]{63, 188, 313, 625, 1250};
+    for (int i = 0; i < 5; ++i) checkAppendOnly(spans[i], frames[i]);
+    checkPauseAndBounds();
     checkConcurrentSnapshots();
-    std::cout << "4 ms detail: five exact spans, both polarities, transient-preserving pixels, wrap, partial pause and concurrent snapshots passed\n";
+    std::cout << "Immutable waveform: 3840 append/scroll comparisons, partial buckets, startup, wraps, Pause/Resume and concurrent snapshots passed\n";
 }

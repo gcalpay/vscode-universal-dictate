@@ -1,6 +1,6 @@
 # M7 - Pause/Resume and overlay controls
 
-Updated: 2026-10-01. Branch: `feat/pause-resume-controls`. Draft PR: #54.
+Updated: 2026-10-03. Branch: `feat/pause-resume-controls`. Draft PR: #54.
 Base: accepted 1.0.0 merge `eda02a512d3feb70989b89a3efc6714d12b833e7`.
 Target test package: 1.1.0. Implementation/builds are authorized; merge and publication
 require the user's finished-candidate review. Run IDs and exact delivered VSIX hashes
@@ -76,6 +76,46 @@ No cross-platform work, model selection, global hotkey or Issue #38 fix is inclu
 Automated results and user acceptance must be recorded separately. No merge or
 Marketplace publication is implied by compilation or by a scripted renderer test.
 
+## Current waveform contract: immutable legacy-style display
+
+The later `43a4ef0` range-column view looked filled, and `d955795` morphed as new
+audio arrived: its repaint-time reduction moved the grouping boundaries across
+previously captured data. Both were rejected. Static screenshot checks alone missed
+this temporal regression. Do not attribute the reference screenshot to a one-second
+setting; the user explicitly corrected that assumption.
+
+Current capture restores the original architecture: 256 fixed-duration signed-peak
+buckets, one completed visual value published once, copied verbatim in chronological
+order. The selected duration is snapshotted before the microphone starts. At ten
+seconds each bucket contains 625 PCM frames (39.0625 ms); other spans retain the
+original nearest-integer sizing of 63/188/313/1250 frames. This restores the original
+display density, not a claim of 4 ms visible resolution for a ten-second window.
+Every short peak is considered inside its capture bucket; there is no moving-window
+reduction and no publication of unfinished buckets. Pause leaves a partial bucket
+intact. A 256-slot sequence-tagged ring detects overwritten reads without locks.
+
+The renderer uses the original thin signed trace, subtle inner/outer envelopes,
+colors, opacity, widths and anti-aliasing. Round joins and viewport clipping prevent
+stroke spikes from exceeding the measured display area. The original fixed peak
+mapping (noise floor 0.001, exponent 0.62) is retained with reference 0.25 instead of
+0.045 for additional loudness headroom. This is a visual-only fixed gain change,
+not RMS normalization, microphone gain adjustment or audio processing. It preserves
+quiet/normal/loud separation without reusing the rejected signed-RMS/decimation path.
+
+Regression coverage includes 3,840 append/scroll comparisons across five spans,
+startup and multiple wraps, partial buckets, short transients, fixed-scale polarity,
+concurrent snapshots and actual callback PCM identity. Windows additionally compares
+production-rendered frames before partial audio and after a completed bucket: old
+strokes must match after accounting for their horizontal translation. An integer
+pixel fixture separates shape changes from ordinary subpixel rasterization during
+scrolling; the normal layouts/DPI still receive their existing presentation checks.
+
+The accepted controls/layout and all six defaults stay unchanged. Historical tests
+specific to the removed range/RMS renderer are replaced by these contract tests;
+recording, input, clipboard, preview, multilingual and non-activation checks remain.
+The final waveform still requires microphone/visual user review before screenshots,
+merge or publication. Record artifact/run identities in PR #54.
+
 ## Waveform correction after the first user review (historical `1dfaf3c` checkpoint)
 
 The user tested the `8778fcd` 1.1.0 VSIX and accepted Pause/Resume and its controls.
@@ -126,7 +166,7 @@ rectangles. Tests explicitly cover the retired setting without mutating saved va
 Keep the actual six-entry menu image. Do not delete Live preview to match an older
 five-entry screenshot or present scripted overlay renders as user captures.
 
-## Fine temporal detail after compact-layout acceptance
+## Fine temporal detail after compact-layout acceptance (historical, rejected)
 
 The user accepted the compact controls/layout at `1eab79d`, but rejected the coarse
 polygonal waveform in subsequent captures. Capture previously summarized ten seconds

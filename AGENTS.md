@@ -20,13 +20,21 @@ feature or Issue #38 focus workaround is part of this milestone.
 
 ## Current visual correction
 
-The user accepted the compact symbols-only `1eab79d` candidate, then requested finer
-waveform temporal detail after comparing new captures with 1.0. Restore approximately
-4 ms acquisition detail at all history spans and stop connecting arbitrary signed
-RMS buckets. Keep the fixed RMS level scale, ten-second default, compact geometry,
-six settings and accepted Pause/Resume/insertion behavior. A new verified test VSIX
-is authorized, not merge or publication. Do not replace public screenshots before
-the final waveform is reviewed; the supplied images document the previous candidate.
+The user accepted Pause/Resume and the compact layout, but rejected the filled
+`43a4ef0` waveform and the wobbling `d955795` replacement. Restore the original
+256 append-only signed-peak display buckets and thin-line/envelope drawing.
+Select the bucket duration before capture; finalize each value once. Completed
+samples may scroll left but must never be regrouped, rescaled or reshaped by later
+audio. Do not add paint-time decimation, neighbor smoothing or adaptive gain.
+Keep the compact geometry, symbol controls, six settings and ten-second default.
+The original peak response has fixed additional headroom for quiet/loud distinction;
+recorded PCM, recognition and Pause/Resume remain unchanged. The reference screenshot
+was NOT necessarily recorded at one second; do not infer its span from old defaults.
+
+Test temporal behavior, not only still images: partial buckets leave the displayed
+frame untouched, completed buckets shift old values verbatim, and production strokes
+translate without changing shape. Include startup, ring wrap, loud input after quiet,
+Pause/Resume and DPI cases. A new verified VSIX is authorized, not merge/publication.
 
 ## Invariants and validation
 

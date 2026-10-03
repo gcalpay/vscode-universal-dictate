@@ -160,4 +160,19 @@ and changing provisional text must not resize the active window. Medium remains 
 default; saved size/span/preview/clipboard values must not be reset.
 The gear has six entries, including Live preview, and no Text/Symbols selector.
 The accepted six-entry menu screenshot stays unchanged.
-Automated RMS/PCM/renderer evidence does not replace this microphone-level check.
+Automated signed-peak/PCM/renderer evidence does not replace this microphone-level check.
+
+### Temporal waveform regression (required before another test VSIX)
+
+Watch an already-created syllable while continuing to speak: it may move left but
+must retain its height and shape. Speak quietly, then louder; older quiet speech
+must not grow, shrink or flip polarity. Check before the history fills, across the
+first full span, through Pause/Resume, and with preview Off/On. Use the saved span;
+there is no requirement to switch to one second to get stable rendering.
+
+Portable CI compares completed samples before/after 3,840 appends and verifies that
+partial buckets change nothing. The Windows renderer test verifies translated
+pixel identity for old strokes and an unchanged frame while the next bucket is
+incomplete. These motion checks supplement, not replace, the existing static
+multilingual, DPI, clipping, loudness and control tests. Scripted captures are not
+public screenshots or a substitute for the user's real-microphone visual review.
