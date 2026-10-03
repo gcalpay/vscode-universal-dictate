@@ -22,8 +22,9 @@ void checkTemporalResolution() {
         requireHistory(history.snapshot(snapshot), "temporal snapshot");
         requireHistory(history.written() == waveformHistoryPoints(span), "fixed 4 ms rate");
         requireHistory(history.written() * kWaveformFramesPerPoint == static_cast<unsigned>(samples), "exact history duration");
+        const int eventLevel = visualRmsMagnitude(819 / 32768.0);
         for (std::size_t i = 0; i < snapshot.size(); ++i) {
-            const int expected = i == 2 ? visualRmsMagnitude(819 / 32768.0) : 0;
+            const int expected = i == 2 ? eventLevel : 0;
             requireHistory(snapshot[i] == WaveformRange{expected, expected, -expected}, "4 ms event lost or smeared");
         }
         // Every display pixel uses all its underlying buckets, including tiny events.
@@ -37,9 +38,9 @@ void checkTemporalResolution() {
         const auto strongest = std::max_element(display.begin(), display.end(), [](auto a, auto b) {
             return a.magnitude < b.magnitude;
         });
-        requireHistory(strongest != display.end() && strongest->magnitude == expected,
+        requireHistory(strongest != display.end() && strongest->magnitude == eventLevel,
                        "legacy display reduction lost transient magnitude");
-        requireHistory(strongest->trace == -expected,
+        requireHistory(strongest->trace == -eventLevel,
                        "legacy display reduction lost measured polarity");
     }
 }
