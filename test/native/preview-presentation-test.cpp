@@ -171,7 +171,9 @@ int waveformInkHeight(const Canvas& canvas, const OverlayRect& box) {
     for (int y = box.top; y < box.bottom; ++y) for (int x = box.left + 3; x < box.right - 3; ++x) {
         const auto pixel = pixels[y * canvas.width + x];
         const int red = (pixel >> 16) & 255, green = (pixel >> 8) & 255, blue = pixel & 255;
-        if (green > 110 && green > red + 20 && green > blue + 10) {
+        // Include the original subtle envelope inks as well as the bright center trace.
+        // The axis/background stay below this threshold.
+        if (green > 55 && green > red + 15 && green > blue + 5) {
             first = std::min(first, y); last = std::max(last, y);
         }
     }
