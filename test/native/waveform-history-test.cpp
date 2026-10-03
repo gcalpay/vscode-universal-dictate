@@ -24,7 +24,7 @@ void checkTemporalResolution() {
         requireHistory(history.written() * kWaveformFramesPerPoint == static_cast<unsigned>(samples), "exact history duration");
         for (std::size_t i = 0; i < snapshot.size(); ++i) {
             const int expected = i == 2 ? visualRmsMagnitude(819 / 32768.0) : 0;
-            requireHistory(snapshot[i] == WaveformRange{expected, expected}, "4 ms event lost or smeared");
+            requireHistory(snapshot[i] == WaveformRange{expected, expected, -expected}, "4 ms event lost or smeared");
         }
         // Every display pixel uses all its underlying buckets, including tiny events.
         for (const int width : {1, 28, 180, 280, 456, 1104}) {
@@ -33,6 +33,14 @@ void checkTemporalResolution() {
             requireHistory(peak->above == snapshot[2].above, "pixel reduction lost short transient");
             requireHistory(columns.size() <= static_cast<unsigned>(width), "unbounded paint columns");
         }
+        const auto display = waveformDisplayPoints(snapshot);
+        const auto strongest = std::max_element(display.begin(), display.end(), [](auto a, auto b) {
+            return a.magnitude < b.magnitude;
+        });
+        requireHistory(strongest != display.end() && strongest->magnitude == expected,
+                       "legacy display reduction lost transient magnitude");
+        requireHistory(strongest->trace == -expected,
+                       "legacy display reduction lost measured polarity");
     }
 }
 void checkRingAndPartialBucket() {
@@ -51,7 +59,7 @@ void checkRingAndPartialBucket() {
     for (int i = 0; i < 31; ++i) requireHistory(!bucket.push(819, 64), "early resumed bucket");
     const auto range = bucket.push(819, 64);
     const auto level = visualRmsMagnitude(819 / 32768.0);
-    requireHistory(range == WaveformRange{level, level}, "partial bucket resume changed waveform");
+    requireHistory(range == WaveformRange{level, level, -level}, "partial bucket resume changed waveform");
     requireHistory(!history.snapshot({}), "empty snapshot accepted");
     requireHistory(waveformColumns({}, 100).empty(), "empty projection");
     requireHistory(waveformColumns(last, 0).empty(), "zero-width projection");

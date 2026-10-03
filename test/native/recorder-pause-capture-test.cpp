@@ -52,7 +52,7 @@ void verifyFineCapture(const std::filesystem::path& path){
     snapshotEnhancedSignal(capture);
     requireCapture(g_overlay.enhancedHistoryPoints==2500,"ten-second history capacity");
     const auto event=g_overlay.enhancedSignalHistory[2252];
-    requireCapture(event.above>0&&event.below==event.above,"production callback lost bipolar 4ms event");
+    requireCapture(event.above>0&&event.below==event.above&&event.trace!=0,"production callback lost bipolar 4ms event or signed trace");
     requireCapture(g_overlay.enhancedSignalHistory[2251].magnitude()==0&&g_overlay.enhancedSignalHistory[2253].magnitude()==0,"temporal event smeared");
     const auto before=g_overlay.enhancedSignalHistory;
     capture.gate.pause(); feed(capture,32767,16000); snapshotEnhancedSignal(capture);

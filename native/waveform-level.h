@@ -1,4 +1,4 @@
-/* Fixed-gain RMS visualization; recorded audio is never modified. SPDX-License-Identifier: MIT */
+/* Fixed-gain waveform visualization; recorded audio is never modified. SPDX-License-Identifier: MIT */
 #pragma once
 #include <algorithm>
 #include <cmath>
@@ -17,29 +17,39 @@ inline int visualRmsMagnitude(double rms) noexcept {
 struct WaveformRange {
     int below = 0;
     int above = 0;
+    // Signed visual representative used only for the thin legacy-style center trace.
+    // Magnitude remains fixed-RMS; sign follows the strongest measured PCM excursion.
+    int trace = 0;
     int magnitude() const noexcept { return std::max(below, above); }
     bool operator==(const WaveformRange&) const = default;
 };
 
 class WaveformBucket {
 public:
-    // Visual-only statistics. Each completed bucket retains both measured extrema;
-    // the fixed RMS scale controls its height, not an arbitrary peak sign.
+    // Visual-only statistics. Each completed 4 ms bucket retains both measured
+    // extrema plus one signed representative. RMS controls height; the signed peak
+    // contributes direction only, reproducing the crisp pre-1.1 trace without
+    // changing recorded PCM or reintroducing early amplitude saturation.
     std::optional<WaveformRange> push(std::int16_t sample, std::uint32_t targetFrames) noexcept {
         const int value = sample;
         sumSquares_ += static_cast<double>(value) * value;
         negativePeak_ = std::max(negativePeak_, -value);
         positivePeak_ = std::max(positivePeak_, value);
+        if (std::abs(value) > std::abs(signedPeak_)) signedPeak_ = value;
         if (++frames_ < std::max(1U, targetFrames)) return std::nullopt;
         const double rms = std::sqrt(sumSquares_ / frames_) / 32768.0;
         const int magnitude = visualRmsMagnitude(rms);
         const int peak = std::max(1, std::max(negativePeak_, positivePeak_));
-        // Preserve the measured positive/negative proportions within the RMS height.
-        // This changes only drawing coordinates, never PCM or the fixed level scale.
+        const int trace = signedPeak_ < 0 ? -magnitude : (signedPeak_ > 0 ? magnitude : 0);
         const WaveformRange result{
             (magnitude * negativePeak_ + peak / 2) / peak,
-            (magnitude * positivePeak_ + peak / 2) / peak};
-        frames_ = 0; sumSquares_ = 0; negativePeak_ = 0; positivePeak_ = 0;
+            (magnitude * positivePeak_ + peak / 2) / peak,
+            trace};
+        frames_ = 0;
+        sumSquares_ = 0;
+        negativePeak_ = 0;
+        positivePeak_ = 0;
+        signedPeak_ = 0;
         return result;
     }
 private:
@@ -47,5 +57,6 @@ private:
     double sumSquares_ = 0;
     int negativePeak_ = 0;
     int positivePeak_ = 0;
+    int signedPeak_ = 0;
 };
 } // namespace universal_dictate

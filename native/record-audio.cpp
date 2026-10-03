@@ -485,42 +485,59 @@ void drawEnhancedWaveform(HDC dc) {
 
     Gdiplus::Graphics graphics(dc);
     graphics.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
-    graphics.SetClip(Gdiplus::Rect(left, top, right-left, bottom-top));
+    graphics.SetClip(Gdiplus::Rect(left, top, right - left, bottom - top));
     graphics.SetPixelOffsetMode(Gdiplus::PixelOffsetModeHighQuality);
 
+    const Gdiplus::Color axisColor(115, 41, 82, 58);
+    const Gdiplus::Color envelopeOuterColor(130, 36, 118, 72);
+    const Gdiplus::Color envelopeInnerColor(85, 45, 145, 88);
+    const Gdiplus::Color mainWaveColor(245, 66, 205, 118);
     const Gdiplus::REAL dpiScale =
         static_cast<Gdiplus::REAL>(g_overlay.dpi) / static_cast<Gdiplus::REAL>(kLogicalDpi);
-    Gdiplus::Pen axisPen(Gdiplus::Color(115, 41, 82, 58), 0.8f * dpiScale);
-    graphics.DrawLine(&axisPen, Gdiplus::PointF(static_cast<float>(left), static_cast<float>(centerY)),
-        Gdiplus::PointF(static_cast<float>(right), static_cast<float>(centerY)));
 
-    const auto columns = universal_dictate::waveformColumns(
-        std::span<const universal_dictate::WaveformRange>(g_overlay.enhancedSignalHistory.data(),
-                                                        g_overlay.enhancedHistoryPoints), width);
-    if (columns.empty()) return;
-    std::vector<Gdiplus::PointF> upper(columns.size()), lower(columns.size());
-    Gdiplus::GraphicsPath detail;
-    for (std::size_t i = 0; i < columns.size(); ++i) {
-        const float x = static_cast<float>(left) + 0.5f +
-            static_cast<float>(i * (width - 1)) / static_cast<float>(std::max<std::size_t>(1, columns.size() - 1));
-        upper[i] = {x, static_cast<float>(centerY) - maxAmplitude * columns[i].above / 1000.0f};
-        lower[i] = {x, static_cast<float>(centerY) + maxAmplitude * columns[i].below / 1000.0f};
-        if (columns[i].magnitude() > 0) {
-            // Independent measured ranges, not a polygon joining random RMS signs.
-            detail.StartFigure();
-            detail.AddLine(upper[i], lower[i]);
-        }
+    Gdiplus::Pen axisPen(axisColor, 0.8f * dpiScale);
+    graphics.DrawLine(&axisPen,
+        Gdiplus::PointF(static_cast<Gdiplus::REAL>(left), static_cast<Gdiplus::REAL>(centerY)),
+        Gdiplus::PointF(static_cast<Gdiplus::REAL>(right), static_cast<Gdiplus::REAL>(centerY)));
+
+    const auto points = universal_dictate::waveformDisplayPoints(
+        std::span<const universal_dictate::WaveformRange>(
+            g_overlay.enhancedSignalHistory.data(), g_overlay.enhancedHistoryPoints));
+    if (points.size() < 2) return;
+
+    std::vector<Gdiplus::PointF> wave(points.size());
+    std::vector<Gdiplus::PointF> upperOuter(points.size());
+    std::vector<Gdiplus::PointF> lowerOuter(points.size());
+    std::vector<Gdiplus::PointF> upperInner(points.size());
+    std::vector<Gdiplus::PointF> lowerInner(points.size());
+
+    for (std::size_t index = 0; index < points.size(); ++index) {
+        const Gdiplus::REAL x = static_cast<Gdiplus::REAL>(left) +
+            static_cast<Gdiplus::REAL>(index * width) /
+                static_cast<Gdiplus::REAL>(points.size() - 1);
+        const Gdiplus::REAL signedAmplitude =
+            static_cast<Gdiplus::REAL>(maxAmplitude * points[index].trace) / 1000.0f;
+        const Gdiplus::REAL envelopeAmplitude =
+            static_cast<Gdiplus::REAL>(maxAmplitude * points[index].magnitude) / 1000.0f;
+
+        wave[index] = Gdiplus::PointF(x, static_cast<Gdiplus::REAL>(centerY) - signedAmplitude);
+        upperOuter[index] = Gdiplus::PointF(x, static_cast<Gdiplus::REAL>(centerY) - envelopeAmplitude);
+        lowerOuter[index] = Gdiplus::PointF(x, static_cast<Gdiplus::REAL>(centerY) + envelopeAmplitude);
+        upperInner[index] = Gdiplus::PointF(x, static_cast<Gdiplus::REAL>(centerY) - envelopeAmplitude * 0.56f);
+        lowerInner[index] = Gdiplus::PointF(x, static_cast<Gdiplus::REAL>(centerY) + envelopeAmplitude * 0.56f);
     }
-    // One thin filament per column avoids repeatedly painting thousands of
-    // subpixel strokes into an opaque block on a ten/twenty-second history.
-    Gdiplus::Pen detailPen(Gdiplus::Color(225, 66, 205, 118), 0.65f);
-    graphics.DrawPath(&detailPen, &detail);
-    Gdiplus::Pen edgePen(Gdiplus::Color(180, 66, 205, 118), 0.8f * dpiScale);
-    edgePen.SetLineJoin(Gdiplus::LineJoinRound);
-    if (columns.size() > 1) {
-        graphics.DrawLines(&edgePen, upper.data(), static_cast<INT>(upper.size()));
-        graphics.DrawLines(&edgePen, lower.data(), static_cast<INT>(lower.size()));
-    }
+
+    // Restore the pre-1.1 visual language exactly: one thin signed trace plus
+    // subtle symmetric outer/inner envelopes. Only the upstream amplitude scale
+    // differs, so quiet/normal/loud input remains distinguishable.
+    Gdiplus::Pen outerPen(envelopeOuterColor, 0.9f * dpiScale);
+    Gdiplus::Pen innerPen(envelopeInnerColor, 0.8f * dpiScale);
+    Gdiplus::Pen wavePen(mainWaveColor, 1.55f * dpiScale);
+    graphics.DrawLines(&outerPen, upperOuter.data(), static_cast<INT>(upperOuter.size()));
+    graphics.DrawLines(&outerPen, lowerOuter.data(), static_cast<INT>(lowerOuter.size()));
+    graphics.DrawLines(&innerPen, upperInner.data(), static_cast<INT>(upperInner.size()));
+    graphics.DrawLines(&innerPen, lowerInner.data(), static_cast<INT>(lowerInner.size()));
+    graphics.DrawLines(&wavePen, wave.data(), static_cast<INT>(wave.size()));
 }
 
 void drawEnhancedOverlay(HDC dc, const RECT& client) {

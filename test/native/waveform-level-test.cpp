@@ -41,9 +41,9 @@ int main() {
         const auto normal = constantLevel(819, frames);
         const auto loud = constantLevel(5243, frames);
         require(quiet > 100 && normal - quiet > 250 && loud - normal > 250 && loud < 950);
-        require(constantRange(-819, frames) == WaveformRange{normal, 0});
-        require(constantRange(819, frames) == WaveformRange{0, normal});
-        require(constantRange(-32768, frames) == WaveformRange{1000, 0});
+        require(constantRange(-819, frames) == WaveformRange{normal, 0, -normal});
+        require(constantRange(819, frames) == WaveformRange{0, normal, normal});
+        require(constantRange(-32768, frames) == WaveformRange{1000, 0, -1000});
         WaveformBucket bucket;
         const auto next = [&](std::int16_t value) {
             std::optional<WaveformRange> result;
@@ -62,6 +62,6 @@ int main() {
     // sign of whichever near-equal peak happens to win in that bucket.
     WaveformBucket bipolar;
     for (int i = 0; i < 63; ++i) require(!bipolar.push(i % 2 ? 819 : -819, 64));
-    require(bipolar.push(819, 64) == WaveformRange{constantLevel(819, 64), constantLevel(819, 64)});
+    require(bipolar.push(819, 64) == WaveformRange{constantLevel(819, 64), constantLevel(819, 64), -constantLevel(819, 64)});
     std::cout << "Fixed RMS mapping: monotonic range, five spans, silence, polarity, transients and no AGC passed\n";
 }
