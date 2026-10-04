@@ -27,7 +27,7 @@ Select the bucket duration before capture; finalize each value once. Completed
 samples may scroll left but must never be regrouped, rescaled or reshaped by later
 audio. Do not add paint-time decimation, neighbor smoothing or adaptive gain.
 Keep the compact geometry, symbol controls, six settings and ten-second default.
-The stable peak response uses reference 0.09, exponent 0.62 and visual idle gate 0.0015; mirrored lower envelope strokes are omitted while the signed primary trace remains;
+The stable peak response uses reference 0.09, exponent 0.62 and visual idle gate 0.0020; mirrored lower envelope strokes are omitted while the signed primary trace remains;
 recorded PCM, recognition and Pause/Resume remain unchanged. The reference screenshot
 was NOT necessarily recorded at one second; do not infer its span from old defaults.
 

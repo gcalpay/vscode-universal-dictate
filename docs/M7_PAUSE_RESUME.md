@@ -98,7 +98,7 @@ The renderer uses the original thin signed trace, subtle inner/outer envelopes,
 colors, opacity, widths and anti-aliasing. Round joins and viewport clipping prevent
 stroke spikes from exceeding the measured display area. The original fixed peak
 mapping is retained with exponent 0.62, reference 0.09 and a visual-only noise
-floor of 0.0015. The moderate reference keeps normal speech away from full visual
+floor of 0.0020. The moderate reference keeps normal speech away from full visual
 height while retaining fine structure. Mirrored lower envelope strokes are omitted;
 the signed primary trace remains. This is a visual-only fixed gain/paint change,
 not RMS normalization, microphone gain adjustment or audio processing. It preserves

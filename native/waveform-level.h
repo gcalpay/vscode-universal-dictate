@@ -11,7 +11,7 @@ namespace universal_dictate {
 inline int visualPeakSample(int sample) noexcept {
     const int clamped = std::clamp(sample, -32767, 32767);
     const double amplitude = std::abs(clamped) / 32767.0;
-    constexpr double noiseFloor = 0.0015;
+    constexpr double noiseFloor = 0.002;
     constexpr double reference = 0.09;
     if (amplitude <= noiseFloor) return 0;
     const double normalized = std::clamp((amplitude - noiseFloor) /

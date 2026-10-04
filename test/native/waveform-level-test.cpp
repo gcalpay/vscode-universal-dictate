@@ -15,8 +15,8 @@ int constantLevel(std::int16_t sample, std::uint32_t frames) {
 }
 int main() {
     require(visualPeakSample(0) == 0);
-    require(visualPeakSample(48) == 0); // Slightly raised visual-only idle gate.
-    require(visualPeakSample(50) > 0);
+    require(visualPeakSample(65) == 0); // Slightly stronger visual-only idle gate.
+    require(visualPeakSample(66) > 0);
     require(visualPeakSample(-32768) == -1000 && visualPeakSample(32767) == 1000);
     // Normal speech-range peaks retain detail and substantial headroom.
     require(visualPeakSample(1475) > 550 && visualPeakSample(1475) < 750);
