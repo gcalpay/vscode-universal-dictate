@@ -4,8 +4,6 @@
 
 **Open source · MIT · [GitHub](https://github.com/gcalpay/vscode-universal-dictate)**
 
-*Overlay screenshots show the earlier interface. The current symbol controls and defaults are described below.*
-
 ![Universal Dictate status-bar controls](media/status-bar-controls.webp)
 
 ![Universal Dictate settings menu](media/settings-menu.webp)
