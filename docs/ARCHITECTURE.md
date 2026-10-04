@@ -2,7 +2,7 @@
 
 ## Scope
 
-Universal Dictate 1.0 is a Windows-first VS Code extension for local speech-to-text.
+Universal Dictate 1.1 candidate is a Windows-first VS Code extension for local speech-to-text.
 It runs in the local Windows **UI extension host**, including when the workspace is
 connected through Remote - WSL. It does not depend on Codex, Copilot or another chat
 extension's private UI and does not require a WSL-side microphone/runtime install.
@@ -41,6 +41,22 @@ The warm server binds to loopback only and uses a randomized request path. The
 multilingual Whisper `base` model is downloaded on first use, checksum-verified and
 reused locally. Final transcription falls back to the one-shot CLI if the warm worker
 cannot start or fails.
+
+## Recording pause and controls
+
+`recording-pause.h` gates admission to the production capture callback without
+blocking that callback or reopening the microphone. PAUSED is acknowledged only
+after any admitted callback drains. Paused PCM does not enter WAV/preview/waveform;
+Resume appends to the existing accepted-audio timeline without a silence gap.
+`recorder-pause.ts` correlates nonterminal commands/acknowledgements on stdin/stdout.
+The engine keeps the recording operation alive, so Stop/Cancel/disposal can win
+while paused or transitioning. Unconfirmed Pause/Resume cancels with an error.
+Preview aborts active results and suspends its scheduler; Resume retains revisions
+and the single-operation ownership boundary. The device remains open while paused.
+
+The enhanced overlay shares three DPI-scaled hit rectangles with the renderer:
+Insert, Pause/Resume, Discard. All three use compact GDI+ vector symbols and
+descriptive non-activating hover help. Waveform history defaults to ten seconds.
 
 ## Dictation and preview lifecycle
 
@@ -110,9 +126,12 @@ and Large presets share the same native renderer and DPI-aware layout rules; Med
 is the default. Waveform history is independently configurable for 1, 3, 5, 10 or
 20 seconds and does not limit recording duration.
 
-When live preview is enabled, recent provisional text is rendered inside the chosen
-overlay size rather than enlarging the window. Insert stops/finalizes the recording;
-Discard cancels it. Overlay actions must remain non-activating.
+The selected size and effective preview flag determine the geometry at startup.
+Preview Off uses a shorter window without empty transcript space; Preview On reserves
+one complete text line in Small and up to two in Medium/Large. Neither preview
+updates nor Pause/Resume resize the window. Compact symbol-only controls retain
+labelled hover help. Insert finalizes; Pause/Resume suspends/continues capture;
+Discard cancels. Overlay and tooltip actions remain non-activating.
 
 ## Known status-bar focus limitation
 
@@ -138,9 +157,9 @@ helpers run on the Windows side while the project workspace may remain in WSL.
 
 ## Release status
 
-M1 overlay sizes, M2 direct-input/recovery/lifecycle work and M3 live preview are
-complete and merged. M4 translation is skipped for 1.0.0, M5 genuine status-bar
-focus preservation is parked and M6 is release validation/publication work.
+M1/M2/M3/M6 are complete in the accepted 1.0.0 merge. M7 Pause/Resume and overlay
+controls are the current 1.1.0 candidate on PR #54, pending user acceptance. M4 remains
+skipped and M5 focus preservation parked. See M7_PAUSE_RESUME.md for current gates.
 
 ## Dependency and privacy invariants
 

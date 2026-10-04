@@ -30,7 +30,7 @@ public:
         layout_.Reset(); format_.Reset(); brush_.Reset(); target_.Reset();
         drawFactory_.Reset(); writeFactory_.Reset();
         text_.clear(); width_ = height_ = fontHeight_ = 0; maxLines_ = 0;
-        offset_ = inset_ = 0; visibleLines_ = skippedLines_ = 0; unavailable_ = false;
+        visibleHeight_ = 0; visibleLines_ = skippedLines_ = 0; unavailable_ = false;
     }
 
     // No HWND operations, input events or clipboard access. Initialization is lazy:
@@ -47,9 +47,9 @@ public:
             target_->SetDpi(96, 96);
             target_->SetTransform(D2D1::Matrix3x2F::Identity());
             target_->Clear(D2D1::ColorF(14.0f/255, 18.0f/255, 27.0f/255));
-            target_->PushAxisAlignedClip(D2D1::RectF(0, inset_, static_cast<float>(width_),
-                static_cast<float>(height_) - inset_), D2D1_ANTIALIAS_MODE_ALIASED);
-            target_->DrawTextLayout(D2D1::Point2F(0, -offset_), layout_.Get(), brush_.Get(),
+            target_->PushAxisAlignedClip(D2D1::RectF(0, 0, static_cast<float>(width_),
+                visibleHeight_), D2D1_ANTIALIAS_MODE_ALIASED);
+            target_->DrawTextLayout(D2D1::Point2F(0, 0), layout_.Get(), brush_.Get(),
                 D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT);
             target_->PopAxisAlignedClip();
             const HRESULT result = target_->EndDraw();
@@ -114,8 +114,9 @@ private:
             }
             if (first == count) return false; // Do not display a vertically clipped line.
             if (first == 0) {
-                inset_ = (height - used) / 2.0f;
-                offset_ = -inset_;
+                // A short hypothesis belongs directly below the waveform, not
+                // vertically centered in space reserved for additional lines.
+                visibleHeight_ = used;
                 visibleLines_ = count;
                 break;
             }
@@ -142,7 +143,7 @@ private:
     std::wstring text_;
     int width_ = 0, height_ = 0, fontHeight_ = 0;
     unsigned int maxLines_ = 0, visibleLines_ = 0, skippedLines_ = 0;
-    float offset_ = 0, inset_ = 0;
+    float visibleHeight_ = 0;
     bool unavailable_ = false;
 };
 } // namespace universal_dictate::preview

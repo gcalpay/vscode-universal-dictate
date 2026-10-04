@@ -42,10 +42,8 @@ struct EnhancedOverlaySpec {
     int buttonHeight;
     int buttonGap;
     int buttonRightInset;
-    int buttonTop;
     int titleFontHeight;
     int subtitleFontHeight;
-    int buttonFontHeight;
     int buttonRadius;
 };
 
@@ -66,10 +64,10 @@ struct EnhancedOverlayLayout {
     int dividerTop = 0;
     int dividerBottom = 0;
     OverlayRect confirmButton;
+    OverlayRect pauseButton;
     OverlayRect cancelButton;
     int titleFontHeight = 0;
     int subtitleFontHeight = 0;
-    int buttonFontHeight = 0;
     int buttonRadius = 0;
 };
 
@@ -77,38 +75,50 @@ constexpr EnhancedOverlaySpec enhancedOverlaySpec(OverlaySize size) {
     switch (size) {
         case OverlaySize::Small:
             return EnhancedOverlaySpec{
-                380, 64, 14, 16,
+                380, 48, 12, 14,
                 18, 10, 8, 3,
-                {34, 18, 96, 46},
+                {34, 14, 96, 34},
                 {0, 0, 0, 0},
                 false,
-                98, 116, 8, 8,
-                112, 14, 14,
-                48, 24, 6, 6, 20,
-                14, 9, 10, 7};
+                98, 112, 3, 3,
+                108, 6, 6,
+                28, 24, 6, 6,
+                14, 9, 7};
         case OverlaySize::Medium:
             return EnhancedOverlaySpec{
-                520, 88, 18, 20,
+                520, 72, 14, 16,
                 22, 12, 10, 3,
-                {40, 17, 112, 39},
-                {40, 39, 112, 58},
+                {40, 16, 112, 36},
+                {40, 36, 112, 52},
                 true,
-                116, 128, 8, 8,
-                122, 18, 18,
-                54, 28, 6, 6, 30,
-                15, 10, 10, 8};
+                116, 124, 3, 3,
+                120, 6, 6,
+                32, 28, 6, 6,
+                15, 10, 8};
         case OverlaySize::Large:
         default:
             return EnhancedOverlaySpec{
-                740, 128, 24, 26,
+                740, 112, 18, 20,
                 28, 16, 13, 4,
-                {50, 39, 143, 63},
-                {50, 64, 143, 84},
+                {50, 34, 143, 58},
+                {50, 59, 143, 79},
                 true,
-                148, 144, 8, 8,
-                140, 30, 30,
-                60, 30, 6, 6, 49,
-                17, 11, 11, 9};
+                148, 136, 3, 3,
+                132, 6, 6,
+                36, 30, 6, 6,
+                17, 11, 9};
+    }
+}
+
+// Select the height once per recording. Preview Off needs no empty text region;
+// Preview On reserves complete shaped lines and its own waveform region.
+constexpr int enhancedOverlayHeight(OverlaySize size, bool previewEnabled) {
+    if (!previewEnabled) return enhancedOverlaySpec(size).height;
+    switch (size) {
+        case OverlaySize::Small: return 64;
+        case OverlaySize::Medium: return 88;
+        case OverlaySize::Large:
+        default: return 120;
     }
 }
 
@@ -129,12 +139,13 @@ inline OverlayRect scaleRect(OverlayRect value, std::uint32_t dpi) {
 
 inline EnhancedOverlayLayout calculateEnhancedOverlayLayout(
     OverlaySize size,
-    std::uint32_t dpi) {
+    std::uint32_t dpi,
+    bool previewEnabled = false) {
     const EnhancedOverlaySpec spec = enhancedOverlaySpec(size);
     EnhancedOverlayLayout layout{};
 
     layout.width = scaleLogical(spec.width, dpi);
-    layout.height = scaleLogical(spec.height, dpi);
+    layout.height = scaleLogical(enhancedOverlayHeight(size, previewEnabled), dpi);
     layout.panelRadius = scaleLogical(spec.panelRadius, dpi);
     layout.regionRadius = scaleLogical(spec.regionRadius, dpi);
     layout.indicatorCenterX = scaleLogical(spec.indicatorCenterX, dpi);
@@ -157,22 +168,27 @@ inline EnhancedOverlayLayout calculateEnhancedOverlayLayout(
     const int buttonHeight = scaleLogical(spec.buttonHeight, dpi);
     const int buttonGap = scaleLogical(spec.buttonGap, dpi);
     const int buttonRightInset = scaleLogical(spec.buttonRightInset, dpi);
-    const int buttonTop = scaleLogical(spec.buttonTop, dpi);
+    const int buttonTop = (layout.height - buttonHeight) / 2;
 
     layout.cancelButton = OverlayRect{
         layout.width - buttonRightInset - buttonWidth,
         buttonTop,
         layout.width - buttonRightInset,
         buttonTop + buttonHeight};
-    layout.confirmButton = OverlayRect{
+    layout.pauseButton = OverlayRect{
         layout.cancelButton.left - buttonGap - buttonWidth,
         buttonTop,
         layout.cancelButton.left - buttonGap,
         buttonTop + buttonHeight};
 
+    layout.confirmButton = OverlayRect{
+        layout.pauseButton.left - buttonGap - buttonWidth,
+        buttonTop,
+        layout.pauseButton.left - buttonGap,
+        buttonTop + buttonHeight};
+
     layout.titleFontHeight = scaleLogical(spec.titleFontHeight, dpi);
     layout.subtitleFontHeight = scaleLogical(spec.subtitleFontHeight, dpi);
-    layout.buttonFontHeight = scaleLogical(spec.buttonFontHeight, dpi);
     layout.buttonRadius = scaleLogical(spec.buttonRadius, dpi);
     return layout;
 }

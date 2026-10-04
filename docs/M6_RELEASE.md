@@ -1,4 +1,8 @@
-# M6 - 1.0.0 final release
+# M6 - 1.0.0 final release (historical checkpoint)
+
+> Closed out by PR #53 at `eda02a512d3feb70989b89a3efc6714d12b833e7`. The user
+> reports Marketplace publication. The material below records the original release
+> gate, not instructions to republish. Current work: [M7](M7_PAUSE_RESUME.md).
 
 Updated: 2026-10-01. Branch: `release/next`.
 Accepted M3 merge: `d1408904409c8636a4ffada6ef342a5d04b6ed3a` (PR #52).

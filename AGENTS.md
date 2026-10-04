@@ -1,76 +1,70 @@
 # Agent guidance
 
-Read [docs/M6_RELEASE.md](docs/M6_RELEASE.md) first for the active release checkpoint,
-then [docs/DICTATION_RELIABILITY_PLAN.md](docs/DICTATION_RELIABILITY_PLAN.md).
-The M2/M3 documents and PRs #51/#52 are historical evidence, not outstanding
-implementation or acceptance instructions.
+Read [docs/M7_PAUSE_RESUME.md](docs/M7_PAUSE_RESUME.md) for current work.
+The M1/M2/M3/M6 ledgers describe historical checkpoints, not outstanding tasks.
 
-## Current checkpoint and authorization
+## Current authorization
 
-M1, M2 and M3 are accepted and merged. M3 merged through PR #52 at
-`d1408904409c8636a4ffada6ef342a5d04b6ed3a`. M4 is skipped, M5 is parked and
-Issue #38 remains unresolved. M6 is the only active 1.0.0 work on `release/next`
-through PR #53.
+Main is the accepted 1.0.0 release merge `eda02a512d3feb70989b89a3efc6714d12b833e7`
+(PR #53). The user reports publishing 1.0.0 to the Marketplace.
+Work on `feat/pause-resume-controls` / PR #54, targeting a 1.1.0 test candidate.
+The user authorized implementation, corresponding Conventional Commits, tests,
+Windows builds and a VSIX for review. **Do not merge, tag or publish this milestone
+until the user accepts the finished Windows candidate and authorizes release.**
 
-The user tested the verified 1.0.0 candidate at `02e94d9` and accepted its product
-behavior. On 2026-10-01 the user explicitly authorized the final release sequence:
-replace the enhanced-overlay screenshot, reconcile active docs, run final checks and
-package audit, update/ready PR #53, merge it, tag `v1.0.0`, create the GitHub Release
-and publish the exact final verified VSIX to the VS Code Marketplace. No further
-routine approval is required for those steps.
+Scope: Pause/Resume recording; a middle overlay button; compact symbol-only
+controls; green Insert, amber Pause/Resume, red Discard; a ten-second waveform
+history default; brief README clarification for compatible external Windows inputs.
+No native Linux/macOS support, model selection/download, global hotkey, translation
+feature or Issue #38 focus workaround is part of this milestone.
 
-The final defaults are Language **English**, overlay size **Medium**, Live preview
-**Off**, Overwrite clipboard **Off**, Enhanced overlay visualization and one-second
-waveform history. Preserve explicit user settings; do not reset preferences on
-upgrade. Keep the Language label and the approved offline language note.
+## Current visual correction
 
-## Final presentation change
+The user accepted Pause/Resume and the compact layout, but rejected the filled
+`43a4ef0` waveform and the wobbling `d955795` replacement. Restore the original
+256 append-only signed-peak display buckets and thin-line/envelope drawing.
+Select the bucket duration before capture; finalize each value once. Completed
+samples may scroll left but must never be regrouped, rescaled or reshaped by later
+audio. Do not add paint-time decimation, neighbor smoothing or adaptive gain.
+Keep the compact geometry, symbol controls, six settings and ten-second default.
+The stable peak response uses reference 0.09, exponent 0.62 and visual idle gate 0.0020; mirrored lower envelope strokes are omitted while the signed primary trace remains;
+recorded PCM, recognition and Pause/Resume remain unchanged. The reference screenshot
+was NOT necessarily recorded at one second; do not infer its span from old defaults.
 
-Replace `media/enhanced-overlay.webp` with the user's final 564 x 113 crop. Convert
-the supplied JPEG to WebP without resizing, cropping, redrawing or changing its
-content; prefer a lossless conversion. The other three 1.0 screenshots are accepted:
-`status-bar-controls.webp`, `settings-menu.webp` and `live-preview.webp`.
-Keep `media/icon.png`; keep the obsolete `universal-dictate-overview.webp` absent.
+Test temporal behavior, not only still images: partial buckets leave the displayed
+frame untouched, completed buckets shift old values verbatim, and production strokes
+translate without changing shape. Include startup, ring wrap, loud input after quiet,
+Pause/Resume and DPI cases. A new verified VSIX is authorized, not merge/publication.
 
-README.md and CHANGELOG.md are already accepted release text. Do not reintroduce
-VSIX-install instructions, internal milestone commentary or obsolete artwork.
+## Invariants and validation
 
-## Release gates
-
-- Inspect live refs before writes and preserve unrelated work.
-- Do not reopen accepted M3 runtime work merely because docs/assets changed.
-- Verify source and packaged defaults resolve to English / Medium / Live preview Off.
-  In particular, the runtime fallback for Live preview must remain literal false.
-- Run the release CI/Windows package workflow and inspect the produced VSIX. Verify
-  version 1.0.0, x64 identity, exact release media, four expected executables and
-  absence of source/test/font/model/audio/development material.
-- Record the exact final source head, VSIX filename and SHA-256 in PR #53.
-- Codacy currently remains `action_required`; prior final-head findings were reviewed
-  as false-positive/policy warnings. Do not weaken rules or claim Codacy is green.
-- After final package verification, publish those exact VSIX bytes. Do not silently
-  rebuild a different artifact for the Marketplace.
-- If artifact/source identity, CI/package verification or publication capability is
-  genuinely blocked, stop and report the blocker rather than guessing.
-- Never request publication credentials in chat. Use an already authorized secure
-  publisher path if one is available.
-
-## Product invariants
-
-Local/offline inference after model setup and the Windows UI-host/Remote-WSL
-architecture remain. Preview is opt-in, overlay-only and bounded; final transcription
-uses the complete recording. Do not insert or copy partial hypotheses. Only the
-final transcript is retained, inserted once and optionally copied.
-
-Automatic clipboard Off performs no clipboard access. On copies the final text once
-before direct Unicode input; do not restore old clipboard data. Copy Last Transcript
-is a separate explicit action backed by memory-only retained text. Keep session,
-cancellation and WAV cleanup safeguards. No Enter, automatic submission or automatic
-retry of uncertain insertion. Cancellation cannot undo already-submitted input.
-
-The intended input/caret is the latest deliberate selection. Clipboard recovery does
-not prove focus preservation. Do not use private Codex internals, global hooks, click
-replay or mandatory custom VS Code. Keep historical experiment branches isolated.
-
-Review analyzer findings at their actual source locations; previous false positives
-do not automatically classify new findings. Do not disable checks or claim that a
-review disposition changes an analyzer's reported status.
+- Inspect live refs before writes; preserve unrelated work and the 1.0.0 release.
+- Pause leaves the device open but excludes incoming PCM from WAV, preview and
+  waveform storage. Show Paused only after the recorder confirms that admitted
+  callbacks have drained. A failed/unconfirmed pause cancels with an error.
+- Pause/Resume are nonterminal pipe messages. Stop/Discard/disposal remain usable
+  while paused or transitioning. No stale acknowledgement may revive a session.
+- Suspend preview scheduling and reject in-flight results across Pause/Resume.
+  Preserve the single active inference slot, full accepted audio and final insertion.
+- Keep preset widths, DPI alignment and non-activation. Use compact vector symbols
+  and descriptive hover labels, not bundled fonts or color alone. Choose the compact
+  or preview-enabled height once at startup; Pause/Resume must not resize it.
+- Preserve explicit saved preferences. Only an absent waveform setting changes to
+  ten seconds. English / Medium / Live preview Off / Overwrite clipboard Off /
+  Enhanced overlay remain the other defaults.
+- Automatic clipboard Off performs no access; On copies the final transcript once.
+  Copy Last Transcript remains explicit and memory-only. No restoration, automatic
+  retry, synthetic Enter or automatic message submission.
+- Local inference uses the existing pinned Whisper runtime/base model. WSL remains
+  a workspace under the Windows UI host, not a newly supported native Linux host.
+- Do not use private Codex internals, global hooks, click replay or custom VS Code.
+  Keep Issue #38 open and frozen experiment branches isolated.
+- Run all existing regressions plus native pause/capture/pipe/renderer tests. Runner
+  synthetic PCM and scratch-window input tests are not user microphone/Codex proof.
+- Inspect the actual Windows VSIX and record source/run identity, hashes and defaults
+  in PR #54. Exclude source/test/tooling/font/model/audio files from the package.
+- Existing screenshots are 1.0 references until new user captures are accepted.
+  Do not substitute scripted test renders into public docs as real user screenshots.
+- Remove the temporary M7 review-snapshot workflow before delivering the candidate.
+- Review analyzer findings individually; do not disable rules or claim an evidence
+  collector makes Codacy green. Never request publishing credentials in chat.

@@ -2,7 +2,7 @@
   "name": "vscode-universal-dictate",
   "displayName": "Universal Dictate",
   "description": "Local, offline dictation for VS Code on Windows and Remote - WSL. 99 languages, optional live transcript preview, clipboard recovery, and no automatic sending.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "license": "MIT",
   "publisher": "gcalpay",
   "icon": "media/icon.png",
@@ -55,7 +55,8 @@
     "onCommand:universalDictate.selectLanguage",
     "onCommand:universalDictate.openSettings",
     "onCommand:universalDictate.showDiagnostics",
-    "onCommand:universalDictate.copyLastTranscript"
+    "onCommand:universalDictate.copyLastTranscript",
+    "onCommand:universalDictate.pauseResume"
   ],
   "contributes": {
     "commands": [
@@ -82,6 +83,11 @@
       {
         "command": "universalDictate.copyLastTranscript",
         "title": "Universal Dictate: Copy Last Transcript"
+      },
+      {
+        "command": "universalDictate.pauseResume",
+        "title": "Universal Dictate: Pause/Resume Recording",
+        "enablement": "universalDictate.recording"
       }
     ],
     "keybindings": [
@@ -93,6 +99,11 @@
       {
         "command": "universalDictate.cancel",
         "key": "escape",
+        "when": "universalDictate.recording && !terminalFocus"
+      },
+      {
+        "command": "universalDictate.pauseResume",
+        "key": "ctrl+alt+p",
         "when": "universalDictate.recording && !terminalFocus"
       }
     ],
@@ -145,7 +156,7 @@
             10,
             20
           ],
-          "default": 1,
+          "default": 10,
           "description": "Amount of recent audio, in seconds, shown across the enhanced native waveform. Changes apply from the next dictation session."
         },
         "universalDictate.overwriteClipboard": {
@@ -168,7 +179,8 @@
     "test:m1": "npm run compile && node --test test/overlay-size.test.cjs",
     "package:vsix": "npm run compile && vsce package --no-dependencies --target win32-x64 --out universal-dictate-win32-x64.vsix",
     "test:m2": "npm run compile && node --test test/transcript-recovery.test.cjs test/transcript-recovery-ui.test.cjs test/text-input.test.cjs test/lifecycle.test.cjs test/recorder-lifecycle.test.cjs",
-    "test:m3": "npm run compile && node --unhandled-rejections=strict --test test/preview-*.test.cjs"
+    "test:m3": "npm run compile && node --unhandled-rejections=strict --test test/preview-*.test.cjs",
+    "test:m7": "npm run compile && node --unhandled-rejections=strict --test test/pause-*.test.cjs"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

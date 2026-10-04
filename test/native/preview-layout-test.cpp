@@ -11,18 +11,21 @@ int main() {
     unsigned int cases = 0;
     for (auto size : {OverlaySize::Small, OverlaySize::Medium, OverlaySize::Large}) {
         for (unsigned int dpi : {0U, 96U, 120U, 144U, 168U, 192U, 240U, 288U}) {
-            const auto normal = calculateEnhancedOverlayLayout(size, dpi);
+            const auto normal = calculateEnhancedOverlayLayout(size, dpi, true);
             const auto preview = calculateTextLayout(size, dpi);
             const std::array<OverlayRect, 4> boxes{preview.title, preview.label, preview.waveform, preview.text};
             for (auto box : boxes) {
                 assert(box.left >= 0 && box.top >= 0 && box.right <= normal.width && box.bottom <= normal.height);
                 assert(box.right > box.left && box.bottom > box.top && box.right < normal.dividerX);
-                assert(!overlaps(box, normal.confirmButton) && !overlaps(box, normal.cancelButton));
+                assert(!overlaps(box, normal.confirmButton) && !overlaps(box, normal.cancelButton) && !overlaps(box, normal.pauseButton));
             }
             for (std::size_t i=0; i<boxes.size(); ++i) for (std::size_t j=i+1; j<boxes.size(); ++j) assert(!overlaps(boxes[i], boxes[j]));
             assert(preview.text.left > normal.indicatorCenterX + normal.indicatorOuterRadius);
             assert(preview.fontHeight >= scaleLogical(14, dpi));
-            assert(preview.maxLines == static_cast<unsigned int>(size) + 1);
+            assert(preview.maxLines == (size == OverlaySize::Small ? 1U : 2U));
+            const int minimumWaveform = size == OverlaySize::Small ? 16 : size == OverlaySize::Medium ? 22 : 42;
+            assert(preview.waveform.bottom - preview.waveform.top >= scaleLogical(minimumWaveform, dpi) - 1);
+            assert(preview.text.top - preview.waveform.bottom <= scaleLogical(3, dpi) + 1);
             ++cases;
         }
     }

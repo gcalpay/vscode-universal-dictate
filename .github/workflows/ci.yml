@@ -39,6 +39,15 @@ jobs:
       - name: M3 preview scheduling and PCM snapshot tests
         run: node --unhandled-rejections=strict --test test/preview-pipeline.test.cjs test/preview-recorder.test.cjs test/preview-runtime.test.cjs
 
+      - name: M7 pause/resume state and command tests
+        run: node --unhandled-rejections=strict --test test/pause-controls.test.cjs
+
+      - name: Concurrent capture pause gate
+        run: |
+          mkdir -p .deps
+          g++ -std=c++20 -Wall -Wextra -Werror -pedantic -pthread test/native/recording-pause-test.cpp -o .deps/recording-pause-test
+          .deps/recording-pause-test
+
       - name: Unicode input policy tests
         run: |
           g++ -std=c++20 -Wall -Wextra -Werror -pedantic test/native/unicode-input-test.cpp -o .deps-unicode-input-test
@@ -57,6 +66,18 @@ jobs:
           g++ -std=c++20 -Wall -Wextra -Werror -pedantic -pthread test/native/preview-bridge-test.cpp -o .deps/preview-bridge-test
           .deps/preview-bridge-test
           node --unhandled-rejections=strict test/preview-native-ipc.cjs ./.deps/preview-bridge-test
+
+      - name: Fixed signed-peak waveform scale
+        run: |
+          g++ -std=c++20 -Wall -Wextra -Werror -pedantic test/native/waveform-level-test.cpp -o .deps/waveform-level-test
+          .deps/waveform-level-test
+
+      - name: Immutable waveform history and scrolling
+        run: |
+          g++ -std=c++20 -Wall -Wextra -Werror -pedantic -pthread test/native/waveform-history-test.cpp -o .deps/waveform-history-test
+          .deps/waveform-history-test
+          g++ -std=c++20 -DNDEBUG -Wall -Wextra -Werror -pedantic test/native/waveform-level-test.cpp -o .deps/waveform-level-ndebug-test
+          .deps/waveform-level-ndebug-test
 
       - name: Preview geometry regression
         run: |

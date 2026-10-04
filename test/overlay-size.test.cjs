@@ -57,7 +57,7 @@ test('enhanced recorder arguments validate invalid size and span', () => {
       'sample.wav',
       '--enhanced-overlay',
       '--waveform-timespan-ms',
-      '1000',
+      '10000',
       '--overlay-size',
       'medium'
     ]

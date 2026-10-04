@@ -31,6 +31,7 @@ int main(int argc, char** argv) {
             bridge.command(command); require(bridge.snapshot().empty(), "malformed sequence");
         }
         bridge.command("SNAPSHOT a 4"); require(bridge.snapshot(false) == "PREVIEW_ERROR a 4\n", "no invisible preview");
+        bridge.command("SNAPSHOT a 5"); require(bridge.snapshot(true, true) == "PREVIEW_EMPTY a 5\n", "paused snapshot does not copy audio");
         std::string text;
         bridge.command("TEXT a 1 4772c3bcc39f6520f09fa7aa");
         require(bridge.takeText(text) && text == "Gr\xc3\xbc\xc3\x9f\x65 \xf0\x9f\xa7\xaa", "UTF8 text");
@@ -39,6 +40,6 @@ int main(int argc, char** argv) {
         bridge.command("TEXT a 2 " + std::string(8194,'0')); require(!bridge.takeText(text), "text cap");
         bridge.command("TEXT b 3 6f6c64"); require(!bridge.takeText(text), "wrong display owner");
         bridge.command("TEXT a 4 6e6577"); require(bridge.takeText(text) && text == "new", "next valid revision");
-        std::cout << "10 preview-bridge checks passed\n";
+        std::cout << "11 preview-bridge checks passed\n";
     } catch (const std::exception& e) { std::cerr << e.what() << '\n'; return 1; }
 }
