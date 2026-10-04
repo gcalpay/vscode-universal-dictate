@@ -500,7 +500,7 @@ void drawEnhancedWaveform(HDC dc) {
         Gdiplus::PointF(static_cast<Gdiplus::REAL>(right), static_cast<Gdiplus::REAL>(centerY)));
 
     const auto& points = g_overlay.enhancedSignalHistory;
-    std::array<Gdiplus::PointF, kEnhancedSignalPoints> wave{}, upperOuter{}, lowerOuter{}, upperInner{}, lowerInner{};
+    std::array<Gdiplus::PointF, kEnhancedSignalPoints> wave{}, upperOuter{}, upperInner{};
 
     for (std::size_t index = 0; index < points.size(); ++index) {
         const Gdiplus::REAL x = static_cast<Gdiplus::REAL>(left) +
@@ -513,13 +513,11 @@ void drawEnhancedWaveform(HDC dc) {
 
         wave[index] = Gdiplus::PointF(x, static_cast<Gdiplus::REAL>(centerY) - signedAmplitude);
         upperOuter[index] = Gdiplus::PointF(x, static_cast<Gdiplus::REAL>(centerY) - envelopeAmplitude);
-        lowerOuter[index] = Gdiplus::PointF(x, static_cast<Gdiplus::REAL>(centerY) + envelopeAmplitude);
         upperInner[index] = Gdiplus::PointF(x, static_cast<Gdiplus::REAL>(centerY) - envelopeAmplitude * 0.56f);
-        lowerInner[index] = Gdiplus::PointF(x, static_cast<Gdiplus::REAL>(centerY) + envelopeAmplitude * 0.56f);
     }
 
-    // Original thin signed trace and subtle envelope strokes. Every completed
-    // sample is immutable: paint changes only its x position as new buckets arrive.
+    // Thin signed trace with subtle upper envelope strokes. The redundant mirrored
+    // lower envelopes are intentionally omitted; every completed sample stays immutable.
     // Round joins retain the clipping/headroom fix without smoothing sample data.
     Gdiplus::Pen outerPen(envelopeOuterColor, 0.9f * dpiScale);
     Gdiplus::Pen innerPen(envelopeInnerColor, 0.8f * dpiScale);
@@ -528,9 +526,7 @@ void drawEnhancedWaveform(HDC dc) {
     innerPen.SetLineJoin(Gdiplus::LineJoinRound);
     wavePen.SetLineJoin(Gdiplus::LineJoinRound);
     graphics.DrawLines(&outerPen, upperOuter.data(), static_cast<INT>(upperOuter.size()));
-    graphics.DrawLines(&outerPen, lowerOuter.data(), static_cast<INT>(lowerOuter.size()));
     graphics.DrawLines(&innerPen, upperInner.data(), static_cast<INT>(upperInner.size()));
-    graphics.DrawLines(&innerPen, lowerInner.data(), static_cast<INT>(lowerInner.size()));
     graphics.DrawLines(&wavePen, wave.data(), static_cast<INT>(wave.size()));
 }
 

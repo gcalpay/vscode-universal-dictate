@@ -19,7 +19,7 @@
 - Waveform history now defaults to **10 seconds**. Explicit saved preferences remain
   unchanged; English, Medium, Live preview Off and Overwrite clipboard Off remain.
 - Gave the waveform more height with Live preview enabled, compacted preview spacing,
-  and restored the finer 0.1.5-style signed-peak response with a slightly raised visual-only idle-noise gate.
+  and tuned the signed-peak response for moderate headroom with a slightly raised visual-only idle-noise gate; redundant mirrored lower-envelope strokes are omitted.
 - Narrowed the controls and removed unused vertical padding. Preview Off uses a
   shorter overlay; Preview On keeps room for complete text lines.
 - Clarified dictation into compatible focused text fields in other Windows apps.

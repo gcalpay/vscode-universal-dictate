@@ -97,9 +97,10 @@ intact. A 256-slot sequence-tagged ring detects overwritten reads without locks.
 The renderer uses the original thin signed trace, subtle inner/outer envelopes,
 colors, opacity, widths and anti-aliasing. Round joins and viewport clipping prevent
 stroke spikes from exceeding the measured display area. The original fixed peak
-mapping is retained with exponent 0.62, reference 0.05 and a visual-only noise
-floor of 0.0015. This stays close to the 0.1.5 response while suppressing only the
-very bottom of idle microphone activity. This is a visual-only fixed gain change,
+mapping is retained with exponent 0.62, reference 0.09 and a visual-only noise
+floor of 0.0015. The moderate reference keeps normal speech away from full visual
+height while retaining fine structure. Mirrored lower envelope strokes are omitted;
+the signed primary trace remains. This is a visual-only fixed gain/paint change,
 not RMS normalization, microphone gain adjustment or audio processing. It preserves
 quiet/normal/loud separation without reusing the rejected signed-RMS/decimation path.
 

@@ -203,6 +203,26 @@ void renderWaveformLevels(const std::filesystem::path& output, OverlaySize size,
     }
 }
 
+void checkNoMirroredLowerEnvelope(OverlaySize size, unsigned int dpi) {
+    const auto layout = configurePresentation(size, dpi, false);
+    const auto box = layout.waveform;
+    const int centerY = (box.top + box.bottom) / 2;
+    g_overlay.enhancedSignalHistory.fill(universal_dictate::visualPeakSample(819));
+    Canvas canvas(layout.width, layout.height);
+    RECT client{0, 0, layout.width, layout.height};
+    drawEnhancedOverlay(canvas.dc, client);
+    const auto pixels = canvas.snapshot();
+    for (int y = centerY + scaleLogical(2, dpi); y < box.bottom; ++y) {
+        for (int x = box.left + scaleLogical(3, dpi); x < box.right - scaleLogical(3, dpi); ++x) {
+            const auto pixel = pixels[y * layout.width + x];
+            const int red = (pixel >> 16) & 255, green = (pixel >> 8) & 255, blue = pixel & 255;
+            check(!(green > 55 && green > red + 15 && green > blue + 5),
+                  "positive waveform produced mirrored lower-envelope ink");
+        }
+    }
+    g_overlay.enhancedSignalHistory.fill(0);
+}
+
 void renderStablePcmDetail(const std::filesystem::path& output, OverlaySize size, unsigned int dpi) {
     // Ten seconds of deterministic speech-like bursts, varying energy and harmonics.
     // Fixed signed peaks come from PCM through the production bucket.
@@ -301,6 +321,7 @@ void checkPreviewTopAlignment(OverlaySize size, unsigned int dpi) {
 
 void renderWaveformCases(const std::filesystem::path& output, OverlaySize size, unsigned int dpi) {
     for (bool enabled : {false, true}) renderWaveformLevels(output, size, dpi, enabled);
+    checkNoMirroredLowerEnvelope(size, dpi);
     checkPreviewTopAlignment(size, dpi);
     // Deterministic low/medium/high energy envelopes, not microphone acceptance.
     for (int i = 0; i < kEnhancedSignalPoints; ++i) {

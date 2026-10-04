@@ -18,8 +18,9 @@ int main() {
     require(visualPeakSample(48) == 0); // Slightly raised visual-only idle gate.
     require(visualPeakSample(50) > 0);
     require(visualPeakSample(-32768) == -1000 && visualPeakSample(32767) == 1000);
-    // Near the old 0.045 reference the response is strong but still has a little headroom.
-    require(visualPeakSample(1475) > 850 && visualPeakSample(1475) < 1000);
+    // Normal speech-range peaks retain detail and substantial headroom.
+    require(visualPeakSample(1475) > 550 && visualPeakSample(1475) < 750);
+    require(visualPeakSample(2949) == 1000);
     int last = 0;
     for (int sample = 0; sample <= 32767; ++sample) {
         const int next = visualPeakSample(sample);
@@ -31,8 +32,8 @@ int main() {
         const auto quiet = constantLevel(128, frames);
         const auto normal = constantLevel(819, frames);
         const auto loud = constantLevel(1475, frames);
-        require(quiet > 100 && normal > quiet + 300 && loud > normal + 200 && loud < 1000);
-        require(constantLevel(5243, frames) == 1000);
+        require(quiet > 50 && normal > quiet + 200 && loud > normal + 150 && loud < 800);
+        require(constantLevel(2949, frames) == 1000);
         require(constantLevel(-819, frames) == -normal);
         // A short transient retains its peak instead of being averaged away.
         WaveformBucket transient;
@@ -50,5 +51,5 @@ int main() {
         require(bipolar.push(0, 1) == 0);
     }
     require(constantLevel(819, 0) == constantLevel(819, 1));
-    std::cout << "Signed-peak mapping: 0.1.5-style response, slight idle gate, polarity, five spans and no AGC passed\n";
+    std::cout << "Signed-peak mapping: moderate headroom, slight idle gate, polarity, five spans and no AGC passed\n";
 }

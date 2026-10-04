@@ -6,13 +6,13 @@
 #include <optional>
 
 namespace universal_dictate {
-// Keep the 0.1.5 signed-peak character while suppressing only the very bottom
-// of idle input slightly more. These constants never adapt to recent history.
+// Keep the stable signed-peak character with moderate visual headroom while
+// suppressing only the very bottom of idle input. These constants never adapt.
 inline int visualPeakSample(int sample) noexcept {
     const int clamped = std::clamp(sample, -32767, 32767);
     const double amplitude = std::abs(clamped) / 32767.0;
     constexpr double noiseFloor = 0.0015;
-    constexpr double reference = 0.05;
+    constexpr double reference = 0.09;
     if (amplitude <= noiseFloor) return 0;
     const double normalized = std::clamp((amplitude - noiseFloor) /
                                          (reference - noiseFloor), 0.0, 1.0);
