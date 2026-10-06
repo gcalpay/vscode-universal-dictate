@@ -1,7 +1,8 @@
 import * as fs from 'node:fs';
 import * as vscode from 'vscode';
-import { DictationEngine, DictationState, type DictationSession, type PreviewControl } from './core/dictation';
+import { DictationEngine, DictationState, type DictationLatencyEvent, type DictationLatencyStage, type DictationSession, type PreviewControl } from './core/dictation';
 import { PreviewCoordinator } from './core/preview-coordinator';
+import type { WhisperInferencePath } from './core/whisper';
 import { TranscriptRecoveryController } from './transcript-recovery';
 import { normalizeOverlaySize, OVERLAY_SIZES, type OverlaySize } from './core/overlay-size';
 import {
@@ -39,6 +40,7 @@ const OVERLAY_SIZE_LABELS: Record<OverlaySize, string> = {
 };
 
 const WAVEFORM_TIME_SPANS: readonly WaveformTimeSpanSeconds[] = [1, 3, 5, 10, 20];
+const LATENCY_STAGES: readonly DictationLatencyStage[] = ['T0','T1','T2','T3','T4','T5','T6'];
 
 function getConfiguredVisualization(): VisualizationMode {
   const value = vscode.workspace
@@ -100,6 +102,7 @@ class DictationController implements vscode.Disposable {
   private readonly settingsStatusBar: vscode.StatusBarItem;
   private readonly levelHistory = Array<number>(9).fill(0);
   private readonly engine: DictationEngine;
+  private readonly latencyOutput: vscode.OutputChannel;
   readonly recovery: TranscriptRecoveryController;
   private activeVisualization: VisualizationMode = 'enhancedOverlay';
   private activeOverwriteClipboard = false;
@@ -107,6 +110,8 @@ class DictationController implements vscode.Disposable {
   private activeLanguage = 'en';
   private activeOverlaySize: OverlaySize = 'medium';
   private activeWaveformSpan: WaveformTimeSpanSeconds = 10;
+  private latencyTrace: { operationId: number; stages: Partial<Record<DictationLatencyStage, number>>; preview: boolean; language: string; warm: boolean; path?: WhisperInferencePath } | undefined;
+  private lastLatencySummary = 'not measured';
 
   constructor(private readonly context: vscode.ExtensionContext) {
     // Use distinct stable IDs so VS Code can track the Dictate and settings
@@ -118,6 +123,7 @@ class DictationController implements vscode.Disposable {
       0
     );
     this.statusBar.name = 'Universal Dictate';
+    this.latencyOutput = vscode.window.createOutputChannel('Universal Dictate Latency');
 
     // A slightly lower priority keeps this separate, content-sized gear
     // immediately to the right of the Dictate item.
@@ -155,7 +161,7 @@ class DictationController implements vscode.Disposable {
           this.activeLivePreview
         );
       },
-      transcribe: (audioPath) => transcribe(this.context, audioPath, this.activeLanguage),
+      transcribe: (audioPath) => transcribe(this.context, audioPath, this.activeLanguage, path => { if (this.latencyTrace) this.latencyTrace.path = path; }),
       startPreview: (session, signal) => this.startPreview(session, signal),
       insert: (transcript, signal) => pasteIntoFocusedControl(this.context, transcript, signal, this.activeOverwriteClipboard),
       onStateChanged: (state) => this.renderState(state),
@@ -170,7 +176,8 @@ class DictationController implements vscode.Disposable {
       onNoSpeech: () => {
         void vscode.window.showInformationMessage('Universal Dictate: no speech detected.');
       },
-      onError: (error) => this.showError(error)
+      onError: (error) => this.showError(error),
+      onLatencyEvent: event => this.recordLatency(event)
     });
 
     this.recovery = new TranscriptRecoveryController(this.engine);
@@ -201,6 +208,8 @@ class DictationController implements vscode.Disposable {
     this.showIdleStatus();
   }
 
+  getLastLatencySummary(): string { return this.lastLatencySummary; }
+
   async toggle(): Promise<void> {
     if (process.platform !== 'win32') {
       void vscode.window.showErrorMessage(
@@ -223,6 +232,7 @@ class DictationController implements vscode.Disposable {
     this.engine.dispose();
     this.statusBar.dispose();
     this.settingsStatusBar.dispose();
+    this.latencyOutput.dispose();
   }
 
   private renderState(state: DictationState): void {
@@ -271,6 +281,37 @@ class DictationController implements vscode.Disposable {
         this.statusBar.text = '$(check) Universal Dictate: inserting';
         return;
     }
+  }
+
+  private recordLatency(event: DictationLatencyEvent): void {
+    if (event.stage === 'T0') {
+      this.latencyTrace = { operationId: event.operationId, stages: {}, preview: this.activeLivePreview, language: this.activeLanguage, warm: isWhisperWarm() };
+    }
+    const trace = this.latencyTrace;
+    if (!trace || trace.operationId !== event.operationId) return;
+    trace.stages[event.stage] = event.atMs;
+    if (event.stage !== 'T6') return;
+    const elapsed = (a: DictationLatencyStage, b: DictationLatencyStage) => {
+      const x = trace.stages[a], y = trace.stages[b];
+      return x === undefined || y === undefined ? 'n/a' : `${Math.max(0, y - x).toFixed(1)}ms`;
+    };
+    const last = LATENCY_STAGES.filter(stage => trace.stages[stage] !== undefined).at(-1) ?? 'T0';
+    const summary = [
+      `preview=${trace.preview ? 'on' : 'off'}`,
+      `language=${trace.language}`,
+      `workerAtStop=${trace.warm ? 'warm' : 'cold'}`,
+      `path=${trace.path ?? 'unknown'}`,
+      `T0-T1=${elapsed('T0','T1')}`,
+      `T1-T2=${elapsed('T1','T2')}`,
+      `T2-T3=${elapsed('T2','T3')}`,
+      `T3-T4=${elapsed('T3','T4')}`,
+      `T4-T5=${elapsed('T4','T5')}`,
+      `T5-T6=${elapsed('T5','T6')}`,
+      `T0-${last}=${elapsed('T0', last)}`
+    ].join(' | ');
+    this.lastLatencySummary = summary;
+    this.latencyOutput.appendLine(`[${new Date().toISOString()}] ${summary}`);
+    this.latencyTrace = undefined;
   }
 
   private updateRecordingLevel(level: number): void {
@@ -627,7 +668,8 @@ export function activate(context: vscode.ExtensionContext): void {
           `whisperCli=${fs.existsSync(getWhisperCliPath(context)) ? 'available' : 'missing'}`,
           `whisperServer=${fs.existsSync(getWhisperServerPath(context)) ? 'available' : 'missing'}`,
           `worker=${isWhisperWarm() ? 'warm' : 'cold'}`,
-          `model=${fs.existsSync(getModelPath(context)) ? 'installed' : 'not-installed'}`
+          `model=${fs.existsSync(getModelPath(context)) ? 'installed' : 'not-installed'}`,
+          `lastLatency=${controller.getLastLatencySummary()}`
         ].join(' | '),
         { modal: true }
       );
