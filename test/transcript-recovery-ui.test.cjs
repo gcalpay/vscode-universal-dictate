@@ -12,7 +12,7 @@ function load(name, dependencies) {
   }); return exports;
 }
 function mock() {
-  const calls = { menus: [], copies: [], info: [], errors: [], updates: [], status: [] }; const commands = new Map(); const config = {};
+  const calls = { menus: [], copies: [], info: [], errors: [], updates: [], status: [], output: [] }; const commands = new Map(); const config = {};
   const vscode = {
     commands: {
       registerCommand: (id, cb) => { assert.ok(!commands.has(id)); commands.set(id, cb); return { dispose: () => commands.delete(id) }; },
@@ -22,6 +22,7 @@ function mock() {
       createQuickPick: () => assert.fail('recovery submenu must not exist'),
       showQuickPick: async items => { calls.menus.push(items); return undefined; },
       createStatusBarItem: () => { const item = { show() {}, dispose() {} }; calls.status.push(item); return item; },
+      createOutputChannel: name => ({ appendLine: line => calls.output.push([name, line]), dispose() {} }),
       showInformationMessage: async s => { calls.info.push(s); }, showErrorMessage: async s => { calls.errors.push(s); }
     },
     env: { clipboard: { writeText: async s => { calls.copies.push(s); } } },
@@ -50,7 +51,7 @@ function extensionFixture() {
     './model': { ensureModel: async () => {} },
     './paste': { pasteIntoFocusedControl: async (...args) => { insertions.push(args); } },
     './recorder': { RecorderSession: { start: async (...args) => { h.calls.recorder = args; return {}; } } },
-    './whisper': { warmWhisper: async () => {}, disposeWhisper() {}, transcribe: async (...args) => { h.calls.transcription = args; return 'final'; } }
+    './whisper': { warmWhisper: async () => {}, disposeWhisper() {}, isWhisperWarm: () => true, transcribe: async (...args) => { h.calls.transcription = args; args[3]?.('server'); return 'final'; } }
   }); const context = { subscriptions: [] }; extension.activate(context);
   return { ...h, get options() { return options; }, insertions, cleanup() { context.subscriptions.forEach(d => d.dispose()); } };
 }
