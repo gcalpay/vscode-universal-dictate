@@ -42,6 +42,9 @@ jobs:
       - name: M7 pause/resume state and command tests
         run: node --unhandled-rejections=strict --test test/pause-controls.test.cjs
 
+      - name: M0 stop-to-insert timing instrumentation
+        run: node --unhandled-rejections=strict --test test/latency-instrumentation.test.cjs
+
       - name: Concurrent capture pause gate
         run: |
           mkdir -p .deps
