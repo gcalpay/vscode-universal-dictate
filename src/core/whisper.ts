@@ -15,6 +15,8 @@ const HEALTH_POLL_INTERVAL_MS = 100;
 const REQUEST_TIMEOUT_MS = 10 * 60 * 1000;
 const STDERR_TAIL_LIMIT = 12 * 1024;
 
+export type WhisperInferencePath = 'server' | 'cli';
+
 export interface WhisperRuntimeOptions {
   readonly cliPath: string;
   readonly serverPath: string;
@@ -110,7 +112,7 @@ export class WhisperRuntime {
     return operation.done;
   }
 
-  async transcribe(audioPath: string, language: string): Promise<string> {
+  async transcribe(audioPath: string, language: string, onPath?: (path: WhisperInferencePath) => void): Promise<string> {
     await this.stopPreview();
     const audioStat = await fs.promises.stat(audioPath);
     if (audioStat.size < MIN_AUDIO_BYTES) {
@@ -119,6 +121,7 @@ export class WhisperRuntime {
 
     try {
       const server = await this.ensureWarmServer();
+      try { onPath?.('server'); } catch { }
       return await this.transcribeWithServer(server, audioPath, language);
     } catch (serverError) {
       // Preserve dictation reliability if the warm worker cannot start or dies.
@@ -127,6 +130,7 @@ export class WhisperRuntime {
       this.dispose();
 
       try {
+        try { onPath?.('cli'); } catch { }
         return await this.transcribeWithCli(audioPath, language);
       } catch (cliError) {
         const serverMessage = errorMessage(serverError);
