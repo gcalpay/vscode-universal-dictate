@@ -1,5 +1,25 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Enhanced Overlay Visualization: Waveform / Oscillogram (default), Log-Frequency
+  Power Spectrogram, Linear-Frequency Power Spectrogram, Constant-Q Power
+  Spectrogram and Circular Spectrum. Selection is independent of display location.
+- Bounded visual-only FFT and variable-window constant-Q analysis, outside capture.
+- Session visualization metadata in the accumulated latency report.
+
+### Changed
+
+- Overlay history reuses the existing saved waveform time-span preference for
+  waveform and spectrograms; Circular Spectrum shows the latest spectrum instead.
+- Preserve M1 isolated inference workers and the existing waveform, status bar,
+  Pause/Resume, clipboard and final insertion semantics.
+
+This is internal integration work, not a published version. Integrated performance
+validation and one combined user review remain before release.
+
 ## 1.1.3
 
 ### M1 review candidate — not published

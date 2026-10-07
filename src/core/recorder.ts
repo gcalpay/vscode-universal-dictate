@@ -5,6 +5,7 @@ import { MAX_PREVIEW_LINE, RecorderLines, RecorderPreviewChannel, validPreviewSe
 import type { PreviewUpdate } from './preview-coordinator';
 import type { PreviewLease } from './preview-audio';
 import { normalizeOverlaySize, type OverlaySize } from './overlay-size';
+import { normalizeOverlayVisualization, type OverlayVisualization } from './overlay-visualization';
 
 const START_TIMEOUT_MS = 10000;
 const STOP_TIMEOUT_MS = 10000;
@@ -26,6 +27,7 @@ export interface RecorderStartOptions {
   readonly overlayStyle?: RecorderOverlayStyle;
   readonly waveformTimeSpanSeconds?: number;
   readonly overlaySize?: OverlaySize | string;
+  readonly enhancedOverlayVisualization?: OverlayVisualization | string;
 }
 
 /**
@@ -56,6 +58,7 @@ export function buildRecorderArguments(options: RecorderStartOptions): string[] 
 
     args.push('--waveform-timespan-ms', String(Math.round(waveformTimeSpanSeconds * 1000)));
     args.push('--overlay-size', normalizeOverlaySize(options.overlaySize));
+    args.push('--overlay-visualization', normalizeOverlayVisualization(options.enhancedOverlayVisualization));
     if (options.previewSessionId && validPreviewSession(options.previewSessionId))
       args.push('--preview-session', options.previewSessionId);
   }

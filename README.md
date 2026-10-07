@@ -8,7 +8,7 @@
 
 ![Universal Dictate settings menu](media/settings-menu.webp)
 
-*Example settings with Live preview enabled; the defaults are listed below.*
+*These screenshots show 1.1.0 with Live preview enabled. The additional visualization selector described below is an unreleased feature; the defaults are listed below.*
 
 ![Recording overlay with live transcript preview](media/live-preview.webp)
 
@@ -28,12 +28,23 @@ Open the settings gear next to **Dictate**, or find **Universal Dictate** in VS 
 | --- | --- | --- |
 | **Language** | Choose the language you intend to speak, or Auto-detect. All 99 Whisper languages are available. | **English** |
 | **Audio visualization** | Choose Enhanced overlay, Both (overlay and status-bar waveform), Status bar only, or Off. | **Enhanced overlay** |
+| **Enhanced Overlay Visualization** | Choose Waveform / Oscillogram, Log-Frequency Power Spectrogram, Linear-Frequency Power Spectrogram, Constant-Q Power Spectrogram or Circular Spectrum. Affects the enhanced overlay only. | **Waveform / Oscillogram** |
 | **Overlay size** | Choose Small, Medium or Large. | **Medium** |
-| **Waveform time span** | Show the latest 1, 3, 5, 10 or 20 seconds of accepted audio in the overlay waveform. This does not limit recording length. | **10 seconds** |
+| **Overlay history** | Show the latest 1, 3, 5, 10 or 20 seconds of accepted audio in Waveform or a scrolling spectrogram. Circular Spectrum shows the latest frame instead. This does not limit recording length. | **10 seconds** |
 | **Overwrite clipboard** | Also copy the final transcript to the clipboard, replacing its previous contents. Automatic insertion still uses direct text input. | **Off** |
 | **Live preview** | Show provisional text while speaking. Requires Enhanced overlay or Both. | **Off** |
 
 Change settings before starting a recording. Changes made during a recording apply to the next one. Saved choices take precedence over the defaults. Medium is the default overlay size. With Live preview Off, the overlay is shorter; enabling preview reserves room for readable text without narrowing the waveform.
+
+### Enhanced overlay visualizations (unreleased)
+
+**Audio visualization** controls *where* feedback appears. **Enhanced Overlay Visualization** controls *what the native overlay draws*. The status-bar waveform is independent. Selecting a renderer neither enables a disabled overlay nor changes the current recording; the preference is retained for the next session using Enhanced overlay or Both.
+
+The existing **Waveform / Oscillogram** remains unchanged and performs no spectral analysis. The **Linear-Frequency Power Spectrogram** uses equally spaced frequencies; the **Log-Frequency Power Spectrogram** displays the same FFT analysis on logarithmically spaced frequency bands. **Constant-Q Power Spectrogram** uses genuinely different, variable-length filters, with finer low-frequency resolution and a longer initial analysis window. **Circular Spectrum** arranges the latest FFT bands clockwise, from low to high frequency; it is not a musical chromagram.
+
+Spectrograms scroll from right to left with low frequencies at the bottom. Their colors use a fixed digital power scale, not a microphone-loudness calibration or rolling automatic gain. The same completed sample keeps its color after louder speech. Circular Spectrum is intentionally compact in Small/preview layouts and is easier to distinguish at larger overlay sizes.
+
+All modes retain the existing size presets, preview area and controls. Pause freezes the visualization without appending paused audio or artificial silence. The visual analysis stays local and does not modify the recorded WAV, transcription or clipboard. There are no new runtime dependencies or model downloads. The saved `universalDictate.waveformTimeSpanSeconds` preference also controls spectrogram history; its key and prior values are retained for compatibility.
 
 ### Live preview
 
@@ -58,7 +69,7 @@ The compact overlay buttons are **✓ Insert / Ⅱ Pause (or ▶ Resume) / ✕ D
 
 ### Pause and resume
 
-Pause to think, then Resume to continue the same recording. Audio received while paused is ignored: it is not saved in the WAV, added to the waveform or sent to preview recognition. The waveform and provisional text freeze; Stop/Insert still transcribes the accepted speech once, and Discard still cancels. There is no silence gap added for the paused time.
+Pause to think, then Resume to continue the same recording. Audio received while paused is ignored: it is not saved in the WAV, added to any audio visualization or sent to preview recognition. The selected visualization and provisional text freeze; Stop/Insert still transcribes the accepted speech once, and Discard still cancels. There is no silence gap added for the paused time.
 
 The microphone device stays open while paused, so Windows may continue to show its microphone-use indicator. Pause is not a hardware mute. Use Discard to end the session.
 

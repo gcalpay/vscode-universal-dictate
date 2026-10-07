@@ -33,3 +33,20 @@ not by overwriting M1 inference, accumulated reports or current lifecycle tests.
 
 Do not claim all milestones complete from source inspection. Preserve source/run/
 artifact identities and record open gates. Initial state: M2 integration in progress.
+
+## M2 integration checkpoint
+
+The previously unpushed renderers have been selectively integrated on M1. The new
+selector is connected from the manifest and gear menu through the session snapshot
+and native arguments to a common renderer dispatcher. No style is a placeholder.
+M1 inference/worker/transport/engine modules are byte-identical to the M1 head.
+The waveform paint function and waveform history/level headers are unchanged.
+
+Local validation: full strict TypeScript check and all 320 Node tests pass. GCC,
+Clang and AddressSanitizer/UndefinedBehaviorSanitizer spectral tests pass, including
+independent DFT comparison, CQT filters, queue concurrency, pause and history.
+These are not Windows production-renderer or full M5 latency claims. Windows gates
+remain to be run on the committed integration; M5 combined capture/render/Whisper
+performance remains the next internal gate, with no user install requested.
+
+Detailed implementation: [OVERLAY_VISUALIZATIONS.md](OVERLAY_VISUALIZATIONS.md).

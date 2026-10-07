@@ -38,6 +38,9 @@ jobs:
       - name: M3 preview scheduling and PCM snapshot tests
         run: node --unhandled-rejections=strict --test test/preview-pipeline.test.cjs test/preview-recorder.test.cjs test/preview-runtime.test.cjs
 
+      - name: Enhanced overlay visualization settings and source guards
+        run: node --unhandled-rejections=strict --test test/overlay-visualization.test.cjs test/overlay-visualization-source.test.cjs
+
       - name: M7 pause/resume state and command tests
         run: node --unhandled-rejections=strict --test test/pause-controls.test.cjs
 
@@ -77,6 +80,9 @@ jobs:
             "if not exist resources\bin mkdir resources\bin",
             "cl /nologo /utf-8 /O2 /std:c++20 /EHsc native\windows-text-input.cpp /Fe:resources\bin\windows-text-input.exe user32.lib",
             "cl /nologo /utf-8 /O2 /std:c++20 /EHsc /I .deps\miniaudio native\record-audio.cpp native\miniaudio-impl.cpp /Fe:resources\bin\universal-dictate-recorder.exe user32.lib gdi32.lib /link /MANIFEST:EMBED",
+            "cl /nologo /utf-8 /O2 /std:c++20 /EHsc test\native\spectral-visualizer-test.cpp /Fe:.deps\spectral-visualizer-test.exe",
+            "cl /nologo /utf-8 /O2 /std:c++20 /EHsc test\native\spectral-benchmark.cpp /Fe:.deps\spectral-benchmark.exe",
+            "cl /nologo /utf-8 /O2 /std:c++20 /EHsc /I .deps\miniaudio test\native\spectral-windows-test.cpp native\miniaudio-impl.cpp /Fe:.deps\spectral-windows-test.exe user32.lib gdi32.lib /link /MANIFEST:EMBED",
             "cl /nologo /utf-8 /O2 /std:c++20 /EHsc test\native\recording-pause-test.cpp /Fe:.deps\recording-pause-test.exe",
             "cl /nologo /utf-8 /O2 /std:c++20 /EHsc /I .deps\miniaudio test\native\recorder-pause-capture-test.cpp native\miniaudio-impl.cpp /Fe:.deps\recorder-pause-capture-test.exe user32.lib gdi32.lib /link /MANIFEST:EMBED",
             "cl /nologo /utf-8 /O2 /std:c++20 /EHsc test\native\overlay-layout-test.cpp /Fe:.deps\overlay-layout-test.exe",
@@ -179,6 +185,29 @@ jobs:
           & .deps/preview-presentation-test.exe --allow-disposable-desktop .deps/preview-presentation
           exit $LASTEXITCODE
 
+      - name: Spectral numerics, native renderer and admitted PCM regression
+        if: ${{ !cancelled() && steps.native_build.outcome == 'success' }}
+        shell: pwsh
+        timeout-minutes: 4
+        run: |
+          & .deps/spectral-visualizer-test.exe
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & .deps/spectral-benchmark.exe .deps/spectral-benchmark.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & .deps/spectral-windows-test.exe --allow-disposable-desktop .deps/spectral-presentation
+          exit $LASTEXITCODE
+
+      - name: Upload spectral renderer and cost evidence
+        if: ${{ always() && steps.native_build.outcome == 'success' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: spectral-windows-evidence
+          path: |
+            .deps/spectral-presentation/*.bmp
+            .deps/spectral-benchmark.json
+          if-no-files-found: warn
+          retention-days: 14
+
       - name: Upload scripted production-renderer images
         if: ${{ always() && steps.native_build.outcome == 'success' }}
         uses: actions/upload-artifact@v7
@@ -215,7 +244,7 @@ jobs:
           }
 
       - name: Measure real Node preview adapter (synthetic speech, no microphone)
-        if: github.head_ref == 'feat/live-transcript-preview' || github.head_ref == 'release/next' || github.head_ref == 'feat/pause-resume-controls' || github.head_ref == 'perf/stop-insert-latency'
+        if: github.head_ref == 'feat/live-transcript-preview' || github.head_ref == 'release/next' || github.head_ref == 'feat/pause-resume-controls' || github.head_ref == 'perf/stop-insert-latency' || github.head_ref == 'feat/overlay-visualizations'
         shell: pwsh
         timeout-minutes: 6
         run: |
@@ -242,7 +271,7 @@ jobs:
           exit 0
 
       - name: Upload Node preview timing evidence
-        if: ${{ always() && (github.head_ref == 'feat/live-transcript-preview' || github.head_ref == 'release/next' || github.head_ref == 'feat/pause-resume-controls' || github.head_ref == 'perf/stop-insert-latency') }}
+        if: ${{ always() && (github.head_ref == 'feat/live-transcript-preview' || github.head_ref == 'release/next' || github.head_ref == 'feat/pause-resume-controls' || github.head_ref == 'perf/stop-insert-latency' || github.head_ref == 'feat/overlay-visualizations') }}
         uses: actions/upload-artifact@v7
         with:
           name: m3-preview-adapter-results

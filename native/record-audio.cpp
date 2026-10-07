@@ -45,6 +45,7 @@
 #include "recording-pause.h"
 #include "overlay-buttons.h"
 #include "waveform-history.h"
+#include "spectral-render-win32.h"
 #include <memory>
 
 #include <algorithm>
@@ -139,6 +140,7 @@ struct CaptureState {
     universal_dictate::WaveformHistory enhancedHistory;
     std::uint32_t enhancedBucketTargetFrames = universal_dictate::waveformBucketFrames(kDefaultWaveformTimeSpanMs);
     universal_dictate::WaveformBucket enhancedBucket;
+    universal_dictate::visualization::SpectralVisualizer* visualizer = nullptr;
 };
 
 void captureCallback(
@@ -157,6 +159,8 @@ void captureCallback(
     if (!lease) return;
     ma_encoder_write_pcm_frames(state->encoder->get(), input, frameCount, nullptr);
     if (state->preview) state->preview->audio.push(static_cast<const std::int16_t*>(input), frameCount);
+    // Bounded copy only: no transforms, allocation, waiting or WAV changes here.
+    if (state->visualizer) state->visualizer->push(static_cast<const std::int16_t*>(input), frameCount);
 
     const auto* samples = static_cast<const ma_int16*>(input);
     int peak = 0;
@@ -229,6 +233,7 @@ struct OverlayState {
     std::array<int, kSignalPoints> levelHistory{};
     std::array<int, kEnhancedSignalPoints> enhancedSignalHistory{};
     bool enhanced = false;
+    universal_dictate::visualization::SpectralVisualizer* visualizer = nullptr;
     bool paused = false;
     bool pausePending = false;
     universal_dictate::ButtonTooltips buttonTooltips;
@@ -530,6 +535,17 @@ void drawEnhancedWaveform(HDC dc) {
     graphics.DrawLines(&wavePen, wave.data(), static_cast<INT>(wave.size()));
 }
 
+void drawEnhancedVisualization(HDC dc) {
+    if (!g_overlay.visualizer) {
+        drawEnhancedWaveform(dc);
+        return;
+    }
+    const OverlayRect rect = g_overlay.previewEnabled
+        ? universal_dictate::preview::calculateTextLayout(g_overlay.overlaySize, g_overlay.dpi).waveform
+        : g_overlay.enhancedLayout.waveform;
+    universal_dictate::visualization::drawSpectralVisualization(dc, rect, g_overlay.dpi, *g_overlay.visualizer);
+}
+
 void drawEnhancedOverlay(HDC dc, const RECT& client) {
     const EnhancedOverlayLayout& layout = g_overlay.enhancedLayout;
     const RECT panel{0, 0, client.right - 1, client.bottom - 1};
@@ -593,7 +609,7 @@ void drawEnhancedOverlay(HDC dc, const RECT& client) {
         DrawTextW(dc, L"Universal Dictate", -1, &subtitle, DT_LEFT | DT_SINGLELINE | DT_VCENTER);
     }
 
-    drawEnhancedWaveform(dc);
+    drawEnhancedVisualization(dc);
 
     if (g_overlay.previewEnabled) {
         const std::wstring& text = g_overlay.previewText;
@@ -889,7 +905,8 @@ RECT overlayWorkArea(HMONITOR monitor) {
 }
 
 bool createOverlay(HMONITOR targetMonitor, bool enhanced, OverlaySize overlaySize,
-                   bool previewEnabled = false) {
+                   bool previewEnabled = false,
+                   universal_dictate::visualization::SpectralVisualizer* visualizer = nullptr) {
     HINSTANCE instance = GetModuleHandleW(nullptr);
 
     WNDCLASSEXW windowClass{};
@@ -905,6 +922,8 @@ bool createOverlay(HMONITOR targetMonitor, bool enhanced, OverlaySize overlaySiz
     }
 
     g_overlay.enhanced = enhanced;
+    g_overlay.visualizer = enhanced ? visualizer : nullptr;
+    if (g_overlay.visualizer) universal_dictate::visualization::prepareSpectrogramPixels(*g_overlay.visualizer);
     g_overlay.paused = false;
     g_overlay.pausePending = false;
     g_overlay.previewEnabled = enhanced && previewEnabled;
@@ -1007,6 +1026,7 @@ bool createOverlay(HMONITOR targetMonitor, bool enhanced, OverlaySize overlaySiz
 }
 
 void destroyOverlay() noexcept {
+    g_overlay.visualizer = nullptr;
     g_overlay.buttonTooltips.reset();
     g_overlay.paused = false;
     g_overlay.pausePending = false;
@@ -1060,7 +1080,14 @@ void updateOverlayLevel(int levelMilli, const CaptureState* captureState) {
     g_overlay.levelHistory.back() = g_overlay.levelMilli;
 
     if (g_overlay.enhanced && captureState != nullptr) {
-        snapshotEnhancedSignal(*captureState);
+        if (g_overlay.visualizer) {
+            const auto revision = g_overlay.visualizer->revision();
+            g_overlay.visualizer->update();
+            if (g_overlay.visualizer->revision() != revision)
+                universal_dictate::visualization::prepareSpectrogramPixels(*g_overlay.visualizer);
+        } else {
+            snapshotEnhancedSignal(*captureState);
+        }
     }
 
     if (g_overlay.window != nullptr) {
@@ -1168,6 +1195,15 @@ int main(int argc, char** argv) {
     const bool enhancedOverlay = hasFlag(argc, argv, "--enhanced-overlay");
     const OverlaySize overlaySize = parseOverlaySize(argc, argv);
     const int waveformTimeSpanMs = parseWaveformTimeSpanMs(argc, argv);
+    const auto visualization = universal_dictate::visualization::parseArgument(argc, argv);
+    std::unique_ptr<universal_dictate::visualization::SpectralVisualizer> visualizer;
+    if (overlayEnabled && enhancedOverlay && visualization != universal_dictate::visualization::Mode::Waveform) {
+        try {
+            visualizer = std::make_unique<universal_dictate::visualization::SpectralVisualizer>(visualization, waveformTimeSpanMs);
+        } catch (const std::exception&) {
+            std::cerr << "WARNING spectral visualization unavailable; using waveform instead\n";
+        }
+    }
     std::unique_ptr<universal_dictate::preview::Bridge> preview;
     if (overlayEnabled && enhancedOverlay) {
         for (int i = 1; i + 1 < argc; ++i) {
@@ -1194,6 +1230,7 @@ int main(int argc, char** argv) {
 
     CaptureState captureState{&encoder};
     captureState.preview = preview.get();
+    captureState.visualizer = visualizer.get();
     captureState.enhancedBucketTargetFrames = universal_dictate::waveformBucketFrames(waveformTimeSpanMs);
 
     CaptureDevice device;
@@ -1258,12 +1295,13 @@ int main(int argc, char** argv) {
 
     bool overlayAvailable = false;
     if (overlayEnabled) {
-        overlayAvailable = createOverlay(overlayMonitor, enhancedOverlay, overlaySize, preview != nullptr);
+        overlayAvailable = createOverlay(overlayMonitor, enhancedOverlay, overlaySize, preview != nullptr, visualizer.get());
         if (!overlayAvailable) {
             std::cerr << "WARNING recording overlay could not be created; keyboard controls remain available\n";
         }
     }
 
+    if (!overlayAvailable && visualizer) visualizer->disable();
     g_overlay.previewEnabled = preview != nullptr && overlayAvailable;
     g_overlay.previewText.clear();
     std::cout << "READY\n" << std::flush;

@@ -1,0 +1,76 @@
+/* Shared, testable spectral presentation geometry. SPDX-License-Identifier: MIT */
+#pragma once
+#include "overlay-layout.h"
+#include "spectral-visualizer.h"
+#include <array>
+#include <cmath>
+#include <cstdint>
+
+namespace universal_dictate::visualization {
+// Opaque ARGB. Zero matches the existing panel, not an animated noise texture.
+inline std::uint32_t spectralColor(std::uint8_t level) noexcept {
+    constexpr std::array<std::array<int, 3>, 6> stops{{
+        {14, 18, 27}, {25, 34, 74}, {52, 63, 142},
+        {64, 149, 191}, {85, 222, 194}, {239, 249, 219}
+    }};
+    const auto scaled = static_cast<unsigned>(level) * (stops.size() - 1);
+    const auto index = std::min(stops.size() - 2, scaled / 255);
+    const int fraction = static_cast<int>(scaled - index * 255);
+    std::uint32_t color = 0xff000000U;
+    for (std::size_t channel = 0; channel < 3; ++channel) {
+        const auto value = (stops[index][channel] * (255 - fraction)
+                          + stops[index + 1][channel] * fraction + 127) / 255;
+        color |= static_cast<std::uint32_t>(value) << (16 - 8 * channel);
+    }
+    return color;
+}
+
+inline void prepareSpectrogramPixels(SpectralVisualizer& visualizer) noexcept {
+    auto pixels = visualizer.pixels();
+    if (pixels.empty()) return;
+    std::array<std::uint32_t, 256> palette{};
+    for (std::size_t i = 0; i < palette.size(); ++i)
+        palette[i] = spectralColor(static_cast<std::uint8_t>(i));
+    // Newest active audio is at the right, low frequencies at the bottom.
+    for (std::size_t y = 0; y < visualizer.bands(); ++y)
+        for (std::size_t x = 0; x < visualizer.columns(); ++x)
+            pixels[y * visualizer.columns() + x] = palette[visualizer.level(x, visualizer.bands() - 1 - y)];
+}
+
+struct RadialBar { float x1 = 0, y1 = 0, x2 = 0, y2 = 0; std::uint8_t level = 0; };
+struct RadialGeometry {
+    float centerX = 0, centerY = 0, innerRadius = 0, stroke = 1;
+    std::size_t count = 0;
+    std::array<RadialBar, kCircularBands> bars{};
+};
+
+inline RadialGeometry circularGeometry(const OverlayRect& rect, unsigned dpi,
+                                       const Levels& spectrum) noexcept {
+    RadialGeometry result;
+    const float scale = static_cast<float>(std::max(1U, dpi)) / 96.0f;
+    const float width = static_cast<float>(rect.right - rect.left);
+    const float height = static_cast<float>(rect.bottom - rect.top);
+    if (width <= 0 || height <= 0) return result;
+    result.centerX = static_cast<float>(rect.left) + width * 0.5f;
+    result.centerY = static_cast<float>(rect.top) + height * 0.5f;
+    result.stroke = std::max(0.6f, 0.95f * scale);
+    const float radius = std::max(0.0f, std::min(width, height) * 0.5f - result.stroke - scale);
+    result.innerRadius = radius * 0.43f;
+    if (radius < scale) return result;
+    // At small/preview sizes fewer wider angular groups remain distinguishable.
+    // Max-pooling merges only neighboring frequency bands, never history samples.
+    const auto count = static_cast<std::size_t>(2 * kPi * result.innerRadius / (2.0f * scale));
+    result.count = std::clamp<std::size_t>(count, 12, kCircularBands);
+    for (std::size_t i = 0; i < result.count; ++i) {
+        const auto first = i * kCircularBands / result.count;
+        const auto end = (i + 1) * kCircularBands / result.count;
+        const auto level = *std::max_element(spectrum.begin() + first, spectrum.begin() + end);
+        const double angle = -kPi * 0.5 + 2 * kPi * i / result.count;
+        const float x = static_cast<float>(std::cos(angle)), y = static_cast<float>(std::sin(angle));
+        const float outer = result.innerRadius + (radius - result.innerRadius) * level / 255.0f;
+        result.bars[i] = {result.centerX + result.innerRadius * x, result.centerY + result.innerRadius * y,
+                         result.centerX + outer * x, result.centerY + outer * y, level};
+    }
+    return result;
+}
+} // namespace universal_dictate::visualization

@@ -74,7 +74,10 @@ try {
     Assert-Valid ($manifest.contributes.configuration.properties.'universalDictate.overwriteClipboard'.default -eq $false) 'Overwrite clipboard must default Off'
     Assert-Valid ($manifest.contributes.configuration.properties.'universalDictate.livePreview'.default -eq $false) 'Live preview must default Off'
     Assert-Valid ($manifest.contributes.configuration.properties.'universalDictate.waveformTimeSpanSeconds'.default -eq 10) 'Ten-second waveform must be the default'
-    Assert-Valid ($manifest.contributes.configuration.properties.Count -eq 6) 'Six user settings expected'
+    Assert-Valid ($manifest.contributes.configuration.properties.Count -eq 7) 'Seven user settings expected'
+    $visualization = $manifest.contributes.configuration.properties.'universalDictate.enhancedOverlayVisualization'
+    Assert-Valid ($visualization.default -eq 'waveform') 'Waveform visualization must be the default'
+    Assert-Valid (($visualization.enum -join ',') -eq 'waveform,logFrequencyPowerSpectrogram,linearFrequencyPowerSpectrogram,constantQPowerSpectrogram,circularSpectrum') 'Five visualization modes expected'
     Assert-Valid (-not $manifest.contributes.configuration.properties.ContainsKey('universalDictate.overlayButtonStyle')) 'Retired style selector packaged'
     foreach ($command in @('copyLastTranscript', 'pauseResume')) {
         $id = "universalDictate.$command"

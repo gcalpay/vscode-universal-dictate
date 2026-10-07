@@ -39,6 +39,9 @@ jobs:
       - name: M3 preview scheduling and PCM snapshot tests
         run: node --unhandled-rejections=strict --test test/preview-pipeline.test.cjs test/preview-recorder.test.cjs test/preview-runtime.test.cjs
 
+      - name: Enhanced overlay visualization settings and source guards
+        run: node --unhandled-rejections=strict --test test/overlay-visualization.test.cjs test/overlay-visualization-source.test.cjs
+
       - name: M7 pause/resume state and command tests
         run: node --unhandled-rejections=strict --test test/pause-controls.test.cjs
 
@@ -86,3 +89,18 @@ jobs:
         run: |
           g++ -std=c++20 -Wall -Wextra -Werror -pedantic test/native/preview-layout-test.cpp -o .deps/preview-layout-test
           .deps/preview-layout-test
+
+      - name: Spectral transforms, history, pause and layout regressions
+        run: |
+          g++ -std=c++20 -O2 -Wall -Wextra -Werror -pedantic -pthread test/native/spectral-visualizer-test.cpp -o .deps/spectral-visualizer-test
+          .deps/spectral-visualizer-test
+          g++ -std=c++20 -O2 -Wall -Wextra -Werror -pedantic test/native/spectral-benchmark.cpp -o .deps/spectral-benchmark
+          .deps/spectral-benchmark .deps/spectral-benchmark.json
+
+      - name: Upload synthetic spectral cost report
+        uses: actions/upload-artifact@v7
+        with:
+          name: spectral-linux-benchmark
+          path: .deps/spectral-benchmark.json
+          if-no-files-found: error
+          retention-days: 14
