@@ -54,7 +54,9 @@ test('independent workers bind only loopback, preserve arguments, and lower only
   assert.equal(h.spawnCalls.length,2);assert.equal(h.priorities.length,1);
   for(const c of h.spawnCalls){assert.equal(c.options.windowsHide,true);assert.ok(c.args.includes('-ng'));assert.equal(c.args[c.args.indexOf('--host')+1],'127.0.0.1');}
   assert.equal(final.isWarm(),true);await preview.stop();assert.equal(final.isWarm(),true);
-  assert.equal(h.spawnCalls[0].child.kills.length,0);
+  // Concurrent startup completion order is platform dependent; assert by owner.
+  assert.equal(f.process.kills.length,0);
+  assert.equal(p.process.kills.length,1);
 });
 
 test('concurrent warm calls share one startup and a cancelled model acquisition cannot spawn later',async t=>{
