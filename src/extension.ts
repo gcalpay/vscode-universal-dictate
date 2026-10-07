@@ -19,6 +19,7 @@ import {
   getWhisperCliPath,
   getWhisperServerPath,
   isWhisperWarm,
+  stopWhisperPreview,
   transcribe,
   warmWhisper,
   previewWhisper
@@ -115,6 +116,7 @@ class DictationController implements vscode.Disposable {
   private previewInferenceStartedAt: number | undefined;
   private previewInferenceFinishedAt: number | undefined;
   private lastLatencySummary = 'not measured';
+  private readonly latencyHistory: string[] = [];
 
   constructor(private readonly context: vscode.ExtensionContext) {
     // Use distinct stable IDs so VS Code can track the Dictate and settings
@@ -207,14 +209,20 @@ class DictationController implements vscode.Disposable {
       onPreview: update => { if (!signal.aborted) session.showPreview!(update); },
       onFailure: () => { if (!signal.aborted) void vscode.window.showInformationMessage('Universal Dictate: live preview stopped. Final dictation remains available.'); }
     });
-    const abort = () => { void coordinator.stop(); };
+    const stop = (): Promise<void> => {
+      // Stop scheduling first, then retire preview even when no request is active.
+      const scheduled = coordinator.stop();
+      const worker = stopWhisperPreview();
+      return Promise.all([scheduled, worker]).then(() => undefined);
+    };
+    const abort = () => { void stop(); };
     signal.addEventListener('abort', abort, { once: true });
-    if (signal.aborted) { signal.removeEventListener('abort', abort); return undefined; }
+    if (signal.aborted) { signal.removeEventListener('abort', abort); void stop(); return undefined; }
     coordinator.start();
     return {
       pause: () => coordinator.pause(),
       resume: () => coordinator.resume(),
-      stop: () => { signal.removeEventListener('abort', abort); return coordinator.stop(); }
+      stop: () => { signal.removeEventListener('abort', abort); return stop(); }
     };
   }
 
@@ -223,6 +231,19 @@ class DictationController implements vscode.Disposable {
   }
 
   getLastLatencySummary(): string { return this.lastLatencySummary; }
+
+  async showLatencyReport(): Promise<void> {
+    const version = this.context.extension?.packageJSON?.version ?? 'unknown';
+    const header = `Universal Dictate ${version} — isolated-preview-v1
+Timings are from engine Stop acceptance to input-helper completion, not target-app paint.
+Preview-active markers describe the host request, not confirmed native computation.
+Last 100 completed dictations; no audio or transcript text.
+
+`;
+    const document = await vscode.workspace.openTextDocument({ language: 'plaintext',
+      content: header + (this.latencyHistory.join('\n') || 'No completed dictation in this window yet.') });
+    await vscode.window.showTextDocument(document, { preview: false });
+  }
 
   async toggle(): Promise<void> {
     if (process.platform !== 'win32') {
@@ -338,7 +359,10 @@ class DictationController implements vscode.Disposable {
       `T0-${last}=${elapsed('T0', last)}`
     ].join(' | ');
     this.lastLatencySummary = summary;
-    this.latencyOutput.appendLine(`[${new Date().toISOString()}] ${summary}`);
+    const line = `[${new Date().toISOString()}] policy=isolated-preview-v1 | ${summary}`;
+    this.latencyHistory.push(line);
+    if (this.latencyHistory.length > 100) this.latencyHistory.shift();
+    this.latencyOutput.appendLine(line);
     this.latencyTrace = undefined;
   }
 
@@ -665,6 +689,10 @@ export function activate(context: vscode.ExtensionContext): void {
     openSettings
   );
 
+  const latencyReport = vscode.commands.registerCommand(
+    'universalDictate.showLatencyReport', () => controller.showLatencyReport()
+  );
+
   const showDiagnostics = vscode.commands.registerCommand(
     'universalDictate.showDiagnostics',
     async () => {
@@ -680,6 +708,8 @@ export function activate(context: vscode.ExtensionContext): void {
 
       await vscode.window.showInformationMessage(
         [
+          `version=${extension?.packageJSON?.version ?? 'unknown'}`,
+          'latencyPolicy=isolated-preview-v1',
           `platform=${process.platform}`,
           `arch=${process.arch}`,
           `remote=${remoteName}`,
@@ -713,6 +743,7 @@ export function activate(context: vscode.ExtensionContext): void {
     selectLanguageCommand,
     openSettingsCommand,
     showDiagnostics,
+    latencyReport,
     whisperDisposable
   );
 

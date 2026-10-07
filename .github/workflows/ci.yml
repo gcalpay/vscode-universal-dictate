@@ -43,7 +43,7 @@ jobs:
         run: node --unhandled-rejections=strict --test test/pause-controls.test.cjs
 
       - name: M0 stop-to-insert timing instrumentation
-        run: node --unhandled-rejections=strict --test test/latency-instrumentation.test.cjs
+        run: node --unhandled-rejections=strict --test test/latency-instrumentation.test.cjs test/whisper-worker.test.cjs
 
       - name: Concurrent capture pause gate
         run: |

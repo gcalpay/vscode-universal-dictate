@@ -51,7 +51,7 @@ function extensionFixture() {
     './model': { ensureModel: async () => {} },
     './paste': { pasteIntoFocusedControl: async (...args) => { insertions.push(args); } },
     './recorder': { RecorderSession: { start: async (...args) => { h.calls.recorder = args; return {}; } } },
-    './whisper': { warmWhisper: async () => {}, disposeWhisper() {}, isWhisperWarm: () => true, transcribe: async (...args) => { h.calls.transcription = args; args[3]?.('server'); return 'final'; } }
+    './whisper': { warmWhisper: async () => {}, disposeWhisper() {}, isWhisperWarm: () => true, stopWhisperPreview: async () => { h.calls.previewStops = (h.calls.previewStops || 0) + 1; }, transcribe: async (...args) => { h.calls.transcription = args; args[3]?.('server'); return 'final'; } }
   }); const context = { subscriptions: [] }; extension.activate(context);
   return { ...h, get options() { return options; }, insertions, cleanup() { context.subscriptions.forEach(d => d.dispose()); } };
 }
@@ -206,4 +206,25 @@ test('invalid preferences fall back; pause command leaves Stop available and req
   assert.equal(binding.key,'ctrl+alt+p');assert.match(binding.when,/universalDictate.recording/);
   for(const state of ['pausing','paused','resuming']){h.options.onStateChanged(state);assert.equal(h.calls.status[0].command,'universalDictate.toggle');}
   h.cleanup();
+});
+
+test('latency report collects multiple runs without screenshots or automatic clipboard access',async()=>{
+  const h=extensionFixture();await h.options.prepare();
+  let document,shown=0;
+  h.vscode.workspace.openTextDocument=async options=>{document=options;return options;};
+  h.vscode.window.showTextDocument=async()=>{shown++;};
+  for(let run=0;run<103;run++){
+    for(let i=0;i<7;i++)h.options.onLatencyEvent({operationId:run,stage:`T${i}`,atMs:run*100+i*10});
+  }
+  assert.equal(shown,0);assert.equal(h.calls.copies.length,0);
+  await h.commands.get('universalDictate.showLatencyReport')();
+  assert.equal(shown,1);assert.match(document.content,/isolated-preview-v1/);
+  assert.equal((document.content.match(/T0-T6=/g)||[]).length,100);
+  assert.equal(h.calls.copies.length,0);h.cleanup();
+});
+
+test('terminal preview stop releases an idle worker as well as scheduled requests',async()=>{
+  const h=extensionFixture();h.config.livePreview=true;await h.options.prepare();
+  const handle=h.options.startPreview({previewSessionId:'s',acquirePreview:async()=>undefined,showPreview:()=>{}},new AbortController().signal);
+  await handle.stop();assert.equal(h.calls.previewStops,1);h.cleanup();
 });

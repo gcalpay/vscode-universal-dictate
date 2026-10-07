@@ -48,6 +48,11 @@ export async function transcribe(
   return await getRuntime(context).transcribe(audioPath, language, onPath);
 }
 
+/** Does not create a runtime when preview is disabled or no recording has begun. */
+export async function stopWhisperPreview(): Promise<void> {
+  await runtime?.stopPreview();
+}
+
 export async function previewWhisper(context: vscode.ExtensionContext, audio: PreviewAudio,
   language: string, signal: AbortSignal): Promise<string> {
   return await getRuntime(context).preview(audio, language, signal);
