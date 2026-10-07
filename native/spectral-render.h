@@ -25,16 +25,41 @@ inline std::uint32_t spectralColor(std::uint8_t level) noexcept {
     return color;
 }
 
-inline void prepareSpectrogramPixels(SpectralVisualizer& visualizer) noexcept {
+inline void prepareSpectrogramPixels(SpectralVisualizer& visualizer,
+                                      std::size_t width = 0, std::size_t height = 0) noexcept {
     auto pixels = visualizer.pixels();
     if (pixels.empty()) return;
+    visualizer.setPixelExtent(width, height);
+    if (visualizer.pixelsCurrent()) return;
+    const auto columns = visualizer.pixelColumns(), rows = visualizer.pixelRows();
     std::array<std::uint32_t, 256> palette{};
     for (std::size_t i = 0; i < palette.size(); ++i)
         palette[i] = spectralColor(static_cast<std::uint8_t>(i));
-    // Newest active audio is at the right, low frequencies at the bottom.
-    for (std::size_t y = 0; y < visualizer.bands(); ++y)
-        for (std::size_t x = 0; x < visualizer.columns(); ++x)
-            pixels[y * visualizer.columns() + x] = palette[visualizer.level(x, visualizer.bands() - 1 - y)];
+    if (columns == visualizer.columns() && rows == visualizer.bands()) {
+        for (std::size_t y = 0; y < rows; ++y)
+            for (std::size_t x = 0; x < columns; ++x)
+                pixels[y * columns + x] = palette[visualizer.level(x, rows - 1 - y)];
+        visualizer.pixelsPrepared();
+        return;
+    }
+    // Partition the original cells into disjoint display bins. Max pooling keeps
+    // narrow tones/transients visible when the viewport has fewer pixels than
+    // bands/columns. It changes neither history nor the fixed power/color scale.
+    // Newest audio stays at the right and low frequencies at the bottom.
+    for (std::size_t y = 0; y < rows; ++y) {
+        const auto firstBand = y * visualizer.bands() / rows;
+        const auto endBand = (y + 1) * visualizer.bands() / rows;
+        for (std::size_t x = 0; x < columns; ++x) {
+            const auto firstTime = x * visualizer.columns() / columns;
+            const auto endTime = (x + 1) * visualizer.columns() / columns;
+            std::uint8_t level = 0;
+            for (auto band = firstBand; band < endBand; ++band)
+                for (auto time = firstTime; time < endTime; ++time)
+                    level = std::max(level, visualizer.level(time, visualizer.bands() - 1 - band));
+            pixels[y * columns + x] = palette[level];
+        }
+    }
+    visualizer.pixelsPrepared();
 }
 
 struct RadialBar { float x1 = 0, y1 = 0, x2 = 0, y2 = 0; std::uint8_t level = 0; };

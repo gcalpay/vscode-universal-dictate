@@ -30,12 +30,13 @@ inline void drawSpectralVisualization(HDC dc, const OverlayRect& rect, unsigned 
         }
         return;
     }
+    prepareSpectrogramPixels(visualizer, static_cast<std::size_t>(width), static_cast<std::size_t>(height));
     auto pixels = visualizer.pixels();
     if (pixels.empty()) return;
-    const auto columns = static_cast<INT>(visualizer.columns());
-    const auto bands = static_cast<INT>(visualizer.bands());
-    // The backing pixels were completed on update, not rebuilt/normalized at paint
-    // time. Nearest-neighbor resizes do not mix adjacent times or invent detail.
+    const auto columns = static_cast<INT>(visualizer.pixelColumns());
+    const auto bands = static_cast<INT>(visualizer.pixelRows());
+    // Raster is cached by completed history revision and viewport. Downsampling
+    // preserves peaks; nearest-neighbor enlargement invents no extra resolution.
     Gdiplus::Bitmap bitmap(columns, bands, columns * static_cast<INT>(sizeof(std::uint32_t)),
         PixelFormat32bppARGB, reinterpret_cast<BYTE*>(pixels.data()));
     if (bitmap.GetLastStatus() != Gdiplus::Ok) return;

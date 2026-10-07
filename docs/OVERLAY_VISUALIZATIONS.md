@@ -94,8 +94,11 @@ rolling color normalization, neighbor smoothing or old-column recoloring.
 Spectrogram storage is bounded at 1250 columns × 96 bands. The selected duration
 uses ceil(milliseconds / 16 ms), so 1 second displays 1.008 seconds, for example.
 Completed columns are immutable; new active audio appears at the right and lower
-frequencies at the bottom. Pixels are prepared only after a completed update;
-nearest-neighbor GDI+ scaling and strict clipping preserve the viewport boundaries.
+frequencies at the bottom. The raster is cached by completed revision and viewport.
+When the viewport is smaller than the matrix, disjoint neighboring time/frequency
+cells are max-pooled into display pixels so narrow tones/transients are not skipped.
+This affects raster resolution only, not stored values or fixed colors. Enlargements
+use nearest-neighbor GDI+ scaling and strict clipping preserves viewport bounds.
 Circular mode shows the latest frame without simulated decay. Its radial groups
 reduce to 12–48 according to available height; it stays inside existing Small,
 Medium, Large and preview geometries rather than resizing the overlay.

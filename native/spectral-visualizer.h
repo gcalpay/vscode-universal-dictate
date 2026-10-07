@@ -194,6 +194,7 @@ public:
         ring_.resize(windowFrames_);
         ordered_.resize(windowFrames_);
         if (mode != Mode::CircularSpectrum) pixels_.resize(columns_ * bands_);
+        pixelColumns_ = columns_; pixelRows_ = bands_;
         if (fourier_) prepareFftBands();
     }
 
@@ -220,6 +221,19 @@ public:
     std::span<const float> lastPower() const noexcept { return {power_.data(), bands_}; }
     const Levels& latest() const noexcept { return latest_; }
     std::span<std::uint32_t> pixels() noexcept { return pixels_; } // Overlay thread only.
+    std::size_t pixelColumns() const noexcept { return pixelColumns_; }
+    std::size_t pixelRows() const noexcept { return pixelRows_; }
+    bool pixelsCurrent() const noexcept { return pixelRevision_ == written_; }
+    void pixelsPrepared() noexcept { pixelRevision_ = written_; }
+    // Reuse the fixed allocation; resolution changes cannot mutate audio history.
+    void setPixelExtent(std::size_t width, std::size_t height) noexcept {
+        const auto columns = width ? std::min(columns_, width) : pixelColumns_;
+        const auto rows = height ? std::min(bands_, height) : pixelRows_;
+        if (columns != pixelColumns_ || rows != pixelRows_) {
+            pixelColumns_ = columns; pixelRows_ = rows;
+            pixelRevision_ = std::numeric_limits<std::uint64_t>::max();
+        }
+    }
 
     std::uint8_t level(std::size_t x, std::size_t band) const noexcept {
         if (x >= columns_ || band >= bands_) return 0;
@@ -318,6 +332,8 @@ private:
     std::vector<CqtKernel> kernels_;
     std::vector<float> ring_, ordered_;
     std::vector<std::uint32_t> pixels_;
+    std::size_t pixelColumns_ = 0, pixelRows_ = 0;
+    std::uint64_t pixelRevision_ = std::numeric_limits<std::uint64_t>::max();
     std::size_t windowFrames_ = 0, ringNext_ = 0, filled_ = 0;
     std::uint64_t written_ = 0, expectedPosition_ = 0;
 };
