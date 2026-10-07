@@ -1,7 +1,9 @@
 import * as fs from 'node:fs';
+import { performance } from 'node:perf_hooks';
 import * as vscode from 'vscode';
-import { DictationEngine, DictationState, type DictationSession, type PreviewControl } from './core/dictation';
+import { DictationEngine, DictationState, type DictationLatencyEvent, type DictationLatencyStage, type DictationSession, type PreviewControl } from './core/dictation';
 import { PreviewCoordinator } from './core/preview-coordinator';
+import type { WhisperInferencePath } from './core/whisper';
 import { TranscriptRecoveryController } from './transcript-recovery';
 import { normalizeOverlaySize, OVERLAY_SIZES, type OverlaySize } from './core/overlay-size';
 import {
@@ -17,6 +19,7 @@ import {
   getWhisperCliPath,
   getWhisperServerPath,
   isWhisperWarm,
+  stopWhisperPreview,
   transcribe,
   warmWhisper,
   previewWhisper
@@ -39,6 +42,7 @@ const OVERLAY_SIZE_LABELS: Record<OverlaySize, string> = {
 };
 
 const WAVEFORM_TIME_SPANS: readonly WaveformTimeSpanSeconds[] = [1, 3, 5, 10, 20];
+const LATENCY_STAGES: readonly DictationLatencyStage[] = ['T0','T1','T2','T3','T4','T5','T6'];
 
 function getConfiguredVisualization(): VisualizationMode {
   const value = vscode.workspace
@@ -100,6 +104,7 @@ class DictationController implements vscode.Disposable {
   private readonly settingsStatusBar: vscode.StatusBarItem;
   private readonly levelHistory = Array<number>(9).fill(0);
   private readonly engine: DictationEngine;
+  private readonly latencyOutput: vscode.OutputChannel;
   readonly recovery: TranscriptRecoveryController;
   private activeVisualization: VisualizationMode = 'enhancedOverlay';
   private activeOverwriteClipboard = false;
@@ -107,6 +112,11 @@ class DictationController implements vscode.Disposable {
   private activeLanguage = 'en';
   private activeOverlaySize: OverlaySize = 'medium';
   private activeWaveformSpan: WaveformTimeSpanSeconds = 10;
+  private latencyTrace: { operationId: number; stages: Partial<Record<DictationLatencyStage, number>>; preview: boolean; language: string; warm: boolean; previewActiveAtStop: boolean; previewActiveForMs?: number; sincePreviewFinishedMs?: number; path?: WhisperInferencePath } | undefined;
+  private previewInferenceStartedAt: number | undefined;
+  private previewInferenceFinishedAt: number | undefined;
+  private lastLatencySummary = 'not measured';
+  private readonly latencyHistory: string[] = [];
 
   constructor(private readonly context: vscode.ExtensionContext) {
     // Use distinct stable IDs so VS Code can track the Dictate and settings
@@ -118,6 +128,7 @@ class DictationController implements vscode.Disposable {
       0
     );
     this.statusBar.name = 'Universal Dictate';
+    this.latencyOutput = vscode.window.createOutputChannel('Universal Dictate Latency');
 
     // A slightly lower priority keeps this separate, content-sized gear
     // immediately to the right of the Dictate item.
@@ -140,6 +151,8 @@ class DictationController implements vscode.Disposable {
         this.activeLanguage = normalizeWhisperLanguage(vscode.workspace.getConfiguration('universalDictate').get<string>('language', 'en'));
         this.activeOverlaySize = getConfiguredOverlaySize();
         this.activeWaveformSpan = getConfiguredWaveformTimeSpanSeconds();
+        this.previewInferenceStartedAt = undefined;
+        this.previewInferenceFinishedAt = undefined;
         await ensureModel(this.context);
       },
       warm: () => warmWhisper(this.context),
@@ -155,7 +168,7 @@ class DictationController implements vscode.Disposable {
           this.activeLivePreview
         );
       },
-      transcribe: (audioPath) => transcribe(this.context, audioPath, this.activeLanguage),
+      transcribe: (audioPath) => transcribe(this.context, audioPath, this.activeLanguage, path => { if (this.latencyTrace) this.latencyTrace.path = path; }),
       startPreview: (session, signal) => this.startPreview(session, signal),
       insert: (transcript, signal) => pasteIntoFocusedControl(this.context, transcript, signal, this.activeOverwriteClipboard),
       onStateChanged: (state) => this.renderState(state),
@@ -170,7 +183,8 @@ class DictationController implements vscode.Disposable {
       onNoSpeech: () => {
         void vscode.window.showInformationMessage('Universal Dictate: no speech detected.');
       },
-      onError: (error) => this.showError(error)
+      onError: (error) => this.showError(error),
+      onLatencyEvent: event => this.recordLatency(event)
     });
 
     this.recovery = new TranscriptRecoveryController(this.engine);
@@ -182,23 +196,53 @@ class DictationController implements vscode.Disposable {
     const coordinator = new PreviewCoordinator({ sessionId: session.previewSessionId,
       language: this.activeLanguage,
       acquire: previewSignal => session.acquirePreview!(previewSignal),
-      decode: (audio, language, previewSignal) => previewWhisper(this.context, audio, language, previewSignal),
+      decode: async (audio, language, previewSignal) => {
+        const startedAt = performance.now();
+        this.previewInferenceStartedAt = startedAt;
+        try {
+          return await previewWhisper(this.context, audio, language, previewSignal);
+        } finally {
+          if (this.previewInferenceStartedAt === startedAt) this.previewInferenceStartedAt = undefined;
+          this.previewInferenceFinishedAt = performance.now();
+        }
+      },
       onPreview: update => { if (!signal.aborted) session.showPreview!(update); },
       onFailure: () => { if (!signal.aborted) void vscode.window.showInformationMessage('Universal Dictate: live preview stopped. Final dictation remains available.'); }
     });
-    const abort = () => { void coordinator.stop(); };
+    const stop = (): Promise<void> => {
+      // Stop scheduling first, then retire preview even when no request is active.
+      const scheduled = coordinator.stop();
+      const worker = stopWhisperPreview();
+      return Promise.all([scheduled, worker]).then(() => undefined);
+    };
+    const abort = () => { void stop(); };
     signal.addEventListener('abort', abort, { once: true });
-    if (signal.aborted) { signal.removeEventListener('abort', abort); return undefined; }
+    if (signal.aborted) { signal.removeEventListener('abort', abort); void stop(); return undefined; }
     coordinator.start();
     return {
       pause: () => coordinator.pause(),
       resume: () => coordinator.resume(),
-      stop: () => { signal.removeEventListener('abort', abort); return coordinator.stop(); }
+      stop: () => { signal.removeEventListener('abort', abort); return stop(); }
     };
   }
 
   initialize(): void {
     this.showIdleStatus();
+  }
+
+  getLastLatencySummary(): string { return this.lastLatencySummary; }
+
+  async showLatencyReport(): Promise<void> {
+    const version = this.context.extension?.packageJSON?.version ?? 'unknown';
+    const header = `Universal Dictate ${version} — isolated-preview-v1
+Timings are from engine Stop acceptance to input-helper completion, not target-app paint.
+Preview-active markers describe the host request, not confirmed native computation.
+Last 100 completed dictations; no audio or transcript text.
+
+`;
+    const document = await vscode.workspace.openTextDocument({ language: 'plaintext',
+      content: header + (this.latencyHistory.join('\n') || 'No completed dictation in this window yet.') });
+    await vscode.window.showTextDocument(document, { preview: false });
   }
 
   async toggle(): Promise<void> {
@@ -223,6 +267,7 @@ class DictationController implements vscode.Disposable {
     this.engine.dispose();
     this.statusBar.dispose();
     this.settingsStatusBar.dispose();
+    this.latencyOutput.dispose();
   }
 
   private renderState(state: DictationState): void {
@@ -271,6 +316,54 @@ class DictationController implements vscode.Disposable {
         this.statusBar.text = '$(check) Universal Dictate: inserting';
         return;
     }
+  }
+
+  private recordLatency(event: DictationLatencyEvent): void {
+    if (event.stage === 'T0') {
+      const activeStartedAt = this.previewInferenceStartedAt;
+      const finishedAt = this.previewInferenceFinishedAt;
+      this.latencyTrace = {
+        operationId: event.operationId,
+        stages: {},
+        preview: this.activeLivePreview,
+        language: this.activeLanguage,
+        warm: isWhisperWarm(),
+        previewActiveAtStop: activeStartedAt !== undefined,
+        previewActiveForMs: activeStartedAt === undefined ? undefined : Math.max(0, event.atMs - activeStartedAt),
+        sincePreviewFinishedMs: activeStartedAt !== undefined || finishedAt === undefined ? undefined : Math.max(0, event.atMs - finishedAt)
+      };
+    }
+    const trace = this.latencyTrace;
+    if (!trace || trace.operationId !== event.operationId) return;
+    trace.stages[event.stage] = event.atMs;
+    if (event.stage !== 'T6') return;
+    const elapsed = (a: DictationLatencyStage, b: DictationLatencyStage) => {
+      const x = trace.stages[a], y = trace.stages[b];
+      return x === undefined || y === undefined ? 'n/a' : `${Math.max(0, y - x).toFixed(1)}ms`;
+    };
+    const last = LATENCY_STAGES.filter(stage => trace.stages[stage] !== undefined).at(-1) ?? 'T0';
+    const summary = [
+      `preview=${trace.preview ? 'on' : 'off'}`,
+      `language=${trace.language}`,
+      `workerAtStop=${trace.warm ? 'warm' : 'cold'}`,
+      `path=${trace.path ?? 'unknown'}`,
+      `previewActiveAtStop=${trace.previewActiveAtStop ? 'yes' : 'no'}`,
+      `previewActiveFor=${trace.previewActiveForMs === undefined ? 'n/a' : `${trace.previewActiveForMs.toFixed(1)}ms`}`,
+      `sincePreviewFinished=${trace.sincePreviewFinishedMs === undefined ? 'n/a' : `${trace.sincePreviewFinishedMs.toFixed(1)}ms`}`,
+      `T0-T1=${elapsed('T0','T1')}`,
+      `T1-T2=${elapsed('T1','T2')}`,
+      `T2-T3=${elapsed('T2','T3')}`,
+      `T3-T4=${elapsed('T3','T4')}`,
+      `T4-T5=${elapsed('T4','T5')}`,
+      `T5-T6=${elapsed('T5','T6')}`,
+      `T0-${last}=${elapsed('T0', last)}`
+    ].join(' | ');
+    this.lastLatencySummary = summary;
+    const line = `[${new Date().toISOString()}] policy=isolated-preview-v1 | ${summary}`;
+    this.latencyHistory.push(line);
+    if (this.latencyHistory.length > 100) this.latencyHistory.shift();
+    this.latencyOutput.appendLine(line);
+    this.latencyTrace = undefined;
   }
 
   private updateRecordingLevel(level: number): void {
@@ -596,6 +689,10 @@ export function activate(context: vscode.ExtensionContext): void {
     openSettings
   );
 
+  const latencyReport = vscode.commands.registerCommand(
+    'universalDictate.showLatencyReport', () => controller.showLatencyReport()
+  );
+
   const showDiagnostics = vscode.commands.registerCommand(
     'universalDictate.showDiagnostics',
     async () => {
@@ -611,6 +708,8 @@ export function activate(context: vscode.ExtensionContext): void {
 
       await vscode.window.showInformationMessage(
         [
+          `version=${extension?.packageJSON?.version ?? 'unknown'}`,
+          'latencyPolicy=isolated-preview-v1',
           `platform=${process.platform}`,
           `arch=${process.arch}`,
           `remote=${remoteName}`,
@@ -627,7 +726,8 @@ export function activate(context: vscode.ExtensionContext): void {
           `whisperCli=${fs.existsSync(getWhisperCliPath(context)) ? 'available' : 'missing'}`,
           `whisperServer=${fs.existsSync(getWhisperServerPath(context)) ? 'available' : 'missing'}`,
           `worker=${isWhisperWarm() ? 'warm' : 'cold'}`,
-          `model=${fs.existsSync(getModelPath(context)) ? 'installed' : 'not-installed'}`
+          `model=${fs.existsSync(getModelPath(context)) ? 'installed' : 'not-installed'}`,
+          `lastLatency=${controller.getLastLatencySummary()}`
         ].join(' | '),
         { modal: true }
       );
@@ -643,6 +743,7 @@ export function activate(context: vscode.ExtensionContext): void {
     selectLanguageCommand,
     openSettingsCommand,
     showDiagnostics,
+    latencyReport,
     whisperDisposable
   );
 

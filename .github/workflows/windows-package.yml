@@ -41,6 +41,9 @@ jobs:
       - name: M7 pause/resume state and command tests
         run: node --unhandled-rejections=strict --test test/pause-controls.test.cjs
 
+      - name: M0 stop-to-insert timing instrumentation
+        run: node --unhandled-rejections=strict --test test/latency-instrumentation.test.cjs test/whisper-worker.test.cjs
+
       - name: Fetch pinned miniaudio header
         shell: pwsh
         run: |
@@ -212,7 +215,7 @@ jobs:
           }
 
       - name: Measure real Node preview adapter (synthetic speech, no microphone)
-        if: github.head_ref == 'feat/live-transcript-preview' || github.head_ref == 'release/next' || github.head_ref == 'feat/pause-resume-controls'
+        if: github.head_ref == 'feat/live-transcript-preview' || github.head_ref == 'release/next' || github.head_ref == 'feat/pause-resume-controls' || github.head_ref == 'perf/stop-insert-latency'
         shell: pwsh
         timeout-minutes: 6
         run: |
@@ -231,16 +234,58 @@ jobs:
             $synth.SetOutputToNull()
           } finally { $synth.Dispose() }
           node test/preview/runtime-benchmark.cjs resources/whisper/whisper-server.exe .deps/ggml-base.bin .deps/preview-fixture.wav .deps/preview-adapter-results.json
-          exit $LASTEXITCODE
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if ('${{ github.head_ref }}' -eq 'perf/stop-insert-latency') {
+            node test/latency/runtime-benchmark.cjs resources/whisper/whisper-server.exe .deps/ggml-base.bin .deps/preview-fixture.wav .deps/stop-insert-latency-baseline.json
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          exit 0
 
       - name: Upload Node preview timing evidence
-        if: ${{ always() && (github.head_ref == 'feat/live-transcript-preview' || github.head_ref == 'release/next' || github.head_ref == 'feat/pause-resume-controls') }}
+        if: ${{ always() && (github.head_ref == 'feat/live-transcript-preview' || github.head_ref == 'release/next' || github.head_ref == 'feat/pause-resume-controls' || github.head_ref == 'perf/stop-insert-latency') }}
         uses: actions/upload-artifact@v7
         with:
           name: m3-preview-adapter-results
           path: .deps/preview-adapter-results.json
           if-no-files-found: warn
           retention-days: 14
+
+      - name: Upload M0 stop-to-insert latency baseline
+        if: ${{ always() && github.head_ref == 'perf/stop-insert-latency' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: m0-stop-insert-latency-baseline
+          path: .deps/stop-insert-latency-baseline.json
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Checkout frozen M0 source for same-run comparison
+        if: github.head_ref == 'perf/stop-insert-latency'
+        uses: actions/checkout@v7
+        with:
+          ref: 81c92d0bcd286b8150aeb311c785e34a00bed926
+          path: .deps/m0-baseline
+
+      - name: Compare M0 and M1 workers with controlled overlap and resource snapshots
+        if: github.head_ref == 'perf/stop-insert-latency'
+        shell: pwsh
+        timeout-minutes: 12
+        run: |
+          npx tsc --target ES2022 --module commonjs --strict --esModuleInterop --skipLibCheck --rootDir .deps/m0-baseline/src --outDir .deps/m0-dist .deps/m0-baseline/src/core/whisper.ts
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          New-Item -ItemType Directory -Force .deps/m1-evidence | Out-Null
+          Copy-Item .deps/preview-fixture.wav .deps/m1-evidence/synthetic-fixture.wav
+          node --unhandled-rejections=strict test/latency/compare-workers.cjs .deps/m0-dist/core/whisper.js resources/whisper/whisper-server.exe .deps/ggml-base.bin .deps/preview-fixture.wav .deps/m1-evidence/comparison.json
+          exit $LASTEXITCODE
+
+      - name: Upload M1 comparison and exact synthetic replay fixture
+        if: ${{ always() && github.head_ref == 'perf/stop-insert-latency' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: m1-latency-evidence
+          path: .deps/m1-evidence/
+          retention-days: 30
+          if-no-files-found: warn
 
       - name: Package win32-x64 VSIX
         shell: pwsh

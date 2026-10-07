@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { WhisperRuntime } from './core/whisper';
+import { WhisperRuntime, type WhisperInferencePath } from './core/whisper';
 import { normalizeWhisperLanguage } from './languages';
 import { ensureModel } from './model';
 import type { PreviewAudio } from './core/preview-audio';
@@ -40,11 +40,17 @@ export function disposeWhisper(): void {
 export async function transcribe(
   context: vscode.ExtensionContext,
   audioPath: string,
-  sessionLanguage?: string
+  sessionLanguage?: string,
+  onPath?: (path: WhisperInferencePath) => void
 ): Promise<string> {
   const configuration = vscode.workspace.getConfiguration('universalDictate');
   const language = normalizeWhisperLanguage(sessionLanguage ?? configuration.get<string>('language', 'en'));
-  return await getRuntime(context).transcribe(audioPath, language);
+  return await getRuntime(context).transcribe(audioPath, language, onPath);
+}
+
+/** Does not create a runtime when preview is disabled or no recording has begun. */
+export async function stopWhisperPreview(): Promise<void> {
+  await runtime?.stopPreview();
 }
 
 export async function previewWhisper(context: vscode.ExtensionContext, audio: PreviewAudio,

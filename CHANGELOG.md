@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.1.3
+
+### M1 review candidate — not published
+
+- Isolate speculative preview in a separate, on-demand Whisper worker with at most two threads and best-effort below-normal process priority. Final transcription keeps its original warm worker and decoding settings.
+- Stop, Cancel and disposal retire the preview worker, including an idle worker. Active preview cancellation waits for native process exit rather than assuming HTTP cancellation proves computation stopped. Pause/Resume retains accepted audio and restarts preview lazily when needed.
+- Keep the pinned local model/runtime, existing waveform, six user settings, clipboard policy and final-only insertion.
+- Add **Universal Dictate: Show Latency Report** to open the last 100 completed timing records in one document. Diagnostics identify the candidate version and inference policy. No transcript or audio is included.
+
+## 1.1.2
+
+### Diagnostic build
+
+- Add M0.2 Stop-to-Insert timing diagnostics for local latency investigation.
+- Record whether live-preview Whisper inference is active at Stop, how long it has been active, or how long since the previous preview inference finished.
+- No dictation, transcription, insertion, clipboard, Pause/Resume, waveform or release behavior is intentionally changed.
+
 ## 1.1.0
 
 ### Added

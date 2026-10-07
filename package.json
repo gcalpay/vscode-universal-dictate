@@ -2,7 +2,7 @@
   "name": "vscode-universal-dictate",
   "displayName": "Universal Dictate",
   "description": "Local, offline dictation for VS Code on Windows and Remote - WSL. 99 languages, optional live transcript preview, clipboard recovery, and no automatic sending.",
-  "version": "1.1.0",
+  "version": "1.1.3",
   "license": "MIT",
   "publisher": "gcalpay",
   "icon": "media/icon.png",
@@ -56,7 +56,8 @@
     "onCommand:universalDictate.openSettings",
     "onCommand:universalDictate.showDiagnostics",
     "onCommand:universalDictate.copyLastTranscript",
-    "onCommand:universalDictate.pauseResume"
+    "onCommand:universalDictate.pauseResume",
+    "onCommand:universalDictate.showLatencyReport"
   ],
   "contributes": {
     "commands": [
@@ -88,6 +89,10 @@
         "command": "universalDictate.pauseResume",
         "title": "Universal Dictate: Pause/Resume Recording",
         "enablement": "universalDictate.recording"
+      },
+      {
+        "command": "universalDictate.showLatencyReport",
+        "title": "Universal Dictate: Show Latency Report"
       }
     ],
     "keybindings": [
@@ -180,7 +185,8 @@
     "package:vsix": "npm run compile && vsce package --no-dependencies --target win32-x64 --out universal-dictate-win32-x64.vsix",
     "test:m2": "npm run compile && node --test test/transcript-recovery.test.cjs test/transcript-recovery-ui.test.cjs test/text-input.test.cjs test/lifecycle.test.cjs test/recorder-lifecycle.test.cjs",
     "test:m3": "npm run compile && node --unhandled-rejections=strict --test test/preview-*.test.cjs",
-    "test:m7": "npm run compile && node --unhandled-rejections=strict --test test/pause-*.test.cjs"
+    "test:m7": "npm run compile && node --unhandled-rejections=strict --test test/pause-*.test.cjs",
+    "test:latency": "npm run compile && node --unhandled-rejections=strict --test test/*latency*.test.cjs test/whisper-worker.test.cjs test/preview-runtime.test.cjs"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

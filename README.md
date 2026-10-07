@@ -39,7 +39,7 @@ Change settings before starting a recording. Changes made during a recording app
 
 When enabled, the overlay shows recent provisional words, which may be revised as recognition continues. It is not a complete transcript history. After Stop, Universal Dictate transcribes the **complete recording** and inserts the final transcript once.
 
-Preview and final transcription both run locally. Preview adds processing work and some delay, particularly with Auto-detect. Turning it Off removes the extra preview processing; Status bar only and Off visualization do not run invisible previews.
+Preview and final transcription both run locally. In this review candidate, preview uses a separate on-demand worker (up to two threads) so final transcription does not queue behind preview work. The extra model instance increases memory use while preview is active; it is released at Stop or Discard. The final worker stays warm. Preview adds processing work and some delay, particularly with Auto-detect. Turning it Off removes the extra preview processing; Status bar only and Off visualization do not run invisible previews.
 
 ## Controls
 
