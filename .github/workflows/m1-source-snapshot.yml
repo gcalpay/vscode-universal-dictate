@@ -1,0 +1,39 @@
+name: M1 source snapshot (temporary)
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  snapshot:
+    if: github.head_ref == 'perf/stop-insert-latency'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Collect tracked source and declared typings
+        run: |
+          mkdir -p snapshot
+          git archive HEAD | tar -x -C snapshot
+          npm install --ignore-scripts --no-audit --no-fund
+          mkdir -p snapshot/node_modules/@types
+          cp -R node_modules/@types/node node_modules/@types/vscode snapshot/node_modules/@types/
+          cp -R node_modules/undici-types snapshot/node_modules/
+          cp package-lock.json snapshot/
+          git rev-parse HEAD > snapshot/SNAPSHOT_SOURCE_SHA
+          tar -czf m1-source.tgz -C snapshot .
+          sha256sum m1-source.tgz
+      - uses: actions/upload-artifact@v7
+        with:
+          name: m1-source
+          path: m1-source.tgz
+          retention-days: 3
+          if-no-files-found: error
