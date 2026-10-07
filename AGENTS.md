@@ -1,26 +1,35 @@
 # Agent guidance
 
-Current work: [docs/M1_FINAL_INFERENCE_PRIORITY.md](docs/M1_FINAL_INFERENCE_PRIORITY.md).
-Branch: `perf/stop-insert-latency`; draft PR #55. Main remains published 1.1.0
-`8017f1950bbacb67c37add2c31315e7a6139bcd3`. Frozen M0.2 source is
-`81c92d0bcd286b8150aeb311c785e34a00bed926`.
+Current work: [docs/OVERLAY_INTEGRATION.md](docs/OVERLAY_INTEGRATION.md).
+Branch: `feat/overlay-visualizations`, based on M1 `d4c52d2d153545a7a8bef6ed1680261e199ef22b`.
+Published main remains 1.1.0 `8017f1950bbacb67c37add2c31315e7a6139bcd3`.
 
-The user authorized M1 implementation, Conventional Commits, automated comparison,
-Windows validation and one finished test VSIX. Do not merge, tag, publish, rewrite
-history or resume `feat/overlay-visualizations` without the relevant review gate.
-Do not request more manual diagnostic micro-builds or per-recording screenshots.
+## Authorization and delivery
 
-Final inference must retain the pinned model/runtime, original decode parameters,
-full accepted WAV and one final insertion. Preview must never use the final worker.
-Preview Off must not spawn a second process. Confirm owned preview process exit on
-retirement; do not treat HTTP abort/kill return as exit proof or kill by process name.
-Do not weaken cancellation, Pause/Resume, clipboard, non-activation, waveform or
-no-auto-submission invariants. Keep six settings and accepted defaults unchanged.
+The user authorized continuing M2-M5 internally without installing or reviewing the
+M1 candidate first. This supersedes the older M1 manual-acceptance gate in PR #55.
+Implement, commit, run automated Windows/numerical/performance checks and inspect
+scripted production renders. Deliver one integrated candidate after internal gates,
+not a VSIX for each substep. No repeated dictated sentence/screenshots per run.
+Do not merge, tag, publish or rewrite Git history in this implementation phase.
+Keep PR #55 and its M1 evidence intact; visualization work builds on that source.
 
-Record synthetic benchmarks and real user observations separately. T3–T4 is the
-whole final adapter call, not isolated native compute; T6 is helper completion,
-not proof the target app painted text. No diagnostic audio/transcript logging.
-Keep bounded resource/cleanup tests, fallback tests and Windows package audit.
-No disabled analyzer rules or falsely claimed passes. Remove temporary transfer
-workflows before delivering the candidate. Persist source/run/VSIX identities in
-PR #55 and the evidence report, not by rebuilding after adding a hash to source.
+## Invariants
+
+Preserve the isolated warm final/preview worker design, pinned model and inference
+parameters. Preserve Pause/Resume, full accepted WAV, one final insertion, clipboard
+Off as no access, non-activating controls and Issue #38 scope boundary.
+Keep existing waveform buckets/drawing unchanged. Spectral analysis is enhanced-
+overlay-only, absent when Waveform/Status-bar-only/Off is effective. No FFT/CQT,
+allocation, blocking wait or disk I/O added to the capture callback. Use bounded
+buffers and intentional dropped visualization updates rather than dropped audio.
+Settings are session snapshots; selecting a style must not enable the overlay.
+Preserve explicit preferences and defaults. Keep accumulated latency reporting.
+
+## Evidence
+
+Verify actual source refs before writes and keep dependency branches separate.
+Report scripted render/numerical/runner results separately from user-PC behavior.
+T3-T4 measures the final adapter call; T6 is helper completion, not target paint.
+No audio/transcript diagnostic logging or analyzer-rule suppression. Remove any
+temporary source-transfer workflow before the implementation checkpoint is delivered.

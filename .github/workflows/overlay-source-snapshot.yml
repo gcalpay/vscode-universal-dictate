@@ -1,0 +1,27 @@
+name: Overlay source snapshot (temporary)
+on:
+  push:
+    branches: [feat/overlay-visualizations]
+permissions:
+  contents: read
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Archive exact tracked source only
+        run: |
+          mkdir -p /tmp/overlay-source
+          git archive --format=tar.gz HEAD > /tmp/overlay-source/source.tgz
+          git rev-parse HEAD > /tmp/overlay-source/source-sha.txt
+          git rev-parse HEAD^{tree} > /tmp/overlay-source/tree-sha.txt
+          sha256sum /tmp/overlay-source/source.tgz
+      - uses: actions/upload-artifact@v7
+        with:
+          name: overlay-source
+          path: /tmp/overlay-source/
+          retention-days: 3
+          if-no-files-found: error
