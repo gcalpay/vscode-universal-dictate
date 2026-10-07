@@ -26,3 +26,7 @@ and On. This does not substitute for user-machine measurements.
 For the user-machine baseline, install the M0 VSIX, dictate several comparable
 10–15 second samples, and inspect the `Universal Dictate Latency` Output channel.
 Do not implement a latency fix until the M0 stage timings identify the dominant cost.
+
+## M0.2 preview-contention correlation
+
+The diagnostic build additionally records whether preview Whisper inference is active at T0, how long that request has been active, or how long ago the previous preview inference finished. This is measurement-only and is intended to distinguish ordinary final-inference variance from Stop events that overlap speculative preview computation.
