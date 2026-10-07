@@ -2,7 +2,7 @@
   "name": "vscode-universal-dictate",
   "displayName": "Universal Dictate",
   "description": "Local, offline dictation for VS Code on Windows and Remote - WSL. 99 languages, optional live transcript preview, clipboard recovery, and no automatic sending.",
-  "version": "1.1.3",
+  "version": "1.2.0",
   "license": "MIT",
   "publisher": "gcalpay",
   "icon": "media/icon.png",

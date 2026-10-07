@@ -50,3 +50,30 @@ remain to be run on the committed integration; M5 combined capture/render/Whispe
 performance remains the next internal gate, with no user install requested.
 
 Detailed implementation: [OVERLAY_VISUALIZATIONS.md](OVERLAY_VISUALIZATIONS.md).
+
+## M5 automated comparison protocol
+
+The corrected native renderer gate passed on `afe5525`. No user installation was
+needed. M5 builds the replay shell against frozen M1 `d4c52d2` and the candidate.
+It replays the same 12-second PCM through the real callback/WAV writer and actual
+Win32 overlay/message loop, production Node recorder adapter, preview coordinator,
+dictation engine and unchanged real Whisper runtime. The producer is synthetic,
+not a microphone device; final insertion is a no-op, not target-application paint.
+All five modes run three times with preview Off/On, with frozen-M1 waveform controls
+and no-overlay controls (42 short runs). Two additional 48-second spectral runs
+fill/wrap the 20-second history. Order reverses on alternate repeats.
+
+Budgets fixed before measurements: median Stop-to-stub overhead <= max(150 ms,10%)
+against matching frozen M1; callback mean overhead <=0.25 ms, callback p95 <=2 ms,
+UI tick p95 <=25 ms at the existing 50 ms cadence, recorder CPU overhead <=5
+single-core percentage points, private committed memory overhead <=16 MiB, and
+zero visual drops. Every run checks exact accepted PCM, one nonempty final result,
+server inference, unchanged final PID and preview exit before final dispatch.
+Actual callback/UI sample distributions and raw per-run data are retained; no
+95th-percentile total-latency claim is made from three repetitions. Preview latency
+and request overlap are recorded, not assumed. CPU is native recorder process time
+(kernel+user) divided by its observed wall time, normalized to one core. Memory
+fields distinguish process working set, peak working set and private commit.
+
+Candidate version is 1.2.0, unpublished. Runtime/source package validation and M5
+budgets must pass before exposing a single integrated candidate to the user.

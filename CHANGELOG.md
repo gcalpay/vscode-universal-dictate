@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 1.2.0
+
+### Integrated review candidate — not published
 
 ### Added
 
