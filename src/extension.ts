@@ -1,4 +1,5 @@
 import * as fs from 'node:fs';
+import { performance } from 'node:perf_hooks';
 import * as vscode from 'vscode';
 import { DictationEngine, DictationState, type DictationLatencyEvent, type DictationLatencyStage, type DictationSession, type PreviewControl } from './core/dictation';
 import { PreviewCoordinator } from './core/preview-coordinator';
@@ -110,7 +111,9 @@ class DictationController implements vscode.Disposable {
   private activeLanguage = 'en';
   private activeOverlaySize: OverlaySize = 'medium';
   private activeWaveformSpan: WaveformTimeSpanSeconds = 10;
-  private latencyTrace: { operationId: number; stages: Partial<Record<DictationLatencyStage, number>>; preview: boolean; language: string; warm: boolean; path?: WhisperInferencePath } | undefined;
+  private latencyTrace: { operationId: number; stages: Partial<Record<DictationLatencyStage, number>>; preview: boolean; language: string; warm: boolean; previewActiveAtStop: boolean; previewActiveForMs?: number; sincePreviewFinishedMs?: number; path?: WhisperInferencePath } | undefined;
+  private previewInferenceStartedAt: number | undefined;
+  private previewInferenceFinishedAt: number | undefined;
   private lastLatencySummary = 'not measured';
 
   constructor(private readonly context: vscode.ExtensionContext) {
@@ -146,6 +149,8 @@ class DictationController implements vscode.Disposable {
         this.activeLanguage = normalizeWhisperLanguage(vscode.workspace.getConfiguration('universalDictate').get<string>('language', 'en'));
         this.activeOverlaySize = getConfiguredOverlaySize();
         this.activeWaveformSpan = getConfiguredWaveformTimeSpanSeconds();
+        this.previewInferenceStartedAt = undefined;
+        this.previewInferenceFinishedAt = undefined;
         await ensureModel(this.context);
       },
       warm: () => warmWhisper(this.context),
@@ -189,7 +194,16 @@ class DictationController implements vscode.Disposable {
     const coordinator = new PreviewCoordinator({ sessionId: session.previewSessionId,
       language: this.activeLanguage,
       acquire: previewSignal => session.acquirePreview!(previewSignal),
-      decode: (audio, language, previewSignal) => previewWhisper(this.context, audio, language, previewSignal),
+      decode: async (audio, language, previewSignal) => {
+        const startedAt = performance.now();
+        this.previewInferenceStartedAt = startedAt;
+        try {
+          return await previewWhisper(this.context, audio, language, previewSignal);
+        } finally {
+          if (this.previewInferenceStartedAt === startedAt) this.previewInferenceStartedAt = undefined;
+          this.previewInferenceFinishedAt = performance.now();
+        }
+      },
       onPreview: update => { if (!signal.aborted) session.showPreview!(update); },
       onFailure: () => { if (!signal.aborted) void vscode.window.showInformationMessage('Universal Dictate: live preview stopped. Final dictation remains available.'); }
     });
@@ -285,7 +299,18 @@ class DictationController implements vscode.Disposable {
 
   private recordLatency(event: DictationLatencyEvent): void {
     if (event.stage === 'T0') {
-      this.latencyTrace = { operationId: event.operationId, stages: {}, preview: this.activeLivePreview, language: this.activeLanguage, warm: isWhisperWarm() };
+      const activeStartedAt = this.previewInferenceStartedAt;
+      const finishedAt = this.previewInferenceFinishedAt;
+      this.latencyTrace = {
+        operationId: event.operationId,
+        stages: {},
+        preview: this.activeLivePreview,
+        language: this.activeLanguage,
+        warm: isWhisperWarm(),
+        previewActiveAtStop: activeStartedAt !== undefined,
+        previewActiveForMs: activeStartedAt === undefined ? undefined : Math.max(0, event.atMs - activeStartedAt),
+        sincePreviewFinishedMs: activeStartedAt !== undefined || finishedAt === undefined ? undefined : Math.max(0, event.atMs - finishedAt)
+      };
     }
     const trace = this.latencyTrace;
     if (!trace || trace.operationId !== event.operationId) return;
@@ -301,6 +326,9 @@ class DictationController implements vscode.Disposable {
       `language=${trace.language}`,
       `workerAtStop=${trace.warm ? 'warm' : 'cold'}`,
       `path=${trace.path ?? 'unknown'}`,
+      `previewActiveAtStop=${trace.previewActiveAtStop ? 'yes' : 'no'}`,
+      `previewActiveFor=${trace.previewActiveForMs === undefined ? 'n/a' : `${trace.previewActiveForMs.toFixed(1)}ms`}`,
+      `sincePreviewFinished=${trace.sincePreviewFinishedMs === undefined ? 'n/a' : `${trace.sincePreviewFinishedMs.toFixed(1)}ms`}`,
       `T0-T1=${elapsed('T0','T1')}`,
       `T1-T2=${elapsed('T1','T2')}`,
       `T2-T3=${elapsed('T2','T3')}`,
