@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.1.2
+
+### Diagnostic build
+
+- Add M0.2 Stop-to-Insert timing diagnostics for local latency investigation.
+- Record whether live-preview Whisper inference is active at Stop, how long it has been active, or how long since the previous preview inference finished.
+- No dictation, transcription, insertion, clipboard, Pause/Resume, waveform or release behavior is intentionally changed.
+
 ## 1.1.0
 
 ### Added
