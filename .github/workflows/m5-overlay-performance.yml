@@ -1,6 +1,7 @@
 name: M5 integrated overlay performance
 on:
-  pull_request:
+  push:
+    branches: [feat/overlay-visualizations]
     paths:
       - "native/**"
       - "src/**"
@@ -11,6 +12,13 @@ permissions:
   contents: read
 jobs:
   replay:
+    strategy:
+      fail-fast: false
+      max-parallel: 6
+      matrix:
+        style: [off, waveform, logFrequencyPowerSpectrogram, linearFrequencyPowerSpectrogram, constantQPowerSpectrogram, circularSpectrum]
+    env:
+      M5_STYLE: ${{ matrix.style }}
     runs-on: windows-latest
     timeout-minutes: 30
     steps:
@@ -33,7 +41,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           npm run compile
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          node --test test/visualizations/performance.test.cjs
+          node --test test/visualizations/*.test.cjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           foreach ($file in @('dictation.ts','whisper.ts','whisper-worker.ts','whisper-transport.ts','preview-coordinator.ts')) {
             if ((Get-FileHash "src/core/$file").Hash -ne (Get-FileHash ".deps/m1-baseline/src/core/$file").Hash) { throw "M1 inference changed: $file" }
@@ -84,7 +92,7 @@ jobs:
         shell: pwsh
         timeout-minutes: 20
         run: |
-          node --unhandled-rejections=strict test/visualizations/performance.cjs .deps/overlay-replay-m1.exe .deps/overlay-replay-candidate.exe .deps/whisper-runtime/Release/whisper-server.exe .deps/ggml-base.bin .deps/preview-fixture.wav .deps/m5-evidence/performance.json
+          node --unhandled-rejections=strict test/visualizations/paired-performance.cjs .deps/overlay-replay-m1.exe .deps/overlay-replay-candidate.exe .deps/whisper-runtime/Release/whisper-server.exe .deps/ggml-base.bin .deps/preview-fixture.wav .deps/m5-evidence/performance.json
           exit $LASTEXITCODE
       - name: Record source identity and upload evidence
         if: always()
@@ -97,7 +105,7 @@ jobs:
       - uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: m5-integrated-performance
+          name: m5-paired-${{ matrix.style }}
           path: .deps/m5-evidence/
           retention-days: 30
           if-no-files-found: error

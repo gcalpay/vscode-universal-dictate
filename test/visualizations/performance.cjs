@@ -229,5 +229,5 @@ async function main() {
   }
   console.log(JSON.stringify({ status: result.status, runs: result.runs.length, gates: result.gates }));
 }
-module.exports = { pcmFrom, wav, stats, deltas, summarize, evaluate };
+module.exports = { pcmFrom, wav, stats, deltas, summarize, evaluate, runCase };
 if (require.main === module) main().catch(error => { console.error(error.message); process.exitCode = 1; });
