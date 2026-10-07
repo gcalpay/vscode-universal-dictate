@@ -42,7 +42,7 @@ function extensionFixture() {
   const h = mock(); let options; const insertions = [];
   const { TranscriptRecoveryController } = load('transcript-recovery', { vscode: h.vscode });
   const extension = load('extension', {
-    'node:fs': fs, vscode: h.vscode,
+    'node:fs': fs, 'node:perf_hooks': require('node:perf_hooks'), vscode: h.vscode,
     './core/dictation': { DictationEngine: class { constructor(o) { options = o; } async togglePause() { h.calls.pauses = (h.calls.pauses || 0) + 1; } dispose() {} } },
     './transcript-recovery': { TranscriptRecoveryController },
     './core/preview-coordinator': require('../dist/core/preview-coordinator'),
