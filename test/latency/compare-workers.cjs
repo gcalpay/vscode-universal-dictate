@@ -65,6 +65,50 @@ async function closeRuntime(runtime) {
   assert.ok(!child||child.exitCode!==null||child.signalCode!==null,'baseline worker still alive');
 }
 
+// Separate regression guard: both final-only workers are resident, but requests
+// execute sequentially in alternating order. Neither runtime creates preview.
+// This controls time-varying VM load more tightly than whole-policy blocks.
+async function offGuard(Baseline, Candidate, server, model, root, full) {
+  const runtimes={}, observations=[];
+  const file=path.join(root,'off-guard.wav');fs.writeFileSync(file,full);
+  try {
+    for(const [policy,Runtime] of [['baseline',Baseline],['candidate',Candidate]]) {
+      runtimes[policy]=new Runtime({serverPath:path.resolve(server),
+        cliPath:path.join(path.dirname(path.resolve(server)),'whisper-cli.exe'),
+        publicPath:path.join(root,'guard-'+policy),ensureModel:async()=>path.resolve(model)});
+      await runtimes[policy].warm();
+    }
+    for(const language of ['en','auto']) {
+      for(const runtime of Object.values(runtimes)) {
+        assert.ok((await runtime.transcribe(file,language)).trim());
+      }
+      for(let repeat=0;repeat<8;repeat++) {
+        for(const policy of repeat%2?['candidate','baseline']:['baseline','candidate']) {
+          const runtime=runtimes[policy],pid=pids(runtime).finalPid;
+          assert.equal(pids(runtime).previewPid,undefined);
+          let inferencePath;
+          const begin=performance.now();
+          const text=await runtime.transcribe(file,language,value=>{inferencePath=value;});
+          const elapsedMs=performance.now()-begin;
+          assert.equal(inferencePath,'server');assert.equal(pids(runtime).finalPid,pid);
+          assert.ok(text.trim());
+          observations.push({policy,language,repeat,elapsedMs,finalPid:pid,textSha256:hash(text)});
+        }
+      }
+    }
+    const summary=[];
+    for(const language of ['en','auto']) {
+      const rows=observations.filter(row=>row.language===language);
+      const baseline=stats(rows.filter(row=>row.policy==='baseline').map(row=>row.elapsedMs));
+      const candidate=stats(rows.filter(row=>row.policy==='candidate').map(row=>row.elapsedMs));
+      const differenceMs=candidate.median-baseline.median;
+      summary.push({language,baseline,candidate,differenceMs,
+        withinRegressionBudget:differenceMs<=Math.max(100,baseline.median*0.1)});
+    }
+    return {kind:'interleaved final-only adapter calls; both models idle-resident; no preview; not T0-T6',observations,summary};
+  } finally {await Promise.all(Object.values(runtimes).map(closeRuntime));}
+}
+
 async function main() {
   const [baselineModule,server,model,fixture,output]=process.argv.slice(2);
   assert.ok(baselineModule&&server&&model&&fixture&&output,'baseline module/server/model/fixture/output required');
@@ -151,6 +195,8 @@ async function main() {
         previewStopResidualMs:stats(rows.map(r=>r.previewStopResidualMs)),hostPendingCount:rows.filter(r=>r.hostPendingAtStop).length});
     }
     result.textHashesByLanguage=Object.fromEntries(['en','auto'].map(language=>[language,[...new Set(result.runs.filter(r=>r.language===language).map(r=>r.finalTextSha256))]]));
+    result.offGuard=await offGuard(Baseline,Candidate,server,model,root,full);
+    assert.ok(result.offGuard.summary.every(row=>row.withinRegressionBudget),'interleaved Preview-Off regression budget exceeded');
     result.status='completed';
   } catch(error) {
     result.status='failed';result.error=error.message;throw error;
@@ -158,6 +204,6 @@ async function main() {
     http.request=originalRequest;
     fs.writeFileSync(output,JSON.stringify(result,null,2));fs.rmSync(root,{recursive:true,force:true});
   }
-  console.log(JSON.stringify({status:result.status,summary:result.summary,textHashesByLanguage:result.textHashesByLanguage}));
+  console.log(JSON.stringify({status:result.status,summary:result.summary,offGuard:result.offGuard.summary,textHashesByLanguage:result.textHashesByLanguage}));
 }
 main().catch(error=>{console.error(error.message);process.exitCode=1;});
