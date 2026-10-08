@@ -5,6 +5,7 @@
 #include "../fixtures/preview-text-uncached.h"
 #include <cstdint>
 #include <iostream>
+#include <fstream>
 #include <stdexcept>
 #include <vector>
 
@@ -39,6 +40,19 @@ public:
         for (auto& pixel : out) pixel &= 0x00ffffffU; // BI_RGB alpha is unused.
         return out;
     }
+    void save(const char* file) const {
+        const auto image = snapshot();
+        BITMAPFILEHEADER header{};
+        BITMAPINFOHEADER info{};
+        info.biSize = sizeof(info); info.biWidth = width; info.biHeight = -height;
+        info.biPlanes = 1; info.biBitCount = 32; info.biCompression = BI_RGB;
+        header.bfType = 0x4d42; header.bfOffBits = sizeof(header) + sizeof(info);
+        header.bfSize = header.bfOffBits + static_cast<DWORD>(image.size() * 4);
+        std::ofstream out(file, std::ios::binary);
+        out.write(reinterpret_cast<const char*>(&header), sizeof(header));
+        out.write(reinterpret_cast<const char*>(&info), sizeof(info));
+        out.write(reinterpret_cast<const char*>(image.data()), image.size() * 4);
+    }
     const int width, height;
     const HDC dc;
 private:
@@ -59,7 +73,20 @@ void comparePixels(preview::TextRenderer& cached, reference::TextRenderer& oracl
     check(oracle.draw(expected.dc, geometry, text), "uncached oracle failed");
     check(cached.draw(actual.dc, geometry, text), "cached first draw failed");
     const auto image = expected.snapshot();
-    check(actual.snapshot() == image, "cache changed accepted RGB pixels");
+    const auto pixels = actual.snapshot();
+    if (pixels != image) {
+        std::size_t differing = 0;
+        for (std::size_t i = 0; i < image.size(); ++i) if (pixels[i] != image[i]) {
+            if (differing++ < 3) std::cerr << "Pixel " << i % actual.width << ',' << i / actual.width
+                << " cached=" << pixels[i] << " oracle=" << image[i] << '\n';
+        }
+        std::cerr << "Case=" << cases << " textUnits=" << text.size() << " font=" << geometry.fontHeight
+            << " rect=" << geometry.text.left << ',' << geometry.text.top << ',' << geometry.text.right << ','
+            << geometry.text.bottom << " mismatched=" << differing << '\n';
+        actual.save(".deps/m5-evidence/cache-actual.bmp");
+        expected.save(".deps/m5-evidence/cache-oracle.bmp");
+        throw std::runtime_error("cache changed accepted RGB pixels");
+    }
     check(cached.visibleLines() == oracle.visibleLines() && cached.skippedLines() == oracle.skippedLines(),
           "cache changed line layout");
     const auto count = cached.rasterizations();
