@@ -57,11 +57,17 @@ jobs:
           $vcvars = Join-Path $vs 'VC\Auxiliary\Build\vcvars64.bat'
           $commands = @(
             "call `"$vcvars`"",
+            'cl /nologo /utf-8 /O2 /std:c++20 /EHsc test\native\preview-text-cache-test.cpp /Fe:.deps\preview-text-cache-test.exe user32.lib gdi32.lib',
             'cl /nologo /utf-8 /O2 /std:c++20 /EHsc /DUD_REPLAY_BASELINE /I .deps\miniaudio test\native\overlay-replay.cpp native\miniaudio-impl.cpp /Fe:.deps\overlay-replay-m1.exe user32.lib gdi32.lib /link /MANIFEST:EMBED',
             'cl /nologo /utf-8 /O2 /std:c++20 /EHsc /I .deps\miniaudio test\native\overlay-replay.cpp native\miniaudio-impl.cpp /Fe:.deps\overlay-replay-candidate.exe user32.lib gdi32.lib /link /MANIFEST:EMBED',
             'cl /nologo /utf-8 /O2 /std:c++20 /EHsc /I .deps\miniaudio test\native\overlay-speech-render.cpp native\miniaudio-impl.cpp /Fe:.deps\overlay-speech-render.exe user32.lib gdi32.lib /link /MANIFEST:EMBED'
           ) -join ' && '
           cmd.exe /D /S /C $commands
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Verify unchanged multilingual pixels and preview raster cache
+        shell: pwsh
+        run: |
+          & .deps/preview-text-cache-test.exe | Tee-Object .deps/m5-evidence/preview-cache-pixels.txt
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Fetch checksum-pinned Whisper and generate synthetic speech
         shell: pwsh
