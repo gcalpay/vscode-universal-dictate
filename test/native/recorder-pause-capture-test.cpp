@@ -51,16 +51,7 @@ void verifyStableCapture(const std::filesystem::path& path){
     feed(capture,0,frames*2); feed(capture,819,1); feed(capture,0,frames-1);
     snapshotEnhancedSignal(capture);
     requireCapture(capture.enhancedHistory.written()==3,"one value per fixed bucket");
-    // Capture keeps the original signed peak; Medium enlarges only the copied
-    // display value, without modifying audio or earlier waveform buckets.
-    std::array<int, kEnhancedSignalPoints> captured{};
-    requireCapture(capture.enhancedHistory.snapshot(captured) &&
-                   captured.back() == universal_dictate::visualPeakSample(819),
-                   "short transient lost from captured waveform history");
-    requireCapture(g_overlay.overlaySize == OverlaySize::Medium, "Medium review fixture changed");
-    requireCapture(g_overlay.enhancedSignalHistory.back() ==
-                   universal_dictate::mediumWaveformDisplayLevel(captured.back()),
-                   "short transient lost from Medium display");
+    requireCapture(g_overlay.enhancedSignalHistory.back()==universal_dictate::visualPeakSample(819),"short transient lost");
     const auto before=g_overlay.enhancedSignalHistory;
     feed(capture,-32767,frames-1); snapshotEnhancedSignal(capture);
     requireCapture(g_overlay.enhancedSignalHistory==before,"unfinished loud audio reshaped history");

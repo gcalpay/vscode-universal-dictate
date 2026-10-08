@@ -20,20 +20,6 @@ inline int visualPeakSample(int sample) noexcept {
     return clamped < 0 ? -magnitude : magnitude;
 }
 
-// M6 normal-use correction: Medium's quiet speech was nearly flat in the
-// 22-pixel preview viewport. Expand only its displayed signed peaks using a
-// fixed soft-knee curve. The admitted PCM, bucket values, immutable history,
-// accepted paint function, other sizes and spectral modes remain unchanged.
-// This is deliberately not automatic gain control: old peaks never rescale.
-inline int mediumWaveformDisplayLevel(int signedPeak) noexcept {
-    const int peak = std::clamp(signedPeak, -1000, 1000);
-    constexpr double knee = 20.0;  // Stored 0..1000 visualization units.
-    static const double maxLog = std::log1p(1000.0 / knee);
-    const int magnitude = static_cast<int>(std::lround(
-        1000.0 * std::log1p(std::abs(peak) / knee) / maxLog));
-    return peak < 0 ? -magnitude : magnitude;
-}
-
 class WaveformBucket {
 public:
     // Called only for admitted audio. The duration is chosen once before capture.

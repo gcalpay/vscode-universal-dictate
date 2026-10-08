@@ -15,12 +15,29 @@ test('accepted 1.1.0 waveform paint function remains byte-identical after render
   assert.match(between(source,'void drawEnhancedVisualization(', 'void drawEnhancedOverlay('), /if \(!g_overlay\.visualizer\)[\s\S]*drawEnhancedWaveform\(dc\)/);
 });
 
-test('Medium gain is display-only, outside the accepted capture/paint functions', () => {
+// Pin the waveform's critical source files to the known working 1.1.2 code.
+// Changes to visualization internals must not silently retune the amplitude,
+// history, button geometry or preview layout of the accepted waveform.
+test('1.2 waveform mapping, history and layouts exactly match working 1.1.2', () => {
+  const gitBlob = content => createHash('sha1')
+    .update(`blob ${Buffer.byteLength(content, 'utf8')}\0`).update(content).digest('hex');
+  const baseline = {
+    'native/waveform-level.h': '582fd26544c387f35fa52b74fec1e8cb9215f2bf',
+    'native/waveform-history.h': '5489ddceeb3dfcf65fb37f9f00ea58158a939784',
+    'native/overlay-layout.h': '3fd73531fc6f42340706ee9086536644b29cf6af',
+    'native/preview-layout.h': 'c3e42fb4a9871691c6027f7376238b071b5b4fb7',
+  };
+  for (const [file, sha] of Object.entries(baseline)) {
+    assert.equal(gitBlob(read(file)), sha, `${file} differs from known working 1.1.2`);
+  }
   const snapshot = between(source, 'void snapshotEnhancedSignal(', 'void updateOverlayLevel(');
-  assert.match(snapshot, /overlaySize == OverlaySize::Medium/);
-  assert.match(snapshot, /mediumWaveformDisplayLevel\(point\)/);
-  assert.match(snapshot, /enhancedHistory\.snapshot\(next\)/);
-  assert.doesNotMatch(between(source, 'void captureCallback(', 'class CaptureDevice'), /mediumWaveformDisplayLevel/);
+  assert.match(snapshot, /if \(state\.enhancedHistory\.snapshot\(next\)\) g_overlay\.enhancedSignalHistory = next;/);
+  assert.doesNotMatch(snapshot, /mediumWaveformDisplayLevel|std::log|std::pow|overlaySize/);
+  const capture = between(source, 'void captureCallback(', 'class CaptureDevice');
+  assert.match(capture, /enhancedBucket\.push\(samples\[i\]/);
+  assert.match(capture, /enhancedHistory\.publish\(\*level\)/);
+  const device = between(source, 'class CaptureDevice', 'struct OverlayState');
+  assert.match(device, /ma_device_init\(nullptr, &config, &device_\)/);
 });
 
 test('capture callback only enqueues admitted PCM; transforms are not on the audio callback', () => {

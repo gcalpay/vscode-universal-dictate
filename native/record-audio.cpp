@@ -1069,12 +1069,7 @@ void pumpOverlayMessages() {
 
 void snapshotEnhancedSignal(const CaptureState& state) {
     std::array<int, kEnhancedSignalPoints> next{};
-    if (!state.enhancedHistory.snapshot(next)) return;
-    // Medium-only display gain: no changes to captured PCM, source buckets,
-    // history snapshots or waveform paint; repeated frames stay immutable.
-    if (g_overlay.overlaySize == OverlaySize::Medium)
-        for (int& point : next) point = universal_dictate::mediumWaveformDisplayLevel(point);
-    g_overlay.enhancedSignalHistory = next;
+    if (state.enhancedHistory.snapshot(next)) g_overlay.enhancedSignalHistory = next;
 }
 
 void updateOverlayLevel(int levelMilli, const CaptureState* captureState) {

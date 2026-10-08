@@ -37,15 +37,9 @@ the latest spectrum. No preference migration or deletion is performed.
 
 The host forwards a normalized `--overlay-visualization` argument only with an
 enhanced overlay. The native parser independently falls back to Waveform. The
-accepted PCM-to-bucket mapping, immutable waveform history and
-`drawEnhancedWaveform` paint function remain unchanged. Following the first
-1.2.0 normal-use review, Medium alone applies a fixed soft-knee visual gain to
-the copied display snapshot: quiet voice peaks use more of its existing vertical
-space, including the 22-logical-pixel live-preview waveform. Small/Large,
-status-bar display and spectral styles are unaffected. No automatic gain control,
-history rescaling, microphone filtering or added capture work is introduced.
-A dispatch function chooses the same paint function or the spectral renderer
-inside the existing waveform viewport.
+existing waveform mapping, history headers and `drawEnhancedWaveform` function
+are unchanged. A dispatch function chooses that exact renderer or the spectral
+renderer inside the same waveform viewport. Status-bar processing is untouched.
 
 The existing admitted capture path still writes the original PCM to the WAV,
 preview buffer, waveform history and raw peak meter. Only the optional visualizer

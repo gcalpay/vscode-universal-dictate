@@ -21,11 +21,11 @@
 - Final transcription keeps its dedicated warm Whisper worker. Preview uses a
   separate lazy worker with at most two inference threads and bounded, confirmed
   shutdown before final dispatch. Preview Off avoids the second model instance.
-- Preserve the accepted waveform paint and raw capture/history, status bar,
-  Pause/Resume, clipboard Off as no automatic access, and one final insertion.
-- Increase only the Medium waveform's fixed display sensitivity, following
-  normal-use feedback: quiet speech uses more of the available waveform height
-  with and without Live preview. No automatic gain control or PCM changes.
+- Preserve the 1.1.2 waveform mapping, immutable history, overlay/preview layout,
+  and accepted paint function; retain status bar, Pause/Resume, clipboard Off
+  as no automatic access, and one final insertion of the full recording.
+- Do not include the experimental RC2 Medium-only gain change. The cause of the
+  earlier intermittent nearly flat waveform is unknown; gain was not a verified fix.
 - Cache unchanged preview text and increase bounded visual-queue scheduling
   headroom, while retaining existing capture audio and per-update analysis limits.
 
