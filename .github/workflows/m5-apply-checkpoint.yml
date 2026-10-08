@@ -1,0 +1,66 @@
+name: Apply verified M5 checkpoint (temporary)
+on:
+  push:
+    branches: [feat/overlay-visualizations]
+    paths: [.github/workflows/m5-apply-checkpoint.yml]
+permissions:
+  contents: read
+jobs:
+  apply:
+    if: github.repository == 'gcalpay/vscode-universal-dictate' && github.ref == 'refs/heads/feat/overlay-visualizations'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    permissions:
+      contents: write
+      actions: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Verify base and exact prepared source tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = a7d6044d9fe87d1863107b6ab69b425641594c40
+          python3 - <<'PY'
+          import hashlib, os
+          from pathlib import Path
+          data = Path('.github/m5-stall-refinement.patch').read_bytes()
+          data = data.replace(b'basic_ios::tie.\n+\ndiff --git', b'basic_ios::tie.\ndiff --git')
+          assert hashlib.sha256(data).hexdigest() == '76ba5be15395c97de58d743524e7b92ccd2390a9124a27ca11e98a197ad596d5', 'Patch transfer mismatch'
+          Path(os.environ['RUNNER_TEMP'], 'm5-reviewed.patch').write_bytes(data)
+          PY
+          git apply --check "$RUNNER_TEMP/m5-reviewed.patch"
+          git apply --index "$RUNNER_TEMP/m5-reviewed.patch"
+          git rm .github/m5-stall-refinement.patch .github/workflows/m5-apply-checkpoint.yml
+          git diff --cached --check
+          test "$(git write-tree)" = 142b4c8225f45d233223277277adf17ed392009c
+      - name: Validate prepared implementation before committing
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --ignore-scripts --no-audit --no-fund
+          npm run check
+          npm run compile
+          node --unhandled-rejections=strict --test test/*.test.cjs test/visualizations/*.test.cjs
+          mkdir -p .deps
+          g++ -std=c++20 -O2 -Wall -Wextra -Werror -pedantic test/native/recorder-streams-test.cpp -o .deps/recorder-streams-test
+          .deps/recorder-streams-test
+          g++ -std=c++20 -O2 -Wall -Wextra -Werror -pedantic -pthread test/native/spectral-visualizer-test.cpp -o .deps/spectral-visualizer-test
+          .deps/spectral-visualizer-test
+      - name: Save only verified feature-branch changes and launch validation
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$(git write-tree)" = 142b4c8225f45d233223277277adf17ed392009c
+          test "$(git ls-remote origin refs/heads/feat/overlay-visualizations | cut -f1)" = "$GITHUB_SHA"
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'perf(overlay): reduce command-stream contention and bound visual catch-up' -m 'Preserve failed M5 confirmation, retain all existing performance thresholds, add scheduling headroom without increasing per-update DSP work, and retain native metrics on failures. Prepared and tested source tree: 142b4c8225f45d233223277277adf17ed392009c. Remove temporary patch transfer files. No merge, publication or history rewrite.'
+          git push origin HEAD:refs/heads/feat/overlay-visualizations
+          gh api --method POST "repos/$GITHUB_REPOSITORY/actions/workflows/windows-package.yml/dispatches" -f ref=feat/overlay-visualizations
+          gh api --method POST "repos/$GITHUB_REPOSITORY/actions/workflows/m5-overlay-performance.yml/dispatches" -f ref=feat/overlay-visualizations

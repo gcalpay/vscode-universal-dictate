@@ -1,0 +1,406 @@
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+index 04e3d0f..cd5e1dc 100644
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -48,6 +48,12 @@ jobs:
+       - name: M0 stop-to-insert timing instrumentation
+         run: node --unhandled-rejections=strict --test test/latency-instrumentation.test.cjs test/whisper-worker.test.cjs
+ 
++      - name: Recorder command stream flush ownership
++        run: |
++          mkdir -p .deps
++          g++ -std=c++20 -O2 -Wall -Wextra -Werror -pedantic test/native/recorder-streams-test.cpp -o .deps/recorder-streams-test
++          .deps/recorder-streams-test
++
+       - name: Concurrent capture pause gate
+         run: |
+           mkdir -p .deps
+diff --git a/.github/workflows/windows-package.yml b/.github/workflows/windows-package.yml
+index 4d5dd1f..8c410a5 100644
+--- a/.github/workflows/windows-package.yml
++++ b/.github/workflows/windows-package.yml
+@@ -80,6 +80,7 @@ jobs:
+             "if not exist resources\bin mkdir resources\bin",
+             "cl /nologo /utf-8 /O2 /std:c++20 /EHsc native\windows-text-input.cpp /Fe:resources\bin\windows-text-input.exe user32.lib",
+             "cl /nologo /utf-8 /O2 /std:c++20 /EHsc /I .deps\miniaudio native\record-audio.cpp native\miniaudio-impl.cpp /Fe:resources\bin\universal-dictate-recorder.exe user32.lib gdi32.lib /link /MANIFEST:EMBED",
++            "cl /nologo /utf-8 /O2 /std:c++20 /EHsc test\native\recorder-streams-test.cpp /Fe:.deps\recorder-streams-test.exe",
+             "cl /nologo /utf-8 /O2 /std:c++20 /EHsc test\native\spectral-visualizer-test.cpp /Fe:.deps\spectral-visualizer-test.exe",
+             "cl /nologo /utf-8 /O2 /std:c++20 /EHsc test\native\spectral-benchmark.cpp /Fe:.deps\spectral-benchmark.exe",
+             "cl /nologo /utf-8 /O2 /std:c++20 /EHsc /I .deps\miniaudio test\native\spectral-windows-test.cpp native\miniaudio-impl.cpp /Fe:.deps\spectral-windows-test.exe user32.lib gdi32.lib /link /MANIFEST:EMBED",
+@@ -190,6 +191,8 @@ jobs:
+         shell: pwsh
+         timeout-minutes: 4
+         run: |
++          & .deps/recorder-streams-test.exe
++          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+           & .deps/spectral-visualizer-test.exe
+           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+           & .deps/spectral-benchmark.exe .deps/spectral-benchmark.json
+diff --git a/docs/M5_STALL_REFINEMENT.md b/docs/M5_STALL_REFINEMENT.md
+new file mode 100644
+index 0000000..c536745
+--- /dev/null
++++ b/docs/M5_STALL_REFINEMENT.md
+@@ -0,0 +1,38 @@
++# M5 stall refinement
++
++The interrupted run was recovered at a7d6044. Windows packaging/render validation
++passed in run 37689428777; the six-job M5 confirmation 37689421812 did not pass.
++All its reports are retained, not relabeled as successes. The paired waveform UI
++p95-overhead gate failed (9.2543 ms > 5 ms). One linear and one CQT trial dropped
++8320 and 5120 visualization samples respectively. These are visual-only losses;
++the harness byte-checked the complete captured PCM before the drop assertion.
++
++## Production changes for the next confirmation
++
++- Detach the recorder command input stream from implicit stdout flushing, before
++  starting threads. The command reader previously used cin.get() with the default
++  stdout tie. Each extraction can flush the other thread's output. Keep existing
++  explicit protocol flushes and C/C++ stdio synchronization, with exact-byte and
++  flush-ownership regression tests. This is a measured candidate optimization,
++  not yet a claim that every prior UI wall-time spike has been explained.
++- Increase spectral scheduling headroom from 8192 to 32768 frames (0.512 to 2.048 s).
++  Keep analysis capped at 8192 samples per update, under 2 MiB analyzer storage,
++  no extra capture-thread allocation/wait, no visual drain at Stop, and bounded
++  visual-only dropping beyond the limit. Test a deterministic 1.5-second drain
++  stall, exact recovered history, overflow gaps and the existing concurrency path.
++
++## Measurement, unchanged acceptance thresholds
++
++Retain the revision-2 ten adjacent AB/BA pairs per preview condition and all its
++latency, UI, CPU, memory and zero-drop gates. Do not relax thresholds or rerun
++until a favorable sample appears. Add native paint/preview-IPC/analysis/level-output
++stage distributions and queue high water for attribution. Preserve full native
++metrics even for failed trials. Compare the unchanged frozen M1 recorder and
++candidate using the same instrumented shell; only the candidate uses the new
++production input initialization. Final worker/model/parameters remain unchanged.
++
++The next automated confirmation must be reviewed before a candidate is delivered.
++No additional manual benchmark or intermediate VSIX is requested.
++
++Primary C++ stream reference: Microsoft Learn, basic_istream::sentry (calls the
++tied stream's flush before formatted/unformatted extraction) and basic_ios::tie.
++
+diff --git a/docs/OVERLAY_VISUALIZATIONS.md b/docs/OVERLAY_VISUALIZATIONS.md
+index 186803a..acf22d1 100644
+--- a/docs/OVERLAY_VISUALIZATIONS.md
++++ b/docs/OVERLAY_VISUALIZATIONS.md
+@@ -44,12 +44,13 @@ renderer inside the same waveform viewport. Status-bar processing is untouched.
+ The existing admitted capture path still writes the original PCM to the WAV,
+ preview buffer, waveform history and raw peak meter. Only the optional visualizer
+ receives an additional bounded copy. `PcmQueue` is single-producer/single-consumer,
+-8192 frames, with acquire/release slot ownership. It performs no allocation, wait,
++32768 frames (2.048 s of scheduling headroom), with acquire/release slot ownership. It performs no allocation, wait,
+ transform or rendering on the capture callback. One consumer batch is copied out
+ before analysis, releasing queue slots promptly.
+ 
+-The overlay thread processes at most one queue-sized batch per existing 50 ms
+-update. The queue may drop a complete visual-only callback chunk when full; this
++The overlay thread processes at most 8192 samples per existing 50 ms update.
++Catch-up work is not enlarged with the queue, and Stop does not drain visual-only
++work before final transcription. The queue may drop a complete visual-only callback chunk when full; this
+ cannot remove WAV/preview samples. Sequence positions reveal drops. Filter context
+ is reset and missing history columns are blank, rather than faking continuity.
+ Constructor allocation failure falls back to Waveform. Failed overlay creation
+diff --git a/native/record-audio.cpp b/native/record-audio.cpp
+index 5d27a0d..c63bef4 100644
+--- a/native/record-audio.cpp
++++ b/native/record-audio.cpp
+@@ -46,6 +46,7 @@
+ #include "overlay-buttons.h"
+ #include "waveform-history.h"
+ #include "spectral-render-win32.h"
++#include "recorder-streams.h"
+ #include <memory>
+ 
+ #include <algorithm>
+@@ -1185,6 +1186,7 @@ bool hasFlag(int argc, char** argv, std::string_view flag) {
+ }  // namespace
+ 
+ int main(int argc, char** argv) {
++    universal_dictate::configureRecorderCommandInput(std::cin);
+     const std::string outputPath = parseOutputPath(argc, argv);
+     if (outputPath.empty()) {
+         std::cerr << "ERROR missing --output path\n";
+diff --git a/native/recorder-streams.h b/native/recorder-streams.h
+new file mode 100644
+index 0000000..c3b61c7
+--- /dev/null
++++ b/native/recorder-streams.h
+@@ -0,0 +1,12 @@
++/* Recorder command input has no implicit output ownership. SPDX-License-Identifier: MIT */
++#pragma once
++#include <istream>
++
++namespace universal_dictate {
++// Call once before the command reader starts. Each protocol response is flushed
++// explicitly by the main/UI thread. cin.get() must not flush that other thread's
++// output for every incoming command byte. Keep C/C++ stdio synchronization enabled.
++inline void configureRecorderCommandInput(std::istream& input) noexcept {
++    input.tie(nullptr);
++}
++} // namespace universal_dictate
+diff --git a/native/spectral-visualizer.h b/native/spectral-visualizer.h
+index aad00f9..7a0ed30 100644
+--- a/native/spectral-visualizer.h
++++ b/native/spectral-visualizer.h
+@@ -24,7 +24,11 @@ constexpr std::size_t kMaxBands = 96;
+ constexpr std::size_t kCqtBands = 84;
+ constexpr std::size_t kCircularBands = 48;
+ constexpr std::size_t kMaxHistoryColumns = 1250; // Twenty seconds at 62.5 columns/s.
+-constexpr std::size_t kPcmQueueCapacity = 8192;
++// Absorb bounded scheduling/preview-IPC stalls without putting work on capture.
++// Processing remains capped at the original 8192 samples per UI update, so a
++// larger queue cannot create a long catch-up computation on Stop or each paint.
++constexpr std::size_t kPcmQueueCapacity = 32768; // 2.048 s; visual-only, never WAV storage.
++constexpr std::size_t kPcmUpdateFrames = 8192;
+ constexpr double kMinFrequency = 62.5;
+ constexpr double kNyquist = kSampleRate / 2.0;
+ constexpr double kPi = std::numbers::pi_v<double>;
+@@ -66,6 +70,9 @@ public:
+         }
+         for (std::size_t i = 0; i < count; ++i)
+             slots_[(write + i) % kPcmQueueCapacity] = PcmFrame{position + i, samples[i]};
++        const auto pending = static_cast<std::size_t>(write + count - read);
++        if (pending > highWater_.load(std::memory_order_relaxed))
++            highWater_.store(pending, std::memory_order_relaxed); // Single producer.
+         write_.store(write + count, std::memory_order_release);
+         received_.store(nextPosition_, std::memory_order_release);
+     }
+@@ -81,10 +88,12 @@ public:
+ 
+     std::uint64_t receivedFrames() const noexcept { return received_.load(std::memory_order_acquire); }
+     std::uint64_t droppedFrames() const noexcept { return dropped_.load(std::memory_order_relaxed); }
++    std::size_t highWaterFrames() const noexcept { return highWater_.load(std::memory_order_relaxed); }
+ private:
+     static_assert(std::atomic<std::uint64_t>::is_always_lock_free);
+     std::array<PcmFrame, kPcmQueueCapacity> slots_{};
+     std::atomic<std::uint64_t> write_{0}, read_{0}, received_{0}, dropped_{0};
++    std::atomic<std::size_t> highWater_{0};
+     std::uint64_t nextPosition_ = 0; // Producer only; paused callbacks never call push.
+ };
+ 
+@@ -176,7 +185,8 @@ inline std::vector<CqtKernel> makeCqtKernels() {
+ // Owned by the recorder, constructed only for an enabled spectral overlay.
+ // push() is the entire callback-side path. update(), history and pixel access
+ // belong solely to the overlay thread. Every update consumes at most one fixed
+-// queue-sized batch; a slow UI can drop visual frames, never accumulate a backlog.
++// 8192-frame batch. Scheduling headroom is bounded at 2.048 seconds; exceeding
++// that bound drops only visualization copies, never audio or an unbounded queue.
+ class SpectralVisualizer {
+ public:
+     explicit SpectralVisualizer(Mode mode, int milliseconds = 10000)
+@@ -218,6 +228,7 @@ public:
+     std::uint64_t revision() const noexcept { return written_; }
+     std::uint64_t receivedFrames() const noexcept { return queue_.receivedFrames(); }
+     std::uint64_t droppedFrames() const noexcept { return queue_.droppedFrames(); }
++    std::size_t queueHighWaterFrames() const noexcept { return queue_.highWaterFrames(); }
+     std::span<const float> lastPower() const noexcept { return {power_.data(), bands_}; }
+     const Levels& latest() const noexcept { return latest_; }
+     std::span<std::uint32_t> pixels() noexcept { return pixels_; } // Overlay thread only.
+@@ -323,7 +334,7 @@ private:
+     const std::size_t columns_, bands_;
+     std::atomic<bool> enabled_{true};
+     PcmQueue queue_;
+-    std::array<PcmFrame, kPcmQueueCapacity> scratch_{};
++    std::array<PcmFrame, kPcmUpdateFrames> scratch_{};
+     std::array<Levels, kMaxHistoryColumns> history_{};
+     std::array<float, kMaxBands> power_{};
+     Levels latest_{};
+diff --git a/test/native/overlay-replay.cpp b/test/native/overlay-replay.cpp
+index 7c2d0b6..f1d67d8 100644
+--- a/test/native/overlay-replay.cpp
++++ b/test/native/overlay-replay.cpp
+@@ -71,6 +71,9 @@ void previewUpdate(universal_dictate::preview::Bridge* preview, CaptureState& ca
+ }
+ }
+ int main(int argc,char** argv) {
++#ifndef UD_REPLAY_BASELINE
++    universal_dictate::configureRecorderCommandInput(std::cin);
++#endif
+     if (!hasFlag(argc,argv,"--allow-disposable-desktop")) {
+         std::cerr<<"Replay requires explicit disposable desktop permission\n"; return 2;
+     }
+@@ -107,8 +110,11 @@ int main(int argc,char** argv) {
+             if (!opened) throw std::runtime_error("replay overlay failed");
+         }
+         std::vector<double> callbacks,uiTicks,producerLateness;
++        std::vector<double> paintTicks,previewTicks,analysisTicks,levelTicks;
+         callbacks.reserve(fixture.size()/160+1); producerLateness.reserve(callbacks.capacity());
+         uiTicks.reserve(2600);
++        paintTicks.reserve(2600); previewTicks.reserve(2600);
++        analysisTicks.reserve(2600); levelTicks.reserve(2600);
+         std::atomic<RecorderCommand> command{RecorderCommand::Record};
+         std::atomic<bool> finished{false};
+         universal_dictate::RecordingPause pause(capture.gate);
+@@ -147,11 +153,15 @@ int main(int argc,char** argv) {
+         while(command.load(std::memory_order_acquire)==RecorderCommand::Record && Clock::now()-begin<std::chrono::seconds(180)) {
+             const auto tick=Clock::now();
+             if(visible) pumpOverlayMessages();
++            const auto afterPaint=Clock::now(); paintTicks.push_back(ms(afterPaint-tick));
+             applyPauseAcknowledgement(pause.poll(),preview.get(),visible);
+             previewUpdate(preview.get(),capture,visible);
++            const auto afterPreview=Clock::now(); previewTicks.push_back(ms(afterPreview-afterPaint));
+             const int level=capture.peakMilli.exchange(0,std::memory_order_relaxed);
+             if(visible && !capture.gate.isBlocked()) updateOverlayLevel(level,&capture);
++            const auto afterAnalysis=Clock::now(); analysisTicks.push_back(ms(afterAnalysis-afterPreview));
+             if(level!=previousLevel) { std::printf("LEVEL %.3f\n",level/1000.0); std::fflush(stdout); previousLevel=level; }
++            levelTicks.push_back(ms(Clock::now()-afterAnalysis));
+             uiTicks.push_back(ms(Clock::now()-tick)); // Includes previous WM_PAINT and current analysis/IPC; excludes sleep.
+             if(!notified && finished.load(std::memory_order_acquire)) { notified=true;std::cout<<"REPLAY_END\n"<<std::flush; }
+             std::this_thread::sleep_for(kLevelInterval);
+@@ -169,6 +179,12 @@ int main(int argc,char** argv) {
+ #else
+             visualizer?visualizer->droppedFrames():0;
+         const auto storage=visualizer?visualizer->storageBytes():0;
++#endif
++        const auto queueHighWater=
++#ifdef UD_REPLAY_BASELINE
++            std::size_t{0};
++#else
++            visualizer?visualizer->queueHighWaterFrames():0;
+ #endif
+         destroyOverlay(); encoder.close();
+         const auto gdiAfter=GetGuiResources(GetCurrentProcess(),GR_GDIOBJECTS);
+@@ -179,7 +195,12 @@ int main(int argc,char** argv) {
+            <<",\"peakWorkingSetBytes\":"<<activeMemory.PeakWorkingSetSize<<",\"privateCommitBytes\":"<<activeMemory.PrivateUsage
+            <<",\"gdiActive\":"<<gdiActive<<",\"gdiAfterClose\":"<<gdiAfter<<",\"visualDroppedFrames\":"<<dropped<<",\"analyzerStorageBytes\":"<<storage
+            <<",\"callback\":"; distribution(out,callbacks);out<<",\"uiTick\":";distribution(out,uiTicks);
+-        out<<",\"producerLateness\":";distribution(out,producerLateness);out<<"}\n";out.close();
++        out<<",\"producerLateness\":";distribution(out,producerLateness);
++        out<<",\"paint\":";distribution(out,paintTicks);
++        out<<",\"previewIpc\":";distribution(out,previewTicks);
++        out<<",\"analysis\":";distribution(out,analysisTicks);
++        out<<",\"levelOutput\":";distribution(out,levelTicks);
++        out<<",\"visualQueueHighWaterFrames\":"<<queueHighWater<<"}\n";out.close();
+         if(!out) throw std::runtime_error("metrics write failed");
+         if(command.load()==RecorderCommand::Cancel) {removeFile(output);std::cout<<"CANCELLED\n";}
+         else std::cout<<"STOPPED "<<output<<'\n';
+diff --git a/test/native/recorder-streams-test.cpp b/test/native/recorder-streams-test.cpp
+new file mode 100644
+index 0000000..2c99eb3
+--- /dev/null
++++ b/test/native/recorder-streams-test.cpp
+@@ -0,0 +1,32 @@
++/* Deterministic flush-ownership regression; no microphone or pipe. */
++#include "../../native/recorder-streams.h"
++#include <sstream>
++#include <iostream>
++#include <stdexcept>
++
++struct FlushCounter : std::stringbuf {
++    unsigned flushes = 0;
++    int sync() override { ++flushes; return 0; }
++};
++int main() {
++    try {
++        FlushCounter sink;
++        std::ostream output(&sink);
++        std::istringstream input("TEXT session 1 616263\nSTOP\n");
++        input.tie(&output);
++        char c = 0;
++        input.get(c); // Prove that this test's stream normally flushes its tie.
++        if (sink.flushes == 0) throw std::runtime_error("control did not exercise tied input");
++        const auto before = sink.flushes;
++        universal_dictate::configureRecorderCommandInput(input);
++        std::string tail;
++        while (input.get(c)) tail += c;
++        if (input.tie() || sink.flushes != before || tail != "EXT session 1 616263\nSTOP\n")
++            throw std::runtime_error("command read flushed output or changed bytes");
++        output << "READY\n" << std::flush;
++        if (sink.flushes != before + 1 || sink.str() != "READY\n")
++            throw std::runtime_error("explicit output flush changed");
++        std::cout << "Recorder input: no per-byte output flush; exact commands and explicit responses preserved\n";
++        return 0;
++    } catch (const std::exception& e) { std::cerr << e.what() << '\n'; return 1; }
++}
+diff --git a/test/native/spectral-visualizer-test.cpp b/test/native/spectral-visualizer-test.cpp
+index 8dbe7c9..56ccf68 100644
+--- a/test/native/spectral-visualizer-test.cpp
++++ b/test/native/spectral-visualizer-test.cpp
+@@ -196,12 +196,14 @@ void testImmutableHistoryAndPause() {
+ }
+ 
+ void testQueueAndOverflow() {
+-    auto visualizer = std::make_unique<vis::SpectralVisualizer>(Mode::LinearFrequencyPowerSpectrogram, 1000);
++    auto visualizer = std::make_unique<vis::SpectralVisualizer>(Mode::LinearFrequencyPowerSpectrogram, 10000);
+     const auto audio = tone(500, 0.15, vis::kPcmQueueCapacity);
+     const auto copy = audio;
+     visualizer->push(audio.data(), audio.size()); visualizer->push(audio.data(), audio.size());
+     check(visualizer->droppedFrames() == audio.size(), "full queue drops only visualization copy");
+-    visualizer->update(); visualizer->push(audio.data(), audio.size()); visualizer->update();
++    while (visualizer->update()) {}
++    visualizer->push(audio.data(), audio.size());
++    while (visualizer->update()) {}
+     check(visualizer->revision() == 3 * audio.size() / vis::kHopFrames, "overflow retains active-audio time gaps");
+     check(visualizer->latest()[6] > 0, "analyzer recovers after overflow");
+     check(audio == copy, "caller PCM remains untouched");
+@@ -239,6 +241,29 @@ void testQueueAndOverflow() {
+     check(readCount + queue->droppedFrames() == queue->receivedFrames(), "concurrent queue accounts for every frame");
+ }
+ 
++void testBoundedSchedulingStall() {
++    const auto audio = tone(1000, .15, 24000); // 1.5 s without a UI drain.
++    for (const auto mode : modes) {
++        auto delayed = std::make_unique<vis::SpectralVisualizer>(mode, 20000);
++        auto reference = std::make_unique<vis::SpectralVisualizer>(mode, 20000);
++        feed(*reference, audio);
++        for (std::size_t start = 0; start < audio.size(); start += 160)
++            delayed->push(audio.data() + start, 160);
++        check(delayed->queueHighWaterFrames() == audio.size(), "queue reports the full scheduling burst");
++        check(delayed->droppedFrames() == 0, "bounded scheduling stall loses no visualization samples");
++        std::size_t consumed = 0, calls = 0;
++        for (;;) {
++            const auto count = delayed->update();
++            check(count <= vis::kPcmUpdateFrames, "catch-up is capped at the original per-update work");
++            if (!count) break;
++            consumed += count; ++calls;
++        }
++        check(consumed == audio.size() && calls == 3, "three bounded updates drain the burst");
++        check(history(*delayed) == history(*reference), "delayed history is identical to regularly drained PCM");
++        check(delayed->storageBytes() < 2 * 1024 * 1024, "20-second analyzer including queue remains under 2 MiB");
++    }
++}
++
+ void testGeometry() {
+     using namespace universal_dictate;
+     vis::Levels spectrum{}; spectrum.fill(255);
+@@ -264,7 +289,7 @@ void testGeometry() {
+ int main() {
+     try {
+         testModeAndScale(); testFourier(); testConstantQ(); testStreamAndMapping();
+-        testImmutableHistoryAndPause(); testQueueAndOverflow(); testGeometry();
++        testImmutableHistoryAndPause(); testQueueAndOverflow(); testBoundedSchedulingStall(); testGeometry();
+         std::cout << "spectral-visualizer: " << assertions << " checks passed\n";
+         return 0;
+     } catch (const std::exception& error) {
+diff --git a/test/visualizations/paired-performance.cjs b/test/visualizations/paired-performance.cjs
+index 3026a79..f5da247 100644
+--- a/test/visualizations/paired-performance.cjs
++++ b/test/visualizations/paired-performance.cjs
+@@ -90,7 +90,7 @@ async function main() {
+       console.log(JSON.stringify({ style, policy: config.policy, preview: config.preview, repeat: config.repeat,
+         seconds: row.seconds, totalMs: row.stopToStubMs }));
+     } catch (error) {
+-      result.failures.push({ config, error: error.message });
++      result.failures.push({ config, error: error.message, native: error.native, stages: error.stages });
+       console.log(JSON.stringify({ failed: config, error: error.message }));
+     }
+     fs.writeFileSync(output, JSON.stringify(result, null, 2));
+diff --git a/test/visualizations/performance.cjs b/test/visualizations/performance.cjs
+index 2d735f9..7d32e2d 100644
+--- a/test/visualizations/performance.cjs
++++ b/test/visualizations/performance.cjs
+@@ -165,6 +165,12 @@ async function runCase(runtime, workerEvents, config, paths, root, sequence) {
+     if (style === 'waveform' || style === 'off') assert.equal(native.analyzerStorageBytes, 0);
+     return { ...config, language, seconds, previewPendingAtStop, finalTextSha256: textHash,
+       pcmSha256: hash(expected), previewDecodeMs: previewTimes, ...deltas(events), native };
++  } catch (error) {
++    if (fs.existsSync(metrics)) {
++      try { error.native = JSON.parse(fs.readFileSync(metrics)); } catch { /* Preserve original failure. */ }
++    }
++    error.stages = events.map(event => ({ stage: event.stage, atMs: event.atMs }));
++    throw error;
+   } finally {
+     childProcess.spawn = originalSpawn;
+     engine?.dispose();
