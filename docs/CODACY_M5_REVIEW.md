@@ -6,7 +6,13 @@ PR #56, based on draft PR #55 / `perf/stop-insert-latency`.
 This record reviews the **eight added findings at `410094fb898e15170cd985ff1f7c060900b1873c`**
 and the corresponding source. It does not convert the analyzer check into a
 successful check, erase the earlier M1 review, or resolve the separate
-[preview-cache investigation](M5_PREVIEW_CACHE.md).
+[preview-cache investigation](M5_CACHE_REVIEW.md).
+
+**Post-review analyzer result:** on `980877b095cbba7c5bd2b5f85794ef4a87332fd1`,
+Codacy check `113316719146` remains **`action_required` with five additions**.
+The three test-maintenance additions are no longer reported. The four deliberate
+assertions and AGENTS settings requirement remain reported and are individually
+justified below; none is suppressed or relabeled as an automatic pass.
 
 ## Evidence and scope
 
@@ -110,7 +116,22 @@ Windows compilation of the renderer test and both replay variants, the existing
 renderer/callback checks, appropriate internal replay verification, and a fresh
 analyzer report. Keep this distinction explicit when recording those later runs.
 
-Five deliberate source constraints/assertions remain documented even if their
-automatic findings persist. The three cleanup findings have source changes ready
-for validation. No current or future successful CI collector run substitutes for
-reading the resulting analyzer status.
+The current-head collector run
+[37778683136](https://github.com/gcalpay/vscode-universal-dictate/actions/runs/37778683136),
+artifact `11551142499`, produced a complete analyzed report for `980877b`.
+Its five `Added` entries are exactly issues 1–4 and 8 in the table. Issues 5–7
+are absent after the cleanup. The report also contains three `Fixed` entries
+for older base-branch AGENTS findings; that separate counter must not be
+attributed to these three cleanup additions.
+
+Both replay variants compiled and ran in all six jobs of M5 run `37778677667`;
+all 224 observations and 88 gates passed. The renderer-test extraction separately
+exposed a C2664 type error in Windows package run `37779796057`: the helper used
+Win32 `RECT` while the actual layout returns `universal_dictate::OverlayRect`.
+The helper signature is corrected to that existing layout type, preserving the
+comparison body. Keep the failed run; final Windows compilation and renderer
+execution are required before delivery and recorded with the delivered audit.
+
+Five deliberate source constraints/assertions remain documented and reported.
+The analyzer is not green, and a successful evidence-collector job is not an
+analyzer pass. No rule, severity or regression assertion was weakened.

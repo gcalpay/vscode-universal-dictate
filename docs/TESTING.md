@@ -1,8 +1,9 @@
 # Internal validation and integrated acceptance
 
 Current scope is the unpublished 1.2.0 Windows integrated candidate. M0 user
-measurements and M1–M4 implementations are complete. M5 confirmation passed;
-[review closeout](M5_REVIEW_CLOSEOUT.md) and [M6 acceptance/freeze](M6_INTEGRATED_CANDIDATE.md)
+measurements and M1–M4 implementations are complete. M5 confirmations and
+[source review](M5_REVIEW_CLOSEOUT.md) are complete, with the original cache cause
+unknown. Final package validation and [M6 acceptance/freeze](M6_INTEGRATED_CANDIDATE.md)
 remain distinct gates. A compile/mock result is not a real Windows interaction
 test, and a Windows runner is not the user's microphone/VS Code/WSL environment.
 
@@ -71,10 +72,26 @@ saved preferences and effective workspace overrides must not be reset for tests.
 
 ## Completed M5 evidence and interpretation
 
-Run `37765259320` at `410094f` completed **224 observations and 88 passing aggregate
+Original run `37765259320` at `410094f` and post-review run `37778677667` at
+`980877b` each independently completed **224 observations and 88 passing aggregate
 gates** under [revision 2](M5_CONFIRMATION_PROTOCOL.md). Use the raw reports and
 [M5 closeout ledger](M5_REVIEW_CLOSEOUT.md), not only green job summaries. Keep
-historical failures, protocol changes and the separate Codacy/cache review visible.
+their source identities/results separate, with historical failures and the protocol
+revision visible.
+
+The post-review run also completed 60 predetermined cache matrices across six jobs:
+7,320 case pairs, 36,660 exact pixel comparisons and 6,000 reset cycles, without a
+reproduced mismatch. Source/oracle review and these probes support a disclosed
+residual risk in the integrated candidate; the original cause is still unknown.
+All eight original Codacy additions were reviewed. Three cleanup additions are
+absent from the new analyzer report; five intentional assertions/requirements
+remain and the check is `action_required`.
+
+Package failures `37778683095` and `37779796057` are retained separately. The latter
+exposed an introduced test-helper RECT/OverlayRect signature mismatch, corrected
+in the final source batch. The consolidated Windows renderer/package gate and
+payload audit must pass before delivery; exact final source/checksum/results are
+recorded in PR #56 and the delivered audit. M5 success is not package success.
 
 Five style jobs compare Preview Off/On against frozen M1 Waveform; the sixth checks
 no overlay against M1 no overlay. Each effective preview condition has ten complete

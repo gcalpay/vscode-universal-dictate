@@ -28,13 +28,17 @@
 
 ### Validation and release status
 
-- M5 confirmation run `37765259320` completed 224 observations and passed all
-  88 revision-2 aggregate gates. These are paired Windows-runner results with
-  synthetic audio and stub insertion, not measured user-PC latency.
+- Original M5 run `37765259320` and independent post-review run `37778677667`
+  each completed 224 observations and passed all 88 revision-2 aggregate gates.
+  These are paired Windows-runner results with synthetic audio and stub insertion,
+  not measured user-PC latency.
 - Preserve the earlier failed comparisons and the explicit UI-aggregation revision.
-  The [M5 closeout record](docs/M5_REVIEW_CLOSEOUT.md) tracks the eight Codacy
-  additions and the earlier unreproduced preview-cache pixel mismatch separately;
-  green performance jobs do not establish their resolution.
+  The [M5 closeout record](docs/M5_REVIEW_CLOSEOUT.md) individually reviews all eight
+  original Codacy additions. Three maintainability additions are absent from the
+  new report; five intentional assertions/requirements remain `action_required`.
+- Fixed cache probes passed 36,660 exact pixel comparisons across six Windows
+  jobs. The earlier mismatch's cause remains unknown and is disclosed as a reviewed
+  residual risk for integrated acceptance; no production-cache fix is claimed.
 - 1.2.0 remains unpublished. One integrated normal-use acceptance and exact accepted
   source/artifact freeze precede the separately safeguarded M7 history work and
   M8 final build/publication. Issue #38 remains unresolved.

@@ -8,8 +8,9 @@ including with a Remote - WSL workspace. It does not depend on Codex/Copilot
 private UI or require a WSL-side microphone, inference runtime or Python install.
 
 M1 final-inference isolation and all five overlay styles are implemented. M5
-confirmation passed; analyzer/cache review and normal-use integrated acceptance
-have separate records in [M5_REVIEW_CLOSEOUT.md](M5_REVIEW_CLOSEOUT.md) and
+confirmations passed; individual analyzer dispositions and the cache mismatch's
+reviewed unknown-cause residual risk are recorded separately from final package
+validation and normal-use integrated acceptance in [M5_REVIEW_CLOSEOUT.md](M5_REVIEW_CLOSEOUT.md) and
 [M6_INTEGRATED_CANDIDATE.md](M6_INTEGRATED_CANDIDATE.md). Historical M1–M7 document
 numbers describe earlier work and do not define the current release status.
 
@@ -137,8 +138,10 @@ leaves little height. Text changes and Pause/Resume do not resize the window.
 Preview text uses a raster cache keyed by text, viewport dimensions, font height
 and line limit. Unchanged text is copied with BitBlt; text/size/font changes rebuild
 the raster with the existing shaping/clipping/color-font/antialiasing operations.
-Reset releases resources in order. The earlier exact-RGB oracle failure and its
-review are recorded separately; later green tests are not a root-cause explanation.
+Reset releases resources in order. The original exact-RGB oracle failure remains
+unexplained after source review and 36,660 passing fixed-probe comparisons. It is
+a disclosed residual risk for integrated acceptance, not a production-cache fix
+or a claim that recurrence is impossible.
 
 ## Insertion, clipboard and recovery
 

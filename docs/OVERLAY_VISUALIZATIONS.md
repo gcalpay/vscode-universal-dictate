@@ -113,8 +113,9 @@ renderer for all five styles, three sizes, four DPIs and both preview states.
 Synthetic images are test evidence, not approved user screenshots.
 
 CI retains M1 worker/cancellation/preview/clipboard regressions and the source/
-package audit. M5 confirmation `37765259320` completed 224 observations and passed
-all 88 revision-2 aggregate gates, with exact admitted PCM and no visual drops.
+package audit. Original M5 `37765259320` and post-review M5 `37778677667` each
+completed 224 observations and passed all 88 revision-2 aggregate gates, with
+exact admitted PCM and no visual drops. Their source identities remain distinct.
 The English synthetic replay uses real recorder/render/Whisper components but
 stub insertion; it is not a physical microphone or target-app latency test.
 
@@ -124,8 +125,13 @@ production-renderer outputs driven by synthetic fixtures, not user screenshots o
 accepted aesthetics. The small circular view in compact preview layouts remains
 visible in review evidence and is subject to normal-use acceptance.
 
-The earlier preview-cache RGB mismatch and eight current Codacy additions have a
-separate [review record](M5_REVIEW_CLOSEOUT.md); passing performance and later
-pixel tests alone do not resolve them. [M6](M6_INTEGRATED_CANDIDATE.md) delivers one
-integrated candidate after review. No micro-step VSIX or repeated user benchmark/
-screenshot exercise is required.
+All eight original Codacy additions have individual dispositions in the
+[review record](M5_REVIEW_CLOSEOUT.md). Three maintainability additions are absent
+from the new report; four regression assertions and the approved settings invariant
+remain, with actual status `action_required`. The earlier preview-cache RGB cause
+is unknown after source review and 36,660 passing exact pixel comparisons on a
+fixed six-runner schedule. This is a disclosed residual risk for integrated review,
+not a production fix. [M6](M6_INTEGRATED_CANDIDATE.md) requires final consolidated
+Windows renderer/package validation and audit before delivery; the exact final
+source/artifact record is maintained with PR #56 and the delivered audit. No
+micro-step VSIX or repeated user benchmark/screenshot exercise is required.

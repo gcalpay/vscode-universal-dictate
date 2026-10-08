@@ -6,30 +6,46 @@ Current roadmap: M0 baseline → M1 final-inference isolation → M2 settings/ro
 M3 FFT styles → M4 CQT/circular → M5 integrated performance → **M6 acceptance and
 freeze** → M7 curated history → M8 final build and publication.
 
-## Current gate status
+## Gate record at source closeout
 
-M0–M4 are implemented and M5 confirmation `37765259320` completed 224 observations
-with 88 passing aggregate gates. The [M5 review ledger](M5_REVIEW_CLOSEOUT.md)
-retains earlier failures and the eight Codacy/cache-mismatch dispositions.
-A packaged 1.2.0 artifact already exists, but artifact creation is not integrated
-acceptance, a GitHub release or Marketplace publication.
+M0–M4 are implemented. Original M5 run `37765259320` at `410094f` and the independent
+post-review run `37778677667` at `980877b` each completed 224 observations with
+88 passing aggregate gates. The [M5 review ledger](M5_REVIEW_CLOSEOUT.md) keeps
+their identities/results separate and retains all earlier failures.
 
-| Gate | Status / required evidence |
+All eight original Codacy findings have individual source-review dispositions.
+The new report contains five deliberate assertions/requirements and remains
+`action_required`; the three maintainability additions are absent. The original
+cache-mismatch cause remains unknown. Fixed probes completed 36,660 exact pixel
+comparisons across six Windows jobs without reproducing it; this is a disclosed,
+reviewed residual risk suitable for integrated acceptance, not a production fix.
+
+**The authoritative delivery record is [PR #56](https://github.com/gcalpay/vscode-universal-dictate/pull/56)
+and the audit/checksum record supplied with the integrated VSIX.** That record
+identifies the actual final source commit/tree, build checkout, final check results
+and package bytes after they exist. Source documentation does not invent those
+identities or require a post-build edit to describe its own commit. Artifact
+creation remains separate from user acceptance, GitHub release and Marketplace
+publication.
+
+| Gate | Source-closeout evidence / delivery requirement |
 | --- | --- |
-| Starting source, base and main | Verified at the SHAs in the M5 ledger; recheck before remote writes |
-| M5 confirmation and existing Windows package audit | Complete on `410094f` / tree `bee76fa…` |
-| Eight Codacy additions | Source review complete: five intentional assertions/requirements retained, three test-maintainability cleanups; fresh Windows/analyzer checks pending; recorded analyzer status `action_required` |
-| Earlier unreproduced RGB mismatch | Source/oracle/failure-log review complete; cause unknown; bounded Windows probes and final residual-risk disposition pending |
-| Current docs, defaults and honest renderer presentation | Consolidated closeout prepared; package validation pending |
-| Integrated artifact selection / final checksum | Pending consolidated source/package audit; do not invent a new build identity |
-| User normal-use acceptance | Not yet received |
-| Accepted source/artifact freeze | Not yet established |
-| M7 history and M8 release | Not started; separate safeguards and authorization required |
+| Source and base identities | Original/review/build-input SHAs and trees in the M5 ledger; recheck live refs before writes |
+| M5 confirmation | Both recorded runs pass independently; post-review run `37778677667` has 224 observations and 88 passing gates |
+| Eight original Codacy findings | Individually reviewed; three cleanup additions absent in check `113316719146`, five deliberate assertions/requirements remain, actual status `action_required` |
+| Earlier RGB mismatch | Source/oracle review and 60 fixed matrices complete; 36,660 exact comparisons pass; unknown cause retained as disclosed residual risk |
+| Documentation and renderer presentation | Consolidated seven-setting/five-style docs and actual production-renderer examples prepared |
+| Reproducible build inputs | Exact resolved lock, compiler-provenance repair and SDL2 license saved in `0956650`; final build records actual tools/source |
+| Test-helper correction | Introduced RECT/OverlayRect mismatch corrected in the final source batch; renderer/package execution is required before delivery |
+| Integrated VSIX | Deliver only after successful consolidated Windows renderer/package validation and payload audit; exact identity/results belong in PR #56 and the delivered record |
+| Normal-use acceptance and freeze | User acceptance has not been received; record it with the accepted source/artifact before M7 |
+| M7 history / M8 release | Not started; separate safeguards and authorization required |
 
 ## M6.1 — prepare and preserve one coherent checkpoint
 
-Reconcile README, changelog, settings, architecture/dependencies/testing and active
-navigation. There are seven independent settings and five exact style labels.
+README, changelog, architecture/dependencies/testing and active navigation are
+reconciled in the source closeout. There are seven independent settings and five
+exact style labels.
 Keep English / Enhanced overlay / Waveform / Medium / 10 seconds / clipboard Off /
 preview Off defaults, explicit preferences, next-recording snapshots, the accepted
 waveform, Pause/Resume, local model/runtime and OpenWhispr/third-party attribution.
@@ -39,11 +55,12 @@ are not additional published releases or required installs. Version 1.2.0 alone
 does not identify the candidate when multiple unpublished builds share that version.
 The historical GitHub tags/releases and live Marketplace state are separate records.
 
-Use actual production-renderer images and identify synthetic inputs. The current
-seven-setting table is authoritative; do not present the old six-entry menu as the
-current UI or fabricate a VS Code screenshot. Show Small/Medium/Large and preview
-geometry honestly, including compact circular mode. No waveform retuning or silent
-overlay resizing is part of this documentation work.
+The prepared examples use actual production-renderer images and identify synthetic
+inputs. The current seven-setting table is authoritative; the old six-entry menu
+is excluded from active presentation. Small/Medium/Large and preview geometry are
+shown honestly, including compact circular mode. No waveform retuning or overlay
+resizing was made. Production source fingerprints are unchanged; generated binary
+equivalence is checked separately in the final package audit.
 
 For test/doc-only changes, verify affected tests and unchanged production
 fingerprints. Runtime/render changes require the corresponding Windows and
@@ -52,12 +69,20 @@ Record a coherent source/evidence checkpoint after the bounded review batch.
 
 ## M6.2 — audit and deliver the integrated candidate
 
-Reuse the existing audited runtime only when the reviewed source/package mapping
-remains appropriate. README, changelog and media are packaged payloads too: a
-metadata-only repack must have a new checksum and explicitly retained native/
-JavaScript payload identity. Do not label the old synthetic-merge build as compiled
-from a new source commit. If production changes, build from the consolidated source
-and complete the affected automated gates internally before delivery.
+Build the consolidated candidate with its committed dependency lock and corrected
+test-helper signature. The original audited VSIX remains a provenance baseline;
+it is not relabeled as a build of newer docs/media/source. README, changelog, media
+and notices are packaged payloads too. Record the new archive checksum and compare
+actual native/JavaScript/runtime payloads with the retained baseline. If production
+changes, complete the affected automated gates before delivery.
+
+Package attempts `37778683095` (compiler-provenance command) and `37779796057`
+(introduced test-helper type mismatch) remain failed attempts, with their corrections
+and exact boundaries in the M5 ledger. A passing M5 run does not override those
+package failures. The final consolidated Windows renderer/package run must pass,
+and its artifact must be independently audited before the single candidate is
+provided. Record the outcome in PR #56 and the delivered audit; do not add another
+source commit solely to insert a checksum or change a build-status sentence.
 
 The final delivery record must contain:
 

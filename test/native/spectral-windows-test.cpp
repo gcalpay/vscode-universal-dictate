@@ -122,7 +122,7 @@ void captureCase(vis::Mode mode, bool previewEnabled, const std::filesystem::pat
     std::filesystem::remove(filename); // No fixture audio in the renderer artifact or VSIX.
 }
 
-void verifyVisualizationViewport(const SpectralCanvas& canvas, const RECT& viewport) {
+void verifyVisualizationViewport(const SpectralCanvas& canvas, const universal_dictate::OverlayRect& viewport) {
     const auto pixels = canvas.snapshot(); bool painted=false;
     for (int y=0;y<canvas.height;++y) for (int x=0;x<canvas.width;++x) {
         const auto pixel = pixels[static_cast<std::size_t>(y)*canvas.width+x] & 0x00ffffffU;

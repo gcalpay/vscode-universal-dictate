@@ -3,10 +3,10 @@
 Review baseline: feature commit `410094fb898e15170cd985ff1f7c060900b1873c`,
 tree `bee76fa88913183d6089c1d2ced1c7b0350f505a`.
 
-**Status:** the earlier RGB mismatch has no established root cause. This batch
-changes test diagnostics and adds bounded probes; it does not change the
-production cache or declare that logging fixed it. Windows probe results and the
-integrated-candidate disposition must be recorded below before this gate closes.
+**Status:** reviewed residual risk, suitable for disclosure with the integrated
+candidate. The earlier RGB mismatch has no established root cause. The bounded
+Windows probes below passed; production cache code remains unchanged. This is
+not a claim that logging fixed a defect or that integrated acceptance occurred.
 
 ## Original failed evidence
 
@@ -125,14 +125,36 @@ oracle edit, fixture exclusion or production performance-budget change.
 
 ## Windows results and delivery disposition
 
-**Pending the consolidated Windows run.** Record its source identity, run/job
-IDs, actual matrix/comparison counts, failures and evidence artifact here.
+Run [37778677667](https://github.com/gcalpay/vscode-universal-dictate/actions/runs/37778677667)
+completed successfully at `2026-10-08T12:55:03Z`, on source
+`980877b095cbba7c5bd2b5f85794ef4a87332fd1`, tree
+`fd00c28c6e0e7f8298b3f4e0a2c44b225e28b483`. All six artifact ZIPs were checked
+against GitHub's SHA-256 digests and their recorded probe outputs were read.
 
-No production cache correction is currently warranted by a reproduced defect.
-If the bounded probes reproduce a pixel mismatch, candidate delivery remains
-blocked pending inspection of the saved arrays and a concrete disposition.
-If they pass, the proposed disposition is a reviewed residual risk that may be
-carried into one integrated normal-use candidate, with the unknown original
-cause disclosed. That is not a resolved-defect claim or integrated acceptance.
-Any subsequent source change to the production renderer requires the affected
-pixel/layout and integrated performance gates before delivery.
+| Runner | Job | Artifact |
+|---|---:|---:|
+| Waveform | 113315948295 | 11552070043 |
+| Log frequency | 113315948529 | 11550914343 |
+| Linear frequency | 113315948460 | 11551494669 |
+| Constant-Q | 113315948951 | 11551414771 |
+| Circular | 113315948608 | 11551364151 |
+| Off | 113315948666 | 11550713750 |
+
+Every runner recorded 10 matrices, zero failed matrices, 1,220 completed case
+pairs and 6,110 exact comparisons, including its 1,000 reset cycles. Across six
+runners that is **60 matrices, 7,320 case pairs, 36,660 exact pixel comparisons
+and 6,000 reset cycles**. The same run's 224 performance observations and 88
+aggregate gates were independently recomputed successfully, with exact PCM and
+zero visual drops. The source and frozen oracle hashes above remain unchanged.
+
+No mismatch or GDI-flush error reproduced under the predefined conditions.
+That result supports proceeding to one normal-use integrated candidate, while
+explicitly carrying the original unexplained failure as a residual risk. It
+does not establish the cause, guarantee cold font caches, or prove the absence
+of an intermittent defect outside these conditions. No production correction,
+assertion tolerance, skipped case or analyzer suppression was introduced.
+
+Future failures retain their exact compared arrays and fail the check. A new
+reproduction requires inspection and a concrete disposition before delivery;
+any production-renderer change requires the affected pixel/layout/performance
+gates. User acceptance and M7/M8 authorization remain separate.

@@ -1,6 +1,6 @@
 # Overlay integration — current M5 closeout and M6 preparation
 
-Verified continuation baseline: `feat/overlay-visualizations` at
+Verified recovery baseline: `feat/overlay-visualizations` at
 `410094fb898e15170cd985ff1f7c060900b1873c`, tree
 `bee76fa88913183d6089c1d2ced1c7b0350f505a`, 8 October 2026.
 Draft PR #56 is stacked on draft PR #55 / `perf/stop-insert-latency` at
@@ -9,10 +9,21 @@ Draft PR #56 is stacked on draft PR #55 / `perf/stop-insert-latency` at
 
 ## Current state and navigation
 
-M0/M1 and all five visualization implementations are saved. M5 run
+M0/M1 and all five visualization implementations are saved. Original M5 run
 [37765259320](https://github.com/gcalpay/vscode-universal-dictate/actions/runs/37765259320)
-completed successfully: **224 observations and 88 passing aggregate gates**.
-Resume review closeout and integrated-candidate preparation; do not restart M0–M4.
+and post-review run
+[37778677667](https://github.com/gcalpay/vscode-universal-dictate/actions/runs/37778677667)
+each completed **224 observations and 88 passing aggregate gates**. The latter
+identifies review commit `980877b095cbba7c5bd2b5f85794ef4a87332fd1`, tree
+`fd00c28c6e0e7f8298b3f4e0a2c44b225e28b483`. Keep both source/run identities distinct.
+
+M5 source review is complete: three maintainability findings were addressed, five
+intentional assertions/requirements remain in Codacy, and the unknown original
+cache-mismatch cause is a disclosed residual risk after the fixed Windows probes.
+The build-input checkpoint is `0956650795519d7275985cc5a65cd126cf458f88`, tree
+`84794fcf086a1ab4fe9796c885b93aa8ed400680`. Deliver one integrated candidate only
+after the consolidated Windows renderer/package gate and audit; do not restart
+M0–M4. Exact final source/checksum/results belong in PR #56 and the delivered audit.
 
 | Area | Current record |
 | --- | --- |
@@ -70,11 +81,13 @@ Audio is synthetic English; insertion is a no-op stub. Within-job paired deltas
 are the comparison, not absolute times across jobs with different allocated CPUs.
 The result is not an actual microphone/VS Code/Codex/WSL latency measurement.
 
-Windows package run
+The original Windows package run
 [37765265222](https://github.com/gcalpay/vscode-universal-dictate/actions/runs/37765265222)
-also passed native/render/preview/package checks. Its synthetic PR checkout tree
-matches the feature tree; this does not mean either PR was merged. See the
-closeout record for exact artifact hashes and unresolved review status.
+passed native/render/preview/package checks at the recovery baseline. Its synthetic
+PR checkout tree matches that original feature tree; neither PR was merged. Later
+package attempts `37778683095` and `37779796057` failed in build-provenance/test
+code respectively and remain failed evidence. The final consolidated package must
+pass independently; the M5 successes do not override a package failure.
 
 ## Historical protocol and failure retention
 
@@ -85,6 +98,8 @@ explicitly changed UI aggregation to median per-run p95 ≤25 ms and median pair
 p95 overhead ≤5 ms before subsequent confirmation data; it retained raw maxima.
 
 Earlier failed runs, including `37689421812` and `37762121955`, remain failures.
-The first cache-validation RGB mismatch at `37764925817` also remains a distinct
-review item. Latest green jobs do not establish its cause or clear Codacy.
+The first cache-validation RGB mismatch at `37764925817` remains unexplained.
+The completed bounded probes did not reproduce it; source review permits a
+disclosed residual risk in the integrated candidate, not a resolved-defect claim.
+Codacy remains `action_required` for five explicitly retained findings.
 See the individual records in [M5_REVIEW_CLOSEOUT.md](M5_REVIEW_CLOSEOUT.md).

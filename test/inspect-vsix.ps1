@@ -153,7 +153,7 @@ try {
         Assert-Valid ($actual -eq (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()) "packaged runtime library differs: $($file.Name)"
         $hashes[$entryName] = $actual
     }
-    foreach ($relative in @('LICENSE', 'THIRD_PARTY_NOTICES.md', 'third_party/whisper.cpp-LICENSE.txt', 'third_party/OpenWhispr-LICENSE.txt', 'third_party/OpenAI-Whisper-LICENSE.txt', 'third_party/miniaudio-NOTICE.txt', 'third_party/miniaudio-LICENSE.txt')) {
+    foreach ($relative in @('LICENSE', 'THIRD_PARTY_NOTICES.md', 'third_party/whisper.cpp-LICENSE.txt', 'third_party/SDL2-LICENSE.txt', 'third_party/OpenWhispr-LICENSE.txt', 'third_party/OpenAI-Whisper-LICENSE.txt', 'third_party/miniaudio-NOTICE.txt', 'third_party/miniaudio-LICENSE.txt')) {
         $entryName = if ($relative -eq 'LICENSE') { 'extension/LICENSE.txt' } else { "extension/$relative" }
         $actual = Get-EntryHash $entryName
         Assert-Valid ($actual -eq (Get-FileHash -LiteralPath (Join-Path $root $relative) -Algorithm SHA256).Hash.ToLowerInvariant()) "packaged license/notice differs: $relative"

@@ -103,7 +103,9 @@ C++ toolchain on `windows-latest`, so a source/version label alone does not free
 the full compiler environment. Do not silently upgrade dependencies while claiming
 runtime equivalence.
 
-The M6 build-input checkpoint now tracks the generated `package-lock.json` with canonical LF line endings
+M6 build-input commit `0956650795519d7275985cc5a65cd126cf458f88`, tree
+`84794fcf086a1ab4fe9796c885b93aa8ed400680`, tracks the generated
+`package-lock.json` with canonical LF line endings
 from Windows run `37778683095`, artifact `11550647643`. Its SHA-256 is
 `45cb23ed750ce092a31006597849aaa97aff133772290fc2504ae78d7296f35d` for the original
 Windows artifact. The committed LF form has SHA-256
@@ -119,8 +121,11 @@ CI and Windows package builds now use `npm ci`; the existing M5 installer also
 consumes the committed lock. No dependency range, runtime pin or model changed.
 The consolidated package workflow retains the npm tree/lock, Node/npm/PowerShell
 versions, actual compiler executable version/path, fetched miniaudio checksum and
-source/tree identity. A successful locked Windows build and final artifact
-identity remain required in [M6_INTEGRATED_CANDIDATE.md](M6_INTEGRATED_CANDIDATE.md).
+source/tree identity. A successful locked Windows renderer/package build and audit
+are required before delivery. Their actual final source/artifact identity and
+results are recorded with [PR #56](https://github.com/gcalpay/vscode-universal-dictate/pull/56)
+and the delivered audit/checksum record, following
+[M6_INTEGRATED_CANDIDATE.md](M6_INTEGRATED_CANDIDATE.md).
 
 The pre-existing runtime archive also contains SDL2 `2.28.5`. Its DLL version
 resource and whisper.cpp's pinned release workflow agree. The matching upstream
