@@ -24,7 +24,7 @@ jobs:
           package-manager-cache: false
 
       - name: Install extension dependencies
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
 
       - name: Record resolved build dependencies
         id: build_identity
@@ -90,8 +90,7 @@ jobs:
           # the production binary must carry its own common-controls dependency.
           $commands = @(
             "call `"$vcvars`"",
-            'set VCToolsVersion > .deps/build-identity/msvc-version.txt',
-            'where cl >> .deps/build-identity/msvc-version.txt',
+            'where cl > .deps/build-identity/msvc-path.txt',
             "if not exist resources\bin mkdir resources\bin",
             "cl /nologo /utf-8 /O2 /std:c++20 /EHsc native\windows-text-input.cpp /Fe:resources\bin\windows-text-input.exe user32.lib",
             "cl /nologo /utf-8 /O2 /std:c++20 /EHsc /I .deps\miniaudio native\record-audio.cpp native\miniaudio-impl.cpp /Fe:resources\bin\universal-dictate-recorder.exe user32.lib gdi32.lib /link /MANIFEST:EMBED",
@@ -118,6 +117,9 @@ jobs:
           if ($LASTEXITCODE -ne 0) {
             exit $LASTEXITCODE
           }
+
+          $compilerPath = Get-Content .deps/build-identity/msvc-path.txt | Select-Object -First 1
+          (Get-Item -LiteralPath $compilerPath).VersionInfo | Select-Object FileVersion, ProductVersion, OriginalFilename | ConvertTo-Json | Set-Content .deps/build-identity/msvc-version.json
 
           # Check the actual embedded resource, not a build-directory sidecar.
           # The later VSIX audit requires byte-identical packaged/native helpers.

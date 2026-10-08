@@ -103,13 +103,29 @@ C++ toolchain on `windows-latest`, so a source/version label alone does not free
 the full compiler environment. Do not silently upgrade dependencies while claiming
 runtime equivalence.
 
-**M6 closeout in progress:** the consolidated package workflow records the resolved
-npm dependency tree and generated lock, Node/npm/PowerShell versions, MSVC version/
-path, fetched miniaudio checksum and actual source/tree identity. The release plan
-is to retain the reviewed generated lock and use `npm ci` before the accepted
-freeze, without upgrading the resolved dependency set. A tracked lock and final
-resolved versions remain pending until that evidence and change are verified.
-See [M6_INTEGRATED_CANDIDATE.md](M6_INTEGRATED_CANDIDATE.md) for the final ledger.
+The M6 build-input checkpoint now tracks the generated `package-lock.json` with canonical LF line endings
+from Windows run `37778683095`, artifact `11550647643`. Its SHA-256 is
+`45cb23ed750ce092a31006597849aaa97aff133772290fc2504ae78d7296f35d` for the original
+Windows artifact. The committed LF form has SHA-256
+`61d824e3a106a0974534f0fd667685c213cc9226d69f3b08dbea2ae2228a89d5`; parsed dependency content is identical.
+That dependency installation succeeded; the later compiler-provenance command
+failed before native compilation. The failure is retained and the command is
+corrected, rather than represented as a successful package build.
+
+The captured environment used Node `24.21.0`, npm `11.19.0`, TypeScript `5.9.3`,
+`@types/node` `22.20.5`, `@types/vscode` `1.140.0` and `@vscode/vsce` `3.9.3-5`.
+The lock records the full resolved dependency graph and integrity values. Normal
+CI and Windows package builds now use `npm ci`; the existing M5 installer also
+consumes the committed lock. No dependency range, runtime pin or model changed.
+The consolidated package workflow retains the npm tree/lock, Node/npm/PowerShell
+versions, actual compiler executable version/path, fetched miniaudio checksum and
+source/tree identity. A successful locked Windows build and final artifact
+identity remain required in [M6_INTEGRATED_CANDIDATE.md](M6_INTEGRATED_CANDIDATE.md).
+
+The pre-existing runtime archive also contains SDL2 `2.28.5`. Its DLL version
+resource and whisper.cpp's pinned release workflow agree. The matching upstream
+zlib license is now retained at `third_party/SDL2-LICENSE.txt`; the DLL itself is
+unchanged. See [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md) for its source.
 
 The package audit must connect source to the exact compiled JavaScript, native
 helpers, runtime DLLs, README/changelog/media and notices in the VSIX. No development
