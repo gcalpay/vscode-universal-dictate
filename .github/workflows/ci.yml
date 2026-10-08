@@ -48,6 +48,12 @@ jobs:
       - name: M0 stop-to-insert timing instrumentation
         run: node --unhandled-rejections=strict --test test/latency-instrumentation.test.cjs test/whisper-worker.test.cjs
 
+      - name: Recorder command stream flush ownership
+        run: |
+          mkdir -p .deps
+          g++ -std=c++20 -O2 -Wall -Wextra -Werror -pedantic test/native/recorder-streams-test.cpp -o .deps/recorder-streams-test
+          .deps/recorder-streams-test
+
       - name: Concurrent capture pause gate
         run: |
           mkdir -p .deps

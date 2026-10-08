@@ -165,6 +165,12 @@ async function runCase(runtime, workerEvents, config, paths, root, sequence) {
     if (style === 'waveform' || style === 'off') assert.equal(native.analyzerStorageBytes, 0);
     return { ...config, language, seconds, previewPendingAtStop, finalTextSha256: textHash,
       pcmSha256: hash(expected), previewDecodeMs: previewTimes, ...deltas(events), native };
+  } catch (error) {
+    if (fs.existsSync(metrics)) {
+      try { error.native = JSON.parse(fs.readFileSync(metrics)); } catch { /* Preserve original failure. */ }
+    }
+    error.stages = events.map(event => ({ stage: event.stage, atMs: event.atMs }));
+    throw error;
   } finally {
     childProcess.spawn = originalSpawn;
     engine?.dispose();

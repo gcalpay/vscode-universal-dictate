@@ -46,6 +46,7 @@
 #include "overlay-buttons.h"
 #include "waveform-history.h"
 #include "spectral-render-win32.h"
+#include "recorder-streams.h"
 #include <memory>
 
 #include <algorithm>
@@ -1185,6 +1186,7 @@ bool hasFlag(int argc, char** argv, std::string_view flag) {
 }  // namespace
 
 int main(int argc, char** argv) {
+    universal_dictate::configureRecorderCommandInput(std::cin);
     const std::string outputPath = parseOutputPath(argc, argv);
     if (outputPath.empty()) {
         std::cerr << "ERROR missing --output path\n";

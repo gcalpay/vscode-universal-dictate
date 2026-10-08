@@ -196,12 +196,14 @@ void testImmutableHistoryAndPause() {
 }
 
 void testQueueAndOverflow() {
-    auto visualizer = std::make_unique<vis::SpectralVisualizer>(Mode::LinearFrequencyPowerSpectrogram, 1000);
+    auto visualizer = std::make_unique<vis::SpectralVisualizer>(Mode::LinearFrequencyPowerSpectrogram, 10000);
     const auto audio = tone(500, 0.15, vis::kPcmQueueCapacity);
     const auto copy = audio;
     visualizer->push(audio.data(), audio.size()); visualizer->push(audio.data(), audio.size());
     check(visualizer->droppedFrames() == audio.size(), "full queue drops only visualization copy");
-    visualizer->update(); visualizer->push(audio.data(), audio.size()); visualizer->update();
+    while (visualizer->update()) {}
+    visualizer->push(audio.data(), audio.size());
+    while (visualizer->update()) {}
     check(visualizer->revision() == 3 * audio.size() / vis::kHopFrames, "overflow retains active-audio time gaps");
     check(visualizer->latest()[6] > 0, "analyzer recovers after overflow");
     check(audio == copy, "caller PCM remains untouched");
@@ -239,6 +241,29 @@ void testQueueAndOverflow() {
     check(readCount + queue->droppedFrames() == queue->receivedFrames(), "concurrent queue accounts for every frame");
 }
 
+void testBoundedSchedulingStall() {
+    const auto audio = tone(1000, .15, 24000); // 1.5 s without a UI drain.
+    for (const auto mode : modes) {
+        auto delayed = std::make_unique<vis::SpectralVisualizer>(mode, 20000);
+        auto reference = std::make_unique<vis::SpectralVisualizer>(mode, 20000);
+        feed(*reference, audio);
+        for (std::size_t start = 0; start < audio.size(); start += 160)
+            delayed->push(audio.data() + start, 160);
+        check(delayed->queueHighWaterFrames() == audio.size(), "queue reports the full scheduling burst");
+        check(delayed->droppedFrames() == 0, "bounded scheduling stall loses no visualization samples");
+        std::size_t consumed = 0, calls = 0;
+        for (;;) {
+            const auto count = delayed->update();
+            check(count <= vis::kPcmUpdateFrames, "catch-up is capped at the original per-update work");
+            if (!count) break;
+            consumed += count; ++calls;
+        }
+        check(consumed == audio.size() && calls == 3, "three bounded updates drain the burst");
+        check(history(*delayed) == history(*reference), "delayed history is identical to regularly drained PCM");
+        check(delayed->storageBytes() < 2 * 1024 * 1024, "20-second analyzer including queue remains under 2 MiB");
+    }
+}
+
 void testGeometry() {
     using namespace universal_dictate;
     vis::Levels spectrum{}; spectrum.fill(255);
@@ -264,7 +289,7 @@ void testGeometry() {
 int main() {
     try {
         testModeAndScale(); testFourier(); testConstantQ(); testStreamAndMapping();
-        testImmutableHistoryAndPause(); testQueueAndOverflow(); testGeometry();
+        testImmutableHistoryAndPause(); testQueueAndOverflow(); testBoundedSchedulingStall(); testGeometry();
         std::cout << "spectral-visualizer: " << assertions << " checks passed\n";
         return 0;
     } catch (const std::exception& error) {

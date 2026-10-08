@@ -44,12 +44,13 @@ renderer inside the same waveform viewport. Status-bar processing is untouched.
 The existing admitted capture path still writes the original PCM to the WAV,
 preview buffer, waveform history and raw peak meter. Only the optional visualizer
 receives an additional bounded copy. `PcmQueue` is single-producer/single-consumer,
-8192 frames, with acquire/release slot ownership. It performs no allocation, wait,
+32768 frames (2.048 s of scheduling headroom), with acquire/release slot ownership. It performs no allocation, wait,
 transform or rendering on the capture callback. One consumer batch is copied out
 before analysis, releasing queue slots promptly.
 
-The overlay thread processes at most one queue-sized batch per existing 50 ms
-update. The queue may drop a complete visual-only callback chunk when full; this
+The overlay thread processes at most 8192 samples per existing 50 ms update.
+Catch-up work is not enlarged with the queue, and Stop does not drain visual-only
+work before final transcription. The queue may drop a complete visual-only callback chunk when full; this
 cannot remove WAV/preview samples. Sequence positions reveal drops. Filter context
 is reset and missing history columns are blank, rather than faking continuity.
 Constructor allocation failure falls back to Waveform. Failed overlay creation

@@ -71,6 +71,9 @@ void previewUpdate(universal_dictate::preview::Bridge* preview, CaptureState& ca
 }
 }
 int main(int argc,char** argv) {
+#ifndef UD_REPLAY_BASELINE
+    universal_dictate::configureRecorderCommandInput(std::cin);
+#endif
     if (!hasFlag(argc,argv,"--allow-disposable-desktop")) {
         std::cerr<<"Replay requires explicit disposable desktop permission\n"; return 2;
     }
@@ -107,8 +110,11 @@ int main(int argc,char** argv) {
             if (!opened) throw std::runtime_error("replay overlay failed");
         }
         std::vector<double> callbacks,uiTicks,producerLateness;
+        std::vector<double> paintTicks,previewTicks,analysisTicks,levelTicks;
         callbacks.reserve(fixture.size()/160+1); producerLateness.reserve(callbacks.capacity());
         uiTicks.reserve(2600);
+        paintTicks.reserve(2600); previewTicks.reserve(2600);
+        analysisTicks.reserve(2600); levelTicks.reserve(2600);
         std::atomic<RecorderCommand> command{RecorderCommand::Record};
         std::atomic<bool> finished{false};
         universal_dictate::RecordingPause pause(capture.gate);
@@ -147,11 +153,15 @@ int main(int argc,char** argv) {
         while(command.load(std::memory_order_acquire)==RecorderCommand::Record && Clock::now()-begin<std::chrono::seconds(180)) {
             const auto tick=Clock::now();
             if(visible) pumpOverlayMessages();
+            const auto afterPaint=Clock::now(); paintTicks.push_back(ms(afterPaint-tick));
             applyPauseAcknowledgement(pause.poll(),preview.get(),visible);
             previewUpdate(preview.get(),capture,visible);
+            const auto afterPreview=Clock::now(); previewTicks.push_back(ms(afterPreview-afterPaint));
             const int level=capture.peakMilli.exchange(0,std::memory_order_relaxed);
             if(visible && !capture.gate.isBlocked()) updateOverlayLevel(level,&capture);
+            const auto afterAnalysis=Clock::now(); analysisTicks.push_back(ms(afterAnalysis-afterPreview));
             if(level!=previousLevel) { std::printf("LEVEL %.3f\n",level/1000.0); std::fflush(stdout); previousLevel=level; }
+            levelTicks.push_back(ms(Clock::now()-afterAnalysis));
             uiTicks.push_back(ms(Clock::now()-tick)); // Includes previous WM_PAINT and current analysis/IPC; excludes sleep.
             if(!notified && finished.load(std::memory_order_acquire)) { notified=true;std::cout<<"REPLAY_END\n"<<std::flush; }
             std::this_thread::sleep_for(kLevelInterval);
@@ -170,6 +180,12 @@ int main(int argc,char** argv) {
             visualizer?visualizer->droppedFrames():0;
         const auto storage=visualizer?visualizer->storageBytes():0;
 #endif
+        const auto queueHighWater=
+#ifdef UD_REPLAY_BASELINE
+            std::size_t{0};
+#else
+            visualizer?visualizer->queueHighWaterFrames():0;
+#endif
         destroyOverlay(); encoder.close();
         const auto gdiAfter=GetGuiResources(GetCurrentProcess(),GR_GDIOBJECTS);
         std::ofstream out(reportPath);
@@ -179,7 +195,12 @@ int main(int argc,char** argv) {
            <<",\"peakWorkingSetBytes\":"<<activeMemory.PeakWorkingSetSize<<",\"privateCommitBytes\":"<<activeMemory.PrivateUsage
            <<",\"gdiActive\":"<<gdiActive<<",\"gdiAfterClose\":"<<gdiAfter<<",\"visualDroppedFrames\":"<<dropped<<",\"analyzerStorageBytes\":"<<storage
            <<",\"callback\":"; distribution(out,callbacks);out<<",\"uiTick\":";distribution(out,uiTicks);
-        out<<",\"producerLateness\":";distribution(out,producerLateness);out<<"}\n";out.close();
+        out<<",\"producerLateness\":";distribution(out,producerLateness);
+        out<<",\"paint\":";distribution(out,paintTicks);
+        out<<",\"previewIpc\":";distribution(out,previewTicks);
+        out<<",\"analysis\":";distribution(out,analysisTicks);
+        out<<",\"levelOutput\":";distribution(out,levelTicks);
+        out<<",\"visualQueueHighWaterFrames\":"<<queueHighWater<<"}\n";out.close();
         if(!out) throw std::runtime_error("metrics write failed");
         if(command.load()==RecorderCommand::Cancel) {removeFile(output);std::cout<<"CANCELLED\n";}
         else std::cout<<"STOPPED "<<output<<'\n';

@@ -90,7 +90,7 @@ async function main() {
       console.log(JSON.stringify({ style, policy: config.policy, preview: config.preview, repeat: config.repeat,
         seconds: row.seconds, totalMs: row.stopToStubMs }));
     } catch (error) {
-      result.failures.push({ config, error: error.message });
+      result.failures.push({ config, error: error.message, native: error.native, stages: error.stages });
       console.log(JSON.stringify({ failed: config, error: error.message }));
     }
     fs.writeFileSync(output, JSON.stringify(result, null, 2));

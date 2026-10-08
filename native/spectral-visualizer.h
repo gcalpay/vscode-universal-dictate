@@ -24,7 +24,11 @@ constexpr std::size_t kMaxBands = 96;
 constexpr std::size_t kCqtBands = 84;
 constexpr std::size_t kCircularBands = 48;
 constexpr std::size_t kMaxHistoryColumns = 1250; // Twenty seconds at 62.5 columns/s.
-constexpr std::size_t kPcmQueueCapacity = 8192;
+// Absorb bounded scheduling/preview-IPC stalls without putting work on capture.
+// Processing remains capped at the original 8192 samples per UI update, so a
+// larger queue cannot create a long catch-up computation on Stop or each paint.
+constexpr std::size_t kPcmQueueCapacity = 32768; // 2.048 s; visual-only, never WAV storage.
+constexpr std::size_t kPcmUpdateFrames = 8192;
 constexpr double kMinFrequency = 62.5;
 constexpr double kNyquist = kSampleRate / 2.0;
 constexpr double kPi = std::numbers::pi_v<double>;
@@ -66,6 +70,9 @@ public:
         }
         for (std::size_t i = 0; i < count; ++i)
             slots_[(write + i) % kPcmQueueCapacity] = PcmFrame{position + i, samples[i]};
+        const auto pending = static_cast<std::size_t>(write + count - read);
+        if (pending > highWater_.load(std::memory_order_relaxed))
+            highWater_.store(pending, std::memory_order_relaxed); // Single producer.
         write_.store(write + count, std::memory_order_release);
         received_.store(nextPosition_, std::memory_order_release);
     }
@@ -81,10 +88,12 @@ public:
 
     std::uint64_t receivedFrames() const noexcept { return received_.load(std::memory_order_acquire); }
     std::uint64_t droppedFrames() const noexcept { return dropped_.load(std::memory_order_relaxed); }
+    std::size_t highWaterFrames() const noexcept { return highWater_.load(std::memory_order_relaxed); }
 private:
     static_assert(std::atomic<std::uint64_t>::is_always_lock_free);
     std::array<PcmFrame, kPcmQueueCapacity> slots_{};
     std::atomic<std::uint64_t> write_{0}, read_{0}, received_{0}, dropped_{0};
+    std::atomic<std::size_t> highWater_{0};
     std::uint64_t nextPosition_ = 0; // Producer only; paused callbacks never call push.
 };
 
@@ -176,7 +185,8 @@ inline std::vector<CqtKernel> makeCqtKernels() {
 // Owned by the recorder, constructed only for an enabled spectral overlay.
 // push() is the entire callback-side path. update(), history and pixel access
 // belong solely to the overlay thread. Every update consumes at most one fixed
-// queue-sized batch; a slow UI can drop visual frames, never accumulate a backlog.
+// 8192-frame batch. Scheduling headroom is bounded at 2.048 seconds; exceeding
+// that bound drops only visualization copies, never audio or an unbounded queue.
 class SpectralVisualizer {
 public:
     explicit SpectralVisualizer(Mode mode, int milliseconds = 10000)
@@ -218,6 +228,7 @@ public:
     std::uint64_t revision() const noexcept { return written_; }
     std::uint64_t receivedFrames() const noexcept { return queue_.receivedFrames(); }
     std::uint64_t droppedFrames() const noexcept { return queue_.droppedFrames(); }
+    std::size_t queueHighWaterFrames() const noexcept { return queue_.highWaterFrames(); }
     std::span<const float> lastPower() const noexcept { return {power_.data(), bands_}; }
     const Levels& latest() const noexcept { return latest_; }
     std::span<std::uint32_t> pixels() noexcept { return pixels_; } // Overlay thread only.
@@ -323,7 +334,7 @@ private:
     const std::size_t columns_, bands_;
     std::atomic<bool> enabled_{true};
     PcmQueue queue_;
-    std::array<PcmFrame, kPcmQueueCapacity> scratch_{};
+    std::array<PcmFrame, kPcmUpdateFrames> scratch_{};
     std::array<Levels, kMaxHistoryColumns> history_{};
     std::array<float, kMaxBands> power_{};
     Levels latest_{};
