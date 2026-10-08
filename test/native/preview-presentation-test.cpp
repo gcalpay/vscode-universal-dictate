@@ -188,11 +188,24 @@ void renderWaveformLevels(const std::filesystem::path& output, OverlaySize size,
     g_overlay.previewText = L"A short preview.";
     int previousHeight = 0;
     for (double peak : {0.004, 0.025, 0.16}) {
+        CaptureState capture{};
         for (int i = 0; i < kEnhancedSignalPoints; ++i)
-            g_overlay.enhancedSignalHistory[i] = universal_dictate::visualPeakSample(
-                static_cast<int>(32767 * peak) * (i % 2 ? 1 : -1));
+            capture.enhancedHistory.publish(universal_dictate::visualPeakSample(
+                static_cast<int>(32767 * peak) * (i % 2 ? 1 : -1)));
+        snapshotEnhancedSignal(capture);  // Production path, including Medium gain.
+        const auto stable = g_overlay.enhancedSignalHistory;
+        snapshotEnhancedSignal(capture);
+        check(g_overlay.enhancedSignalHistory == stable, "display gain accumulated on repaint");
+        const int raw = universal_dictate::visualPeakSample(static_cast<int>(32767 * peak));
+        const int expected = size == OverlaySize::Medium
+            ? universal_dictate::mediumWaveformDisplayLevel(raw) : raw;
+        check(std::abs(stable.back()) == expected, "size-specific waveform snapshot changed");
         drawEnhancedOverlay(canvas.dc, client);
         const int height = waveformInkHeight(canvas, box);
+        if (size == OverlaySize::Medium && peak < 0.005)
+            check(height * 100 >= 30 * (box.bottom - box.top), "quiet Medium waveform is still flattened");
+        if (size == OverlaySize::Medium && peak > 0.02 && peak < 0.03)
+            check(height * 100 >= 65 * (box.bottom - box.top), "normal Medium waveform underuses viewport");
         std::cout << "WAVEFORM size=" << static_cast<int>(size) << " dpi=" << dpi
                   << " preview=" << enabled << " peak=" << peak << " inkHeight=" << height
                   << " previous=" << previousHeight << '\n' << std::flush;
@@ -324,13 +337,15 @@ void renderWaveformCases(const std::filesystem::path& output, OverlaySize size, 
     checkNoMirroredLowerEnvelope(size, dpi);
     checkPreviewTopAlignment(size, dpi);
     // Deterministic low/medium/high energy envelopes, not microphone acceptance.
+    CaptureState envelope{};
     for (int i = 0; i < kEnhancedSignalPoints; ++i) {
         const auto fraction = static_cast<double>(i) / kEnhancedSignalPoints;
         const double peak = fraction < 0.08 ? 0 : fraction < 0.35 ? 0.004 : fraction < 0.67 ? 0.025 : 0.16;
         const double variation = 0.75 + 0.25 * std::sin(i * 0.45);
-        g_overlay.enhancedSignalHistory[i] = universal_dictate::visualPeakSample(
-            static_cast<int>(32767 * peak * variation) * (i % 2 ? 1 : -1));
+        envelope.enhancedHistory.publish(universal_dictate::visualPeakSample(
+            static_cast<int>(32767 * peak * variation) * (i % 2 ? 1 : -1)));
     }
+    snapshotEnhancedSignal(envelope);
     for (bool enabled : {false, true}) {
         const auto layout = configurePresentation(size, dpi, enabled);
         Canvas canvas(layout.width, layout.height);

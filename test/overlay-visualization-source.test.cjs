@@ -15,6 +15,14 @@ test('accepted 1.1.0 waveform paint function remains byte-identical after render
   assert.match(between(source,'void drawEnhancedVisualization(', 'void drawEnhancedOverlay('), /if \(!g_overlay\.visualizer\)[\s\S]*drawEnhancedWaveform\(dc\)/);
 });
 
+test('Medium gain is display-only, outside the accepted capture/paint functions', () => {
+  const snapshot = between(source, 'void snapshotEnhancedSignal(', 'void updateOverlayLevel(');
+  assert.match(snapshot, /overlaySize == OverlaySize::Medium/);
+  assert.match(snapshot, /mediumWaveformDisplayLevel\(point\)/);
+  assert.match(snapshot, /enhancedHistory\.snapshot\(next\)/);
+  assert.doesNotMatch(between(source, 'void captureCallback(', 'class CaptureDevice'), /mediumWaveformDisplayLevel/);
+});
+
 test('capture callback only enqueues admitted PCM; transforms are not on the audio callback', () => {
   const callback = between(source, 'void captureCallback(', 'class CaptureDevice');
   assert.ok(callback.indexOf('if (!lease) return;') < callback.indexOf('state->visualizer->push'));

@@ -51,5 +51,28 @@ int main() {
         require(bipolar.push(0, 1) == 0);
     }
     require(constantLevel(819, 0) == constantLevel(819, 1));
-    std::cout << "Signed-peak mapping: moderate headroom, slight idle gate, polarity, five spans and no AGC passed\n";
+    // Post-history Medium display only: quiet speech is visible; stronger speech
+    // has additional headroom, sign/silence/ordering stay deterministic.
+    require(mediumWaveformDisplayLevel(0) == 0);
+    require(mediumWaveformDisplayLevel(visualPeakSample(65)) == 0);
+    require(mediumWaveformDisplayLevel(visualPeakSample(66)) < 100);
+    require(mediumWaveformDisplayLevel(-32768) == -1000);
+    require(mediumWaveformDisplayLevel(32767) == 1000);
+    const int quietVisible = mediumWaveformDisplayLevel(visualPeakSample(128));
+    const int normalVisible = mediumWaveformDisplayLevel(visualPeakSample(819));
+    const int loudVisible = mediumWaveformDisplayLevel(visualPeakSample(1475));
+    require(quietVisible >= 400 && quietVisible <= 480);
+    require(normalVisible > quietVisible + 300 && normalVisible < 850);
+    require(loudVisible > normalVisible + 75 && loudVisible < 950);
+    last = 0;
+    for (int value = 0; value <= 1000; ++value) {
+        const int next = mediumWaveformDisplayLevel(value);
+        require(next >= last && next <= 1000);
+        require(mediumWaveformDisplayLevel(-value) == -next);
+        last = next;
+    }
+    // Visual emphasis is stable across time, with no rolling gain or peak decay.
+    require(mediumWaveformDisplayLevel(visualPeakSample(128)) == quietVisible);
+    require(constantLevel(128, 625) == visualPeakSample(128));
+    std::cout << "Signed-peak mapping and fixed Medium-only quiet-speech display gain passed\n";
 }
