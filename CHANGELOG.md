@@ -11,16 +11,33 @@
   Spectrogram and Circular Spectrum. Selection is independent of display location.
 - Bounded visual-only FFT and variable-window constant-Q analysis, outside capture.
 - Session visualization metadata in the accumulated latency report.
+- **Universal Dictate: Show Latency Report** retains up to 100 completed timing
+  records in one in-memory document, with no audio or transcript diagnostics.
 
 ### Changed
 
 - Overlay history reuses the existing saved waveform time-span preference for
   waveform and spectrograms; Circular Spectrum shows the latest spectrum instead.
-- Preserve M1 isolated inference workers and the existing waveform, status bar,
-  Pause/Resume, clipboard and final insertion semantics.
+- Final transcription keeps its dedicated warm Whisper worker. Preview uses a
+  separate lazy worker with at most two inference threads and bounded, confirmed
+  shutdown before final dispatch. Preview Off avoids the second model instance.
+- Preserve the accepted waveform, status bar, Pause/Resume, clipboard Off as no
+  automatic clipboard access, and one final insertion of the full recording.
+- Cache unchanged preview text and increase bounded visual-queue scheduling
+  headroom, while retaining existing capture audio and per-update analysis limits.
 
-This is internal integration work, not a published version. Integrated performance
-validation and one combined user review remain before release.
+### Validation and release status
+
+- M5 confirmation run `37765259320` completed 224 observations and passed all
+  88 revision-2 aggregate gates. These are paired Windows-runner results with
+  synthetic audio and stub insertion, not measured user-PC latency.
+- Preserve the earlier failed comparisons and the explicit UI-aggregation revision.
+  The [M5 closeout record](docs/M5_REVIEW_CLOSEOUT.md) tracks the eight Codacy
+  additions and the earlier unreproduced preview-cache pixel mismatch separately;
+  green performance jobs do not establish their resolution.
+- 1.2.0 remains unpublished. One integrated normal-use acceptance and exact accepted
+  source/artifact freeze precede the separately safeguarded M7 history work and
+  M8 final build/publication. Issue #38 remains unresolved.
 
 ## 1.1.3
 
@@ -33,7 +50,7 @@ validation and one combined user review remain before release.
 
 ## 1.1.2
 
-### Diagnostic build
+### Internal diagnostic build — not published
 
 - Add M0.2 Stop-to-Insert timing diagnostics for local latency investigation.
 - Record whether live-preview Whisper inference is active at Stop, how long it has been active, or how long since the previous preview inference finished.

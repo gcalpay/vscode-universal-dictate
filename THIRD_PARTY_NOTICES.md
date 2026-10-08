@@ -46,7 +46,7 @@ The focused-input Windows paste helper has historical source lineage from OpenWh
 - Project: `OpenWhispr/openwhispr`
 - Upstream revision used by the early Universal Dictate adaptation: `1866ecf6641b9fa4851f19c7838cb18f3662def7`
 - Historical role: Win32 `SendInput` fast-paste logic, including temporary modifier release/restore around the paste shortcut
-- Current implementation: `native/windows-fast-paste.cpp`, substantially rewritten in C++20 and reduced to Universal Dictate's Ctrl+V-only focused-input use case
+- Current implementation: `native/windows-text-input.cpp`, substantially rewritten in C++20 for direct Unicode input into the focused target. Automatic insertion does not use a clipboard/Ctrl+V transport; the separate optional clipboard copy and explicit recovery-copy action retain their own behavior.
 - License: MIT
 - License notice retained at: `third_party/OpenWhispr-LICENSE.txt`
 

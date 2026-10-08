@@ -26,6 +26,19 @@ jobs:
       - name: Install extension dependencies
         run: npm install --no-audit --no-fund
 
+      - name: Record resolved build dependencies
+        id: build_identity
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force .deps/build-identity | Out-Null
+          npm ls --all --json | Set-Content .deps/build-identity/npm-tree.json -Encoding utf8
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Copy-Item package-lock.json .deps/build-identity/package-lock.json
+          node -p "JSON.stringify({node:process.version,versions:process.versions,platform:process.platform,arch:process.arch},null,2)" | Set-Content .deps/build-identity/node.json -Encoding utf8
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm --version | Set-Content .deps/build-identity/npm-version.txt
+          $PSVersionTable.PSVersion.ToString() | Set-Content .deps/build-identity/powershell-version.txt
+
       - name: Type-check
         run: npm run check
 
@@ -77,6 +90,8 @@ jobs:
           # the production binary must carry its own common-controls dependency.
           $commands = @(
             "call `"$vcvars`"",
+            'set VCToolsVersion > .deps/build-identity/msvc-version.txt',
+            'where cl >> .deps/build-identity/msvc-version.txt',
             "if not exist resources\bin mkdir resources\bin",
             "cl /nologo /utf-8 /O2 /std:c++20 /EHsc native\windows-text-input.cpp /Fe:resources\bin\windows-text-input.exe user32.lib",
             "cl /nologo /utf-8 /O2 /std:c++20 /EHsc /I .deps\miniaudio native\record-audio.cpp native\miniaudio-impl.cpp /Fe:resources\bin\universal-dictate-recorder.exe user32.lib gdi32.lib /link /MANIFEST:EMBED",
@@ -335,6 +350,20 @@ jobs:
         shell: pwsh
         run: |
           & ./test/inspect-vsix.ps1 -Path universal-dictate-win32-x64.vsix -ReportPath .deps/vsix-inspection.json
+          if (-not $?) { throw 'Package audit failed' }
+          git rev-parse HEAD | Set-Content .deps/build-identity/source-sha.txt
+          git rev-parse 'HEAD^{tree}' | Set-Content .deps/build-identity/tree-sha.txt
+          Get-FileHash .deps/miniaudio/miniaudio.h -Algorithm SHA256 | Select-Object Hash | ConvertTo-Json | Set-Content .deps/build-identity/miniaudio-sha256.json
+          Get-ChildItem .deps/build-identity -File | Where-Object Name -ne 'SHA256SUMS.txt' | Sort-Object Name | ForEach-Object { "{0}  {1}" -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant(), $_.Name } | Set-Content .deps/build-identity/SHA256SUMS.txt
+
+      - name: Upload resolved build identity
+        if: ${{ always() && steps.build_identity.outcome == 'success' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-build-identity
+          path: .deps/build-identity/
+          if-no-files-found: error
+          retention-days: 90
 
       - name: Upload win32-x64 VSIX
         uses: actions/upload-artifact@v7

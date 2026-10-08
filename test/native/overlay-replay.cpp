@@ -69,6 +69,153 @@ void previewUpdate(universal_dictate::preview::Bridge* preview, CaptureState& ca
         }
     }
 }
+
+struct ReplaySamples {
+    std::vector<double> callbacks,uiTicks,producerLateness;
+    std::vector<double> paintTicks,previewTicks,analysisTicks,levelTicks;
+    explicit ReplaySamples(std::size_t fixtureFrames) {
+        callbacks.reserve(fixtureFrames/160+1); producerLateness.reserve(callbacks.capacity());
+        uiTicks.reserve(2600);
+        paintTicks.reserve(2600); previewTicks.reserve(2600);
+        analysisTicks.reserve(2600); levelTicks.reserve(2600);
+    }
+};
+
+void readReplayCommands(std::atomic<RecorderCommand>& command, universal_dictate::RecordingPause& pause,
+                        universal_dictate::preview::Bridge* preview) {
+    // Same bounded FIFO commands as the production recorder.
+    std::string line; char c=0; bool dropping=false;
+    while (std::cin.get(c)) {
+        if(c!='\n') { if(!dropping && line.size()<8448) line.push_back(c); else {line.clear();dropping=true;} continue; }
+        if(dropping) {dropping=false;line.clear();continue;}
+        if(!line.empty() && line.back()=='\r') line.pop_back();
+        if(line=="STOP" || line=="CANCEL") {
+            command.store(line=="STOP"?RecorderCommand::Stop:RecorderCommand::Cancel,std::memory_order_release); return;
+        }
+        if(!pause.command(line) && preview) { try {preview->command(line);} catch (...) {} }
+        line.clear();
+    }
+    command.store(RecorderCommand::Cancel,std::memory_order_release);
+}
+
+void produceFixture(const std::vector<ma_int16>& fixture, CaptureState& capture,
+                    const std::atomic<RecorderCommand>& command, std::atomic<bool>& finished, ReplaySamples& samples) {
+    ma_device fake{}; fake.pUserData=&capture;
+    const auto origin=Clock::now();
+    for(std::size_t offset=0;offset<fixture.size() && command.load(std::memory_order_acquire)==RecorderCommand::Record;offset+=160) {
+        const auto due=origin+std::chrono::microseconds((offset+160)*1000000ULL/16000);
+        std::this_thread::sleep_until(due);
+        const auto started=Clock::now();
+        const auto count=static_cast<ma_uint32>(std::min<std::size_t>(160,fixture.size()-offset));
+        captureCallback(&fake,nullptr,fixture.data()+offset,count);
+        samples.callbacks.push_back(ms(Clock::now()-started));
+        samples.producerLateness.push_back(std::max(0.0,ms(started-due)));
+    }
+    finished.store(true,std::memory_order_release);
+}
+
+bool collectReplayTicks(bool visible, CaptureState& capture, universal_dictate::preview::Bridge* preview,
+                        universal_dictate::RecordingPause& pause, const std::atomic<RecorderCommand>& command,
+                        const std::atomic<bool>& finished, Clock::time_point begin, ReplaySamples& samples) {
+    bool notified=false; int previousLevel=-1;
+    while(command.load(std::memory_order_acquire)==RecorderCommand::Record && Clock::now()-begin<std::chrono::seconds(180)) {
+        const auto tick=Clock::now();
+        if(visible) pumpOverlayMessages();
+        const auto afterPaint=Clock::now(); samples.paintTicks.push_back(ms(afterPaint-tick));
+        applyPauseAcknowledgement(pause.poll(),preview,visible);
+        previewUpdate(preview,capture,visible);
+        const auto afterPreview=Clock::now(); samples.previewTicks.push_back(ms(afterPreview-afterPaint));
+        const int level=capture.peakMilli.exchange(0,std::memory_order_relaxed);
+        if(visible && !capture.gate.isBlocked()) updateOverlayLevel(level,&capture);
+        const auto afterAnalysis=Clock::now(); samples.analysisTicks.push_back(ms(afterAnalysis-afterPreview));
+        if(level!=previousLevel) { std::printf("LEVEL %.3f\n",level/1000.0); std::fflush(stdout); previousLevel=level; }
+        samples.levelTicks.push_back(ms(Clock::now()-afterAnalysis));
+        samples.uiTicks.push_back(ms(Clock::now()-tick)); // Includes previous WM_PAINT and current analysis/IPC; excludes sleep.
+        if(!notified && finished.load(std::memory_order_acquire)) { notified=true;std::cout<<"REPLAY_END\n"<<std::flush; }
+        std::this_thread::sleep_for(kLevelInterval);
+    }
+    return notified;
+}
+
+struct ReplayResources {
+    double wall,cpu;
+    PROCESS_MEMORY_COUNTERS_EX memoryBefore,activeMemory;
+    DWORD gdiActive,gdiAfter=0;
+    std::uint64_t dropped=0;
+    std::size_t storage=0,queueHighWater=0;
+};
+
+ReplayResources measureReplayResources(Clock::time_point begin, double cpuBegin,
+                                      const PROCESS_MEMORY_COUNTERS_EX& memoryBefore, const CaptureState& capture) {
+    const double wall=ms(Clock::now()-begin),cpu=cpuMs()-cpuBegin;
+    const auto activeMemory=memory();
+    const auto gdiActive=GetGuiResources(GetCurrentProcess(),GR_GDIOBJECTS);
+    ReplayResources result{wall,cpu,memoryBefore,activeMemory,gdiActive};
+#ifndef UD_REPLAY_BASELINE
+    if (capture.visualizer) {
+        result.dropped=capture.visualizer->droppedFrames();
+        result.storage=capture.visualizer->storageBytes();
+        result.queueHighWater=capture.visualizer->queueHighWaterFrames();
+    }
+#else
+    (void)capture;
+#endif
+    return result;
+}
+
+void writeReplayMetrics(const std::string& reportPath, std::size_t fixtureFrames, bool notified,
+                        const ReplayResources& resources, const ReplaySamples& samples) {
+    std::ofstream out(reportPath);
+    out<<"{\"syntheticCapture\":true,\"fixtureFrames\":"<<fixtureFrames<<",\"completedReplay\":"<<(notified?"true":"false")
+       <<",\"recordingWallMs\":"<<resources.wall<<",\"recorderCpuMs\":"<<resources.cpu<<",\"recorderCpuOneCorePercent\":"<<resources.cpu/resources.wall*100
+       <<",\"workingSetBeforeBytes\":"<<resources.memoryBefore.WorkingSetSize<<",\"workingSetActiveBytes\":"<<resources.activeMemory.WorkingSetSize
+       <<",\"peakWorkingSetBytes\":"<<resources.activeMemory.PeakWorkingSetSize<<",\"privateCommitBytes\":"<<resources.activeMemory.PrivateUsage
+       <<",\"gdiActive\":"<<resources.gdiActive<<",\"gdiAfterClose\":"<<resources.gdiAfter<<",\"visualDroppedFrames\":"<<resources.dropped<<",\"analyzerStorageBytes\":"<<resources.storage
+       <<",\"callback\":"; distribution(out,samples.callbacks);out<<",\"uiTick\":";distribution(out,samples.uiTicks);
+    out<<",\"producerLateness\":";distribution(out,samples.producerLateness);
+    out<<",\"paint\":";distribution(out,samples.paintTicks);
+    out<<",\"previewIpc\":";distribution(out,samples.previewTicks);
+    out<<",\"analysis\":";distribution(out,samples.analysisTicks);
+    out<<",\"levelOutput\":";distribution(out,samples.levelTicks);
+    out<<",\"visualQueueHighWaterFrames\":"<<resources.queueHighWater<<"}\n";out.close();
+    if(!out) throw std::runtime_error("metrics write failed");
+}
+
+int replayAndReport(const std::vector<ma_int16>& fixture, const std::string& reportPath, const std::string& output,
+                    bool visible, Encoder& encoder, CaptureState& capture, universal_dictate::preview::Bridge* preview,
+                    const PROCESS_MEMORY_COUNTERS_EX& memoryBefore) {
+    ReplaySamples samples(fixture.size());
+    std::atomic<RecorderCommand> command{RecorderCommand::Record};
+    std::atomic<bool> finished{false};
+    universal_dictate::RecordingPause pause(capture.gate);
+    const auto begin=Clock::now(); const double cpuBegin=cpuMs();
+    std::thread control([&] { readReplayCommands(command,pause,preview); });
+    std::thread producer([&] { produceFixture(fixture,capture,command,finished,samples); });
+    std::cout<<"READY\n"<<std::flush;
+    const bool notified=collectReplayTicks(visible,capture,preview,pause,command,finished,begin,samples);
+    if(command.load()==RecorderCommand::Record) command.store(RecorderCommand::Cancel);
+    producer.join();
+    if(control.joinable()) { CancelSynchronousIo(control.native_handle()); control.join(); }
+    auto resources=measureReplayResources(begin,cpuBegin,memoryBefore,capture);
+    destroyOverlay(); encoder.close();
+    resources.gdiAfter=GetGuiResources(GetCurrentProcess(),GR_GDIOBJECTS);
+    writeReplayMetrics(reportPath,fixture.size(),notified,resources,samples);
+    if(command.load()==RecorderCommand::Cancel) {removeFile(output);std::cout<<"CANCELLED\n";}
+    else std::cout<<"STOPPED "<<output<<'\n';
+    return notified?0:1;
+}
+
+void openReplayOverlay(bool visible, OverlaySize size, bool previewEnabled, CaptureState& capture) {
+    if (!visible) return;
+    enableEnhancedOverlayDpiAwareness();
+#ifdef UD_REPLAY_BASELINE
+    (void)capture;
+    const bool opened=createOverlay(nullptr,true,size,previewEnabled);
+#else
+    const bool opened=createOverlay(nullptr,true,size,previewEnabled,capture.visualizer);
+#endif
+    if (!opened) throw std::runtime_error("replay overlay failed");
+}
 }
 int main(int argc,char** argv) {
 #ifndef UD_REPLAY_BASELINE
@@ -100,111 +247,8 @@ int main(int argc,char** argv) {
         if (visible && mode!=vis::Mode::Waveform) visualizer=std::make_unique<vis::SpectralVisualizer>(mode,span);
         capture.visualizer=visualizer.get();
 #endif
-        if (visible) {
-            enableEnhancedOverlayDpiAwareness();
-#ifdef UD_REPLAY_BASELINE
-            const bool opened=createOverlay(nullptr,true,size,preview!=nullptr);
-#else
-            const bool opened=createOverlay(nullptr,true,size,preview!=nullptr,visualizer.get());
-#endif
-            if (!opened) throw std::runtime_error("replay overlay failed");
-        }
-        std::vector<double> callbacks,uiTicks,producerLateness;
-        std::vector<double> paintTicks,previewTicks,analysisTicks,levelTicks;
-        callbacks.reserve(fixture.size()/160+1); producerLateness.reserve(callbacks.capacity());
-        uiTicks.reserve(2600);
-        paintTicks.reserve(2600); previewTicks.reserve(2600);
-        analysisTicks.reserve(2600); levelTicks.reserve(2600);
-        std::atomic<RecorderCommand> command{RecorderCommand::Record};
-        std::atomic<bool> finished{false};
-        universal_dictate::RecordingPause pause(capture.gate);
-        const auto begin=Clock::now(); const double cpuBegin=cpuMs();
-        std::thread control([&] {
-            // Same bounded FIFO commands as the production recorder.
-            std::string line; char c=0; bool dropping=false;
-            while (std::cin.get(c)) {
-                if(c!='\n') { if(!dropping && line.size()<8448) line.push_back(c); else {line.clear();dropping=true;} continue; }
-                if(dropping) {dropping=false;line.clear();continue;}
-                if(!line.empty() && line.back()=='\r') line.pop_back();
-                if(line=="STOP" || line=="CANCEL") {
-                    command.store(line=="STOP"?RecorderCommand::Stop:RecorderCommand::Cancel,std::memory_order_release); return;
-                }
-                if(!pause.command(line) && preview) { try {preview->command(line);} catch (...) {} }
-                line.clear();
-            }
-            command.store(RecorderCommand::Cancel,std::memory_order_release);
-        });
-        std::thread producer([&] {
-            ma_device fake{}; fake.pUserData=&capture;
-            const auto origin=Clock::now();
-            for(std::size_t offset=0;offset<fixture.size() && command.load(std::memory_order_acquire)==RecorderCommand::Record;offset+=160) {
-                const auto due=origin+std::chrono::microseconds((offset+160)*1000000ULL/16000);
-                std::this_thread::sleep_until(due);
-                const auto started=Clock::now();
-                const auto count=static_cast<ma_uint32>(std::min<std::size_t>(160,fixture.size()-offset));
-                captureCallback(&fake,nullptr,fixture.data()+offset,count);
-                callbacks.push_back(ms(Clock::now()-started));
-                producerLateness.push_back(std::max(0.0,ms(started-due)));
-            }
-            finished.store(true,std::memory_order_release);
-        });
-        std::cout<<"READY\n"<<std::flush;
-        bool notified=false; int previousLevel=-1;
-        while(command.load(std::memory_order_acquire)==RecorderCommand::Record && Clock::now()-begin<std::chrono::seconds(180)) {
-            const auto tick=Clock::now();
-            if(visible) pumpOverlayMessages();
-            const auto afterPaint=Clock::now(); paintTicks.push_back(ms(afterPaint-tick));
-            applyPauseAcknowledgement(pause.poll(),preview.get(),visible);
-            previewUpdate(preview.get(),capture,visible);
-            const auto afterPreview=Clock::now(); previewTicks.push_back(ms(afterPreview-afterPaint));
-            const int level=capture.peakMilli.exchange(0,std::memory_order_relaxed);
-            if(visible && !capture.gate.isBlocked()) updateOverlayLevel(level,&capture);
-            const auto afterAnalysis=Clock::now(); analysisTicks.push_back(ms(afterAnalysis-afterPreview));
-            if(level!=previousLevel) { std::printf("LEVEL %.3f\n",level/1000.0); std::fflush(stdout); previousLevel=level; }
-            levelTicks.push_back(ms(Clock::now()-afterAnalysis));
-            uiTicks.push_back(ms(Clock::now()-tick)); // Includes previous WM_PAINT and current analysis/IPC; excludes sleep.
-            if(!notified && finished.load(std::memory_order_acquire)) { notified=true;std::cout<<"REPLAY_END\n"<<std::flush; }
-            std::this_thread::sleep_for(kLevelInterval);
-        }
-        if(command.load()==RecorderCommand::Record) command.store(RecorderCommand::Cancel);
-        producer.join();
-        if(control.joinable()) { CancelSynchronousIo(control.native_handle()); control.join(); }
-        const double wall=ms(Clock::now()-begin),cpu=cpuMs()-cpuBegin;
-        const auto activeMemory=memory();
-        const auto gdiActive=GetGuiResources(GetCurrentProcess(),GR_GDIOBJECTS);
-        const auto dropped=
-#ifdef UD_REPLAY_BASELINE
-            std::uint64_t{0};
-        const auto storage=std::size_t{0};
-#else
-            visualizer?visualizer->droppedFrames():0;
-        const auto storage=visualizer?visualizer->storageBytes():0;
-#endif
-        const auto queueHighWater=
-#ifdef UD_REPLAY_BASELINE
-            std::size_t{0};
-#else
-            visualizer?visualizer->queueHighWaterFrames():0;
-#endif
-        destroyOverlay(); encoder.close();
-        const auto gdiAfter=GetGuiResources(GetCurrentProcess(),GR_GDIOBJECTS);
-        std::ofstream out(reportPath);
-        out<<"{\"syntheticCapture\":true,\"fixtureFrames\":"<<fixture.size()<<",\"completedReplay\":"<<(notified?"true":"false")
-           <<",\"recordingWallMs\":"<<wall<<",\"recorderCpuMs\":"<<cpu<<",\"recorderCpuOneCorePercent\":"<<cpu/wall*100
-           <<",\"workingSetBeforeBytes\":"<<memoryBefore.WorkingSetSize<<",\"workingSetActiveBytes\":"<<activeMemory.WorkingSetSize
-           <<",\"peakWorkingSetBytes\":"<<activeMemory.PeakWorkingSetSize<<",\"privateCommitBytes\":"<<activeMemory.PrivateUsage
-           <<",\"gdiActive\":"<<gdiActive<<",\"gdiAfterClose\":"<<gdiAfter<<",\"visualDroppedFrames\":"<<dropped<<",\"analyzerStorageBytes\":"<<storage
-           <<",\"callback\":"; distribution(out,callbacks);out<<",\"uiTick\":";distribution(out,uiTicks);
-        out<<",\"producerLateness\":";distribution(out,producerLateness);
-        out<<",\"paint\":";distribution(out,paintTicks);
-        out<<",\"previewIpc\":";distribution(out,previewTicks);
-        out<<",\"analysis\":";distribution(out,analysisTicks);
-        out<<",\"levelOutput\":";distribution(out,levelTicks);
-        out<<",\"visualQueueHighWaterFrames\":"<<queueHighWater<<"}\n";out.close();
-        if(!out) throw std::runtime_error("metrics write failed");
-        if(command.load()==RecorderCommand::Cancel) {removeFile(output);std::cout<<"CANCELLED\n";}
-        else std::cout<<"STOPPED "<<output<<'\n';
-        return notified?0:1;
+        openReplayOverlay(visible,size,preview!=nullptr,capture);
+        return replayAndReport(fixture,reportPath,output,visible,encoder,capture,preview.get(),memoryBefore);
     } catch(const std::exception& e) {
         destroyOverlay(); std::cerr<<"Replay failed: "<<e.what()<<'\n'; return 1;
     }

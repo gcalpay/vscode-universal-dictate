@@ -4,6 +4,7 @@
 #include "../../native/preview-text.h"
 #include "../fixtures/preview-text-uncached.h"
 #include <cstdint>
+#include <filesystem>
 #include <iostream>
 #include <fstream>
 #include <stdexcept>
@@ -13,8 +14,34 @@ namespace {
 namespace preview = universal_dictate::preview;
 namespace reference = universal_dictate::preview_reference;
 constexpr std::uint32_t background = 0x00335577U;
+using Pixels = std::vector<std::uint32_t>;
 unsigned cases = 0;
+unsigned comparisons = 0;
+unsigned matrices = 0, failedMatrices = 0;
+struct ProbeContext {
+    const char* name = "default-oracle-first";
+    bool cachedFirst = false;
+    unsigned pass = 1, firstCase = 0;
+    DWORD batchLimit = 0;
+} probe;
 void check(bool ok, const char* message) { if (!ok) throw std::runtime_error(message); }
+void flushGdi(const char* operation) {
+    if (!GdiFlush()) throw std::runtime_error(std::string("GDI batch failed before ") + operation);
+}
+
+class BatchLimit {
+public:
+    BatchLimit(DWORD limit, bool& restored) : previous_(GdiSetBatchLimit(limit)), restored_(restored) {
+        check(previous_ != 0, "set GDI batch limit failed");
+    }
+    ~BatchLimit() { restored_ = GdiSetBatchLimit(previous_) != 0; }
+    BatchLimit(const BatchLimit&) = delete;
+    BatchLimit& operator=(const BatchLimit&) = delete;
+private:
+    const DWORD previous_;
+    bool& restored_;
+};
+
 class Canvas {
 public:
     Canvas(int w, int h) : width(w), height(h), dc(CreateCompatibleDC(nullptr)) {
@@ -28,20 +55,22 @@ public:
         if (!dc || !bitmap || !pixels || !previous || previous == HGDI_ERROR) {
             release(); throw std::runtime_error("cache test DIB allocation");
         }
-        clear();
+        try { clear(); }
+        catch (...) { release(); throw; }
     }
     ~Canvas() { release(); }
     Canvas(const Canvas&) = delete;
     Canvas& operator=(const Canvas&) = delete;
-    void clear() { GdiFlush(); std::fill(pixels, pixels + width * height, background); }
-    std::vector<std::uint32_t> snapshot() const {
-        GdiFlush();
-        std::vector<std::uint32_t> out(pixels, pixels + width * height);
+    void clear() { flushGdi("DIB clear"); std::fill(pixels, pixels + width * height, background); }
+    Pixels snapshot() const {
+        flushGdi("DIB snapshot");
+        Pixels out(pixels, pixels + width * height);
         for (auto& pixel : out) pixel &= 0x00ffffffU; // BI_RGB alpha is unused.
         return out;
     }
-    void save(const char* file) const {
-        const auto image = snapshot();
+    // Save the exact arrays used in the assertion, never a later DIB readback.
+    void save(const std::filesystem::path& file, const Pixels& image) const {
+        check(image.size() == static_cast<std::size_t>(width) * height, "failure bitmap size");
         BITMAPFILEHEADER header{};
         BITMAPINFOHEADER info{};
         info.biSize = sizeof(info); info.biWidth = width; info.biHeight = -height;
@@ -52,6 +81,8 @@ public:
         out.write(reinterpret_cast<const char*>(&header), sizeof(header));
         out.write(reinterpret_cast<const char*>(&info), sizeof(info));
         out.write(reinterpret_cast<const char*>(image.data()), image.size() * 4);
+        out.close();
+        check(out.good(), "failure bitmap write failed");
     }
     const int width, height;
     const HDC dc;
@@ -66,27 +97,59 @@ private:
     std::uint32_t* pixels = nullptr;
 };
 
+void saveFailure(const Canvas& canvas, const Pixels& actual, const Pixels& expected,
+                 const char* stage, unsigned repeat) {
+    const std::filesystem::path folder = ".deps/m5-evidence";
+    const auto stem = std::string("cache-") + probe.name + "-pass" + std::to_string(probe.pass)
+        + "-case" + std::to_string(cases - probe.firstCase) + "-" + stage
+        + "-repeat" + std::to_string(repeat);
+    try {
+        std::filesystem::create_directories(folder);
+        canvas.save(folder / (stem + "-actual.bmp"), actual);
+        canvas.save(folder / (stem + "-oracle.bmp"), expected);
+    } catch (const std::exception& error) {
+        std::cerr << "Failure bitmap capture: " << error.what() << '\n';
+    }
+}
+
+void compareImages(const Canvas& canvas, const Pixels& actual, const Pixels& expected,
+                   const preview::TextLayout& geometry, std::size_t textUnits,
+                   const char* stage, unsigned repeat, const char* message) {
+    ++comparisons;
+    check(actual.size() == expected.size(), "pixel comparison size mismatch");
+    if (actual == expected) return;
+    std::size_t differing = 0;
+    for (std::size_t i = 0; i < expected.size(); ++i) if (actual[i] != expected[i]) {
+        if (differing++ < 3) std::cerr << "Pixel " << i % canvas.width << ',' << i / canvas.width
+            << " cached=" << actual[i] << " oracle=" << expected[i] << '\n';
+    }
+    std::cerr << "Scenario=" << probe.name << " order=" << (probe.cachedFirst ? "cached-first" : "oracle-first")
+        << " batchLimit=" << probe.batchLimit << " pass=" << probe.pass << " case=" << cases - probe.firstCase
+        << " stage=" << stage << " repeat=" << repeat << " textUnits=" << textUnits
+        << " font=" << geometry.fontHeight << " rect=" << geometry.text.left << ',' << geometry.text.top
+        << ',' << geometry.text.right << ',' << geometry.text.bottom << " mismatched=" << differing << '\n';
+    saveFailure(canvas, actual, expected, stage, repeat);
+    throw std::runtime_error(message);
+}
+
+void drawPair(preview::TextRenderer& cached, reference::TextRenderer& oracle,
+              Canvas& actual, Canvas& expected, const preview::TextLayout& geometry,
+              const std::wstring& text) {
+    const auto drawCached = [&]() { check(cached.draw(actual.dc, geometry, text), "cached first draw failed"); };
+    const auto drawOracle = [&]() { check(oracle.draw(expected.dc, geometry, text), "uncached oracle failed"); };
+    if (probe.cachedFirst) { drawCached(); drawOracle(); }
+    else { drawOracle(); drawCached(); }
+}
+
 void comparePixels(preview::TextRenderer& cached, reference::TextRenderer& oracle,
                    Canvas& actual, Canvas& expected, const preview::TextLayout& geometry,
                    const std::wstring& text) {
     actual.clear(); expected.clear();
-    check(oracle.draw(expected.dc, geometry, text), "uncached oracle failed");
-    check(cached.draw(actual.dc, geometry, text), "cached first draw failed");
+    drawPair(cached, oracle, actual, expected, geometry, text);
     const auto image = expected.snapshot();
     const auto pixels = actual.snapshot();
-    if (pixels != image) {
-        std::size_t differing = 0;
-        for (std::size_t i = 0; i < image.size(); ++i) if (pixels[i] != image[i]) {
-            if (differing++ < 3) std::cerr << "Pixel " << i % actual.width << ',' << i / actual.width
-                << " cached=" << pixels[i] << " oracle=" << image[i] << '\n';
-        }
-        std::cerr << "Case=" << cases << " textUnits=" << text.size() << " font=" << geometry.fontHeight
-            << " rect=" << geometry.text.left << ',' << geometry.text.top << ',' << geometry.text.right << ','
-            << geometry.text.bottom << " mismatched=" << differing << '\n';
-        actual.save(".deps/m5-evidence/cache-actual.bmp");
-        expected.save(".deps/m5-evidence/cache-oracle.bmp");
-        throw std::runtime_error("cache changed accepted RGB pixels");
-    }
+    compareImages(actual, pixels, image, geometry, text.size(), "first-draw", 0,
+        "cache changed accepted RGB pixels");
     check(cached.visibleLines() == oracle.visibleLines() && cached.skippedLines() == oracle.skippedLines(),
           "cache changed line layout");
     const auto count = cached.rasterizations();
@@ -94,7 +157,8 @@ void comparePixels(preview::TextRenderer& cached, reference::TextRenderer& oracl
         actual.clear();
         check(cached.draw(actual.dc, geometry, text), "cache hit draw failed");
         check(cached.rasterizations() == count, "unchanged preview was rasterized again");
-        check(actual.snapshot() == image, "cache hit pixels differ");
+        compareImages(actual, actual.snapshot(), image, geometry, text.size(), "cache-hit", repeat + 1,
+            "cache hit pixels differ");
     }
     ++cases;
 }
@@ -151,19 +215,22 @@ void clippingAndReset() {
     actual.clear();
     check(cached.draw(actual.dc, geometry, text), "clipped cache hit");
     const auto clipped = actual.snapshot();
+    Pixels clippedExpected(full.size(), background);
     for (int y = 0; y < actual.height; ++y) for (int x = 0; x < actual.width; ++x) {
         const auto i = static_cast<std::size_t>(y) * actual.width + x;
         const bool inside = x >= clip.left && x < clip.right && y >= clip.top && y < clip.bottom;
-        check(clipped[i] == (inside ? full[i] : background), "cached preview escaped destination clip");
+        if (inside) clippedExpected[i] = full[i];
     }
+    compareImages(actual, clipped, clippedExpected, geometry, text.size(), "destination-clip", 0,
+        "cached preview escaped destination clip");
     check(RestoreDC(actual.dc, saved) != 0, "restore clip DC");
-    cached.reset(); oracle.reset(); GdiFlush();
+    cached.reset(); oracle.reset(); flushGdi("resource baseline");
     const auto before = GetGuiResources(GetCurrentProcess(), GR_GDIOBJECTS);
     for (unsigned repeat = 0; repeat < 100; ++repeat) {
         check(cached.draw(actual.dc, geometry, text), "reset/recreate draw");
         cached.reset();
     }
-    GdiFlush();
+    flushGdi("resource verification");
     check(GetGuiResources(GetCurrentProcess(), GR_GDIOBJECTS) <= before + 2, "cache leaked GDI objects");
     geometry.text.right = geometry.text.left;
     check(!cached.draw(actual.dc, geometry, text), "invalid viewport accepted");
@@ -171,11 +238,48 @@ void clippingAndReset() {
     geometry = preview::calculateTextLayout(universal_dictate::OverlaySize::Medium, 144);
     comparePixels(cached, oracle, actual, expected, geometry, text);
 }
+
+bool runMatrix() {
+    ++matrices;
+    probe.firstCase = cases;
+    const auto firstComparison = comparisons;
+    try {
+        pixelMatrix(); clippingAndReset();
+        std::cout << "Probe=" << probe.name << " batchLimit=" << probe.batchLimit << " pass=" << probe.pass
+            << " cases=" << cases - probe.firstCase << " exactComparisons=" << comparisons - firstComparison << '\n';
+        return true;
+    } catch (const std::exception& error) {
+        ++failedMatrices;
+        std::cerr << "Probe=" << probe.name << " pass=" << probe.pass << " failed: " << error.what() << '\n';
+        return false;
+    }
+}
+
+void runProbe(const char* name, bool cachedFirst, DWORD limit) {
+    bool restored = false;
+    {
+        BatchLimit batch(limit, restored);
+        // Predetermined diagnostic passes, not retries until a favorable result.
+        for (unsigned pass = 1; pass <= 3; ++pass) {
+            probe = {name, cachedFirst, pass, cases, limit};
+            runMatrix();
+        }
+    }
+    check(restored, "restore GDI batch limit failed");
+}
 }
 int main() {
     try {
-        pixelMatrix(); clippingAndReset();
-        std::cout << cases << " cached/uncached RGB cases passed; repeated hits, DPI/text invalidation, clipping and 100 reset cycles\n";
-        return 0;
+        const auto defaultLimit = GdiGetBatchLimit();
+        check(defaultLimit != 0, "read default GDI batch limit failed");
+        probe.batchLimit = defaultLimit;
+        if (runMatrix())
+            std::cout << cases << " cached/uncached RGB cases passed; repeated hits, DPI/text invalidation, clipping and 100 reset cycles\n";
+        runProbe("default-cached-first", true, defaultLimit);
+        runProbe("unbatched-oracle-first", false, 1);
+        runProbe("unbatched-cached-first", true, 1);
+        std::cout << "Fixed cache probes: matrices=" << matrices << " failedMatrices=" << failedMatrices
+            << " completedCases=" << cases << " exactComparisons=" << comparisons << '\n';
+        return failedMatrices == 0 ? 0 : 1;
     } catch (const std::exception& error) { std::cerr << error.what() << '\n'; return 1; }
 }

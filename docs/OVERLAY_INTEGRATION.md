@@ -1,79 +1,90 @@
-# Overlay integration — M2 through M5
+# Overlay integration — current M5 closeout and M6 preparation
 
-Base: M1 `d4c52d2d153545a7a8bef6ed1680261e199ef22b`; branch
-`feat/overlay-visualizations`. Published main and draft PR #55 stay unchanged.
+Verified continuation baseline: `feat/overlay-visualizations` at
+`410094fb898e15170cd985ff1f7c060900b1873c`, tree
+`bee76fa88913183d6089c1d2ced1c7b0350f505a`, 8 October 2026.
+Draft PR #56 is stacked on draft PR #55 / `perf/stop-insert-latency` at
+`d4c52d2d153545a7a8bef6ed1680261e199ef22b`. Accepted 1.1.0 `main` remains
+`8017f1950bbacb67c37add2c31315e7a6139bcd3`.
+
+## Current state and navigation
+
+M0/M1 and all five visualization implementations are saved. M5 run
+[37765259320](https://github.com/gcalpay/vscode-universal-dictate/actions/runs/37765259320)
+completed successfully: **224 observations and 88 passing aggregate gates**.
+Resume review closeout and integrated-candidate preparation; do not restart M0–M4.
+
+| Area | Current record |
+| --- | --- |
+| Implemented settings, DSP and rendering | [OVERLAY_VISUALIZATIONS.md](OVERLAY_VISUALIZATIONS.md) |
+| Current performance protocol | [M5_CONFIRMATION_PROTOCOL.md](M5_CONFIRMATION_PROTOCOL.md), revision 2 |
+| Source/run identity, result interpretation and review dispositions | [M5_REVIEW_CLOSEOUT.md](M5_REVIEW_CLOSEOUT.md) |
+| One integrated candidate, acceptance/freeze, separate M7/M8 safeguards | [M6_INTEGRATED_CANDIDATE.md](M6_INTEGRATED_CANDIDATE.md) |
+| Internal regression and normal-use acceptance procedure | [TESTING.md](TESTING.md) |
+
+Historical documents and npm scripts reuse milestone numbers. In particular,
+`M6_RELEASE.md` records the old 1.0.0 release process and `M7_PAUSE_RESUME.md`
+records the old pause milestone. They are not current M6/M7 authorization.
 
 ## Approved workflow
 
-The user explicitly removed individual M1/M2/M3/M4 manual VSIX gates. Continue
-internal implementation and automated validation; deliver one integrated candidate
-only after M5, with a possible final release build later. Do not ask for additional
-micro-diagnostic installs or prescribed repeated screenshot/reading exercises.
+The user removed individual M1/M2/M3/M4 manual VSIX gates. Continue internal
+validation and renderer inspection in bounded, recoverable batches. Preserve a
+coherent source/evidence checkpoint after each batch. Deliver one integrated
+candidate containing M1 and all five styles after internal review, with normal-use
+acceptance. There is no prescribed repeated dictation, per-run diagnostics or
+screenshot exercise. Do not require installation of the older 1.1.3 M1 candidate.
 
-## Scope
+Only if timing evidence is needed, use one accumulated **Show Latency Report**
+document (latest 100 completed records, lost on reload unless saved). Do not
+merge, tag, publish or replace public history before integrated acceptance and the
+separate M7/M8 safeguards. Preserve PR #55 and its evidence.
 
-Add **Enhanced Overlay Visualization**, independent of existing visualization
-location: Waveform / Oscillogram (default), Log-Frequency Power Spectrogram,
-Linear-Frequency Power Spectrogram, Constant-Q Power Spectrogram, Circular Spectrum.
-Settings are snapshotted before recording; disabled overlays perform no invisible
-spectral work. Status-bar rendering and the accepted append-only waveform remain.
-A previous unpushed source bundle exists against 1.1.0; integrate it selectively,
-not by overwriting M1 inference, accumulated reports or current lifecycle tests.
+## Implemented scope and preserved behavior
 
-## Internal checkpoints
+**Enhanced Overlay Visualization** independently selects Waveform / Oscillogram
+(default), Log-Frequency Power Spectrogram, Linear-Frequency Power Spectrogram,
+Constant-Q Power Spectrogram or Circular Spectrum. All modes are implemented.
+Selecting a style does not enable the overlay or change the active recording;
+settings are snapshotted before asynchronous preparation for the next recording.
 
-- M2: settings, native argument routing and renderer/analysis boundaries on M1.
-- M3: linear/log FFT spectrogram numerical and production-renderer validation.
-- M4: genuine variable-window Constant-Q and circular-spectrum validation.
-- M5: compare all styles against waveform with the retained synthetic fixture;
-  inspect CPU/memory/capture/Stop latency and sizes/DPI/preview/Pause behavior.
-- Integrated review candidate: M1 plus all five modes after automated gates.
-- Only after user acceptance: release freeze, separately controlled history cleanup,
-  final build/audit and release authorization.
+Preserve the isolated M1 final/preview workers, model and inference parameters,
+accepted waveform, status-bar behavior, seven independent settings, Pause/Resume,
+clipboard policy, non-activating controls and final-only insertion. Waveform,
+Status bar only and Off do not perform spectral analysis. Do not replace current
+source with an earlier 1.1.0-based visualization bundle. Issue #38 stays outside
+this release's scope.
 
-Do not claim all milestones complete from source inspection. Preserve source/run/
-artifact identities and record open gates. Initial state: M2 integration in progress.
+## Completed automated comparison
 
-## M2 integration checkpoint
+Revision 2 uses six independent Windows jobs. Each compares its candidate style
+against frozen M1 on the same runner and warm final worker, with ten adjacent
+AB/BA pairs per effective preview condition. Five styles × two preview states
+produce 200 short observations; the no-overlay control adds 20. Linear and CQT
+each add a baseline/candidate pair using 48 seconds of continuous generated
+speech. Total: 224 observations, 112 per policy, 11 short conditions and 88 gates.
 
-The previously unpushed renderers have been selectively integrated on M1. The new
-selector is connected from the manifest and gear menu through the session snapshot
-and native arguments to a common renderer dispatcher. No style is a placeholder.
-M1 inference/worker/transport/engine modules are byte-identical to the M1 head.
-The waveform paint function and waveform history/level headers are unchanged.
+The replay uses real callback/WAV writing, Win32 rendering/message handling,
+production Node/native IPC, preview coordination and pinned Whisper inference.
+Audio is synthetic English; insertion is a no-op stub. Within-job paired deltas
+are the comparison, not absolute times across jobs with different allocated CPUs.
+The result is not an actual microphone/VS Code/Codex/WSL latency measurement.
 
-Local validation: full strict TypeScript check and all 320 Node tests pass. GCC,
-Clang and AddressSanitizer/UndefinedBehaviorSanitizer spectral tests pass, including
-independent DFT comparison, CQT filters, queue concurrency, pause and history.
-These are not Windows production-renderer or full M5 latency claims. Windows gates
-remain to be run on the committed integration; M5 combined capture/render/Whisper
-performance remains the next internal gate, with no user install requested.
+Windows package run
+[37765265222](https://github.com/gcalpay/vscode-universal-dictate/actions/runs/37765265222)
+also passed native/render/preview/package checks. Its synthetic PR checkout tree
+matches the feature tree; this does not mean either PR was merged. See the
+closeout record for exact artifact hashes and unresolved review status.
 
-Detailed implementation: [OVERLAY_VISUALIZATIONS.md](OVERLAY_VISUALIZATIONS.md).
+## Historical protocol and failure retention
 
-## M5 automated comparison protocol
+The original plan was 42 short observations using three repetitions plus two long
+runs. It is superseded by revision 2 and must not be used as the current gate.
+Its maximum-per-run UI-p95 target failed even on unchanged Waveform. Revision 2
+explicitly changed UI aggregation to median per-run p95 ≤25 ms and median paired
+p95 overhead ≤5 ms before subsequent confirmation data; it retained raw maxima.
 
-The corrected native renderer gate passed on `afe5525`. No user installation was
-needed. M5 builds the replay shell against frozen M1 `d4c52d2` and the candidate.
-It replays the same 12-second PCM through the real callback/WAV writer and actual
-Win32 overlay/message loop, production Node recorder adapter, preview coordinator,
-dictation engine and unchanged real Whisper runtime. The producer is synthetic,
-not a microphone device; final insertion is a no-op, not target-application paint.
-All five modes run three times with preview Off/On, with frozen-M1 waveform controls
-and no-overlay controls (42 short runs). Two additional 48-second spectral runs
-fill/wrap the 20-second history. Order reverses on alternate repeats.
-
-Budgets fixed before measurements: median Stop-to-stub overhead <= max(150 ms,10%)
-against matching frozen M1; callback mean overhead <=0.25 ms, callback p95 <=2 ms,
-UI tick p95 <=25 ms at the existing 50 ms cadence, recorder CPU overhead <=5
-single-core percentage points, private committed memory overhead <=16 MiB, and
-zero visual drops. Every run checks exact accepted PCM, one nonempty final result,
-server inference, unchanged final PID and preview exit before final dispatch.
-Actual callback/UI sample distributions and raw per-run data are retained; no
-95th-percentile total-latency claim is made from three repetitions. Preview latency
-and request overlap are recorded, not assumed. CPU is native recorder process time
-(kernel+user) divided by its observed wall time, normalized to one core. Memory
-fields distinguish process working set, peak working set and private commit.
-
-Candidate version is 1.2.0, unpublished. Runtime/source package validation and M5
-budgets must pass before exposing a single integrated candidate to the user.
+Earlier failed runs, including `37689421812` and `37762121955`, remain failures.
+The first cache-validation RGB mismatch at `37764925817` also remains a distinct
+review item. Latest green jobs do not establish its cause or clear Codacy.
+See the individual records in [M5_REVIEW_CLOSEOUT.md](M5_REVIEW_CLOSEOUT.md).

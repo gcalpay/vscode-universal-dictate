@@ -16,6 +16,8 @@ tsconfig.json
 **/*.pdb
 **/*.vsix
 node_modules/**
+package-lock.json
+media/settings-menu.webp
 resources/bin/windows-fast-paste.exe
 .deps-clipboard-transaction-test
 resources/bin/windows-clipboard-paste.exe

@@ -15,8 +15,7 @@ void verify(bool condition, const char* message) {
 constexpr std::uint32_t sentinelColor = 0x00335577U;
 class SpectralCanvas {
 public:
-    SpectralCanvas(int width, int height) : width(width), height(height) {
-        dc = CreateCompatibleDC(nullptr);
+    SpectralCanvas(int width, int height) : width(width), height(height), dc(CreateCompatibleDC(nullptr)) {
         BITMAPINFO info{}; info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
         info.bmiHeader.biWidth = width; info.bmiHeader.biHeight = -height;
         info.bmiHeader.biPlanes = 1; info.bmiHeader.biBitCount = 32; info.bmiHeader.biCompression = BI_RGB;
@@ -123,6 +122,17 @@ void captureCase(vis::Mode mode, bool previewEnabled, const std::filesystem::pat
     std::filesystem::remove(filename); // No fixture audio in the renderer artifact or VSIX.
 }
 
+void verifyVisualizationViewport(const SpectralCanvas& canvas, const RECT& viewport) {
+    const auto pixels = canvas.snapshot(); bool painted=false;
+    for (int y=0;y<canvas.height;++y) for (int x=0;x<canvas.width;++x) {
+        const auto pixel = pixels[static_cast<std::size_t>(y)*canvas.width+x] & 0x00ffffffU;
+        if (x<viewport.left || x>=viewport.right || y<viewport.top || y>=viewport.bottom)
+            verify(pixel == sentinelColor,"spectral renderer escaped its viewport");
+        else if (pixel != sentinelColor && pixel != 0x000e121bU) painted=true;
+    }
+    verify(painted, "selected renderer produced no signal pixels");
+}
+
 void renderCase(vis::Mode mode, OverlaySize size, unsigned dpi, bool previewEnabled,
                 const std::filesystem::path& output) {
     std::unique_ptr<vis::SpectralVisualizer> visualizer;
@@ -147,14 +157,7 @@ void renderCase(vis::Mode mode, OverlaySize size, unsigned dpi, bool previewEnab
     const auto rect = previewEnabled ? universal_dictate::preview::calculateTextLayout(size,dpi).waveform : layout.waveform;
     SpectralCanvas guard(layout.width,layout.height);
     drawEnhancedVisualization(guard.dc);
-    const auto guardPixels = guard.snapshot(); bool painted=false;
-    for (int y=0;y<layout.height;++y) for (int x=0;x<layout.width;++x) {
-        const auto pixel = guardPixels[static_cast<std::size_t>(y)*layout.width+x] & 0x00ffffffU;
-        if (x<rect.left || x>=rect.right || y<rect.top || y>=rect.bottom)
-            verify(pixel == sentinelColor,"spectral renderer escaped its viewport");
-        else if (pixel != sentinelColor && pixel != 0x000e121bU) painted=true;
-    }
-    verify(painted, "selected renderer produced no signal pixels");
+    verifyVisualizationViewport(guard,rect);
     SpectralCanvas canvas(layout.width,layout.height);
     drawEnhancedOverlay(canvas.dc,client);
     const auto original = canvas.snapshot();
