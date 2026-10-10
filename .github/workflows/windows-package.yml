@@ -54,7 +54,7 @@ jobs:
       - name: Enhanced overlay visualization settings and source guards
         run: node --unhandled-rejections=strict --test test/overlay-visualization.test.cjs test/overlay-visualization-source.test.cjs
 
-      - name: M7 pause/resume state and command tests
+      - name: Internal lifecycle regression (legacy pause gates, no public Pause control)
         run: node --unhandled-rejections=strict --test test/pause-controls.test.cjs
 
       - name: M0 stop-to-insert timing instrumentation
@@ -132,7 +132,7 @@ jobs:
           }
           Write-Output 'Recorder embedded manifest verified: Windows common controls 6.0.0.0'
 
-      - name: Pause gate, production PCM capture and actual Node pause pipe
+      - name: Internal admission gate and production PCM/IPC regression
         if: ${{ !cancelled() && steps.native_build.outcome == 'success' }}
         shell: pwsh
         timeout-minutes: 3

@@ -27,8 +27,7 @@ inline std::vector<std::uint8_t> history(const vis::SpectralVisualizer& v) {
     return out;
 }
 inline void run() {
-    for (const auto mode : {Mode::LinearFrequencyPowerSpectrogram,
-            Mode::LogFrequencyPowerSpectrogram, Mode::ConstantQPowerSpectrogram}) {
+    for (const auto mode : {Mode::LogFrequencyPowerSpectrogram}) {
         auto visualizer = std::make_unique<vis::SpectralVisualizer>(mode, 1000);
         feed(*visualizer, tone(250, 0.2, 32000));
         const auto original = history(*visualizer);

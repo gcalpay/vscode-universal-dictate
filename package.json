@@ -56,7 +56,6 @@
     "onCommand:universalDictate.openSettings",
     "onCommand:universalDictate.showDiagnostics",
     "onCommand:universalDictate.copyLastTranscript",
-    "onCommand:universalDictate.pauseResume",
     "onCommand:universalDictate.showLatencyReport"
   ],
   "contributes": {
@@ -86,11 +85,6 @@
         "title": "Universal Dictate: Copy Last Transcript"
       },
       {
-        "command": "universalDictate.pauseResume",
-        "title": "Universal Dictate: Pause/Resume Recording",
-        "enablement": "universalDictate.recording"
-      },
-      {
         "command": "universalDictate.showLatencyReport",
         "title": "Universal Dictate: Show Latency Report"
       }
@@ -104,11 +98,6 @@
       {
         "command": "universalDictate.cancel",
         "key": "escape",
-        "when": "universalDictate.recording && !terminalFocus"
-      },
-      {
-        "command": "universalDictate.pauseResume",
-        "key": "ctrl+alt+p",
         "when": "universalDictate.recording && !terminalFocus"
       }
     ],
@@ -142,26 +131,20 @@
           "enum": [
             "waveform",
             "logFrequencyPowerSpectrogram",
-            "linearFrequencyPowerSpectrogram",
-            "constantQPowerSpectrogram",
             "circularSpectrum"
           ],
           "enumItemLabels": [
             "Waveform / Oscillogram",
             "Log-Frequency Power Spectrogram",
-            "Linear-Frequency Power Spectrogram",
-            "Constant-Q Power Spectrogram",
             "Circular Spectrum"
           ],
           "enumDescriptions": [
             "Keep the existing scrolling speech waveform. Default; no spectral analysis.",
             "Show FFT power over time with logarithmic frequency spacing (62.5 Hz to 8 kHz).",
-            "Show FFT power over time with linear frequency spacing (0 to 8 kHz).",
-            "Show power from variable-length constant-Q filters (62.5 Hz to about 7.55 kHz); more low-frequency resolution and a longer startup window.",
             "Arrange the latest FFT spectrum around a circle. Not a chromagram; the history duration does not apply."
           ],
           "default": "waveform",
-          "description": "Visualization drawn inside the enhanced native recording overlay. Used only when Audio visualization is Enhanced overlay or Both. Does not change the status bar or enable the overlay. Changes apply from the next dictation session."
+          "description": "Visualization drawn inside the enhanced native recording overlay. Used only when Audio visualization is Enhanced overlay or Both. Does not change the status bar or enable the overlay. Changes apply from the next dictation session. Retired Linear/Constant-Q preferences display the log-frequency spectrogram instead."
         },
         "universalDictate.overlaySize": {
           "type": "string",
@@ -199,6 +182,32 @@
           "type": "boolean",
           "default": false,
           "description": "Show provisional text while recording in the enhanced overlay. Disabled by default; when disabled no preview audio snapshots or extra inference run. Requires Enhanced overlay or Both visualization. Changes apply from the next recording. The complete recording is still transcribed and inserted once after Stop."
+        },
+        "universalDictate.overlayColorTheme": {
+          "type": "string",
+          "enum": [
+            "blue",
+            "green",
+            "dark",
+            "amber",
+            "slate"
+          ],
+          "enumItemLabels": [
+            "Blue",
+            "Green",
+            "Dark",
+            "Amber",
+            "Slate"
+          ],
+          "enumDescriptions": [
+            "Blue/cyan; retains the original log-spectrogram palette.",
+            "Restrained medium-dark emerald green.",
+            "Neutral graphite and silver.",
+            "Warm amber and gold.",
+            "Muted steel-blue and cool grey."
+          ],
+          "default": "blue",
+          "description": "Colors of the enhanced overlay visualization. Does not change microphone gain, the status bar, controls or display location. Applies from the next recording."
         }
       }
     }

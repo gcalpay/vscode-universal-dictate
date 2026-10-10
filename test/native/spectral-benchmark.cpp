@@ -19,9 +19,7 @@ int main(int argc, char** argv) {
     report << "{\n  \"fixture\": \"60 seconds synthetic PCM; 50 ms batches; analyzer plus pixel preparation; no microphone or GDI\",\n  \"results\": [\n";
     bool first = true;
     for (const auto& [mode, name] : {
-        std::pair{vis::Mode::LinearFrequencyPowerSpectrogram,"linearFrequencyPowerSpectrogram"},
         std::pair{vis::Mode::LogFrequencyPowerSpectrogram,"logFrequencyPowerSpectrogram"},
-        std::pair{vis::Mode::ConstantQPowerSpectrogram,"constantQPowerSpectrogram"},
         std::pair{vis::Mode::CircularSpectrum,"circularSpectrum"}}) {
         const auto before = Clock::now();
         auto visualizer = std::make_unique<vis::SpectralVisualizer>(mode,20000);

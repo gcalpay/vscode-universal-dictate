@@ -14,9 +14,9 @@ jobs:
   replay:
     strategy:
       fail-fast: false
-      max-parallel: 6
+      max-parallel: 4
       matrix:
-        style: [off, waveform, logFrequencyPowerSpectrogram, linearFrequencyPowerSpectrogram, constantQPowerSpectrogram, circularSpectrum]
+        style: [off, waveform, logFrequencyPowerSpectrogram, circularSpectrum]
     env:
       M5_STYLE: ${{ matrix.style }}
     runs-on: windows-latest

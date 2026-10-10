@@ -9,8 +9,14 @@ const sha = text => createHash('sha256').update(text).digest('hex');
 const source = read('native/record-audio.cpp');
 const between = (text, begin, end) => text.slice(text.indexOf(begin),text.indexOf(end));
 
-test('accepted 1.1.0 waveform paint function remains byte-identical after renderer dispatch', () => {
-  assert.equal(sha(between(source,'void drawEnhancedWaveform(', 'void drawEnhancedVisualization(')),
+test('waveform drawing differs from 1.1.2 only in its requested palette', () => {
+  const paint = between(source,'void drawEnhancedWaveform(', 'bool circularOverlay(')
+    .replace('const auto colors = universal_dictate::waveformColors(g_overlay.theme);\n    ', '')
+    .replace('const Gdiplus::Color axisColor((115U << 24) | colors.axis);','const Gdiplus::Color axisColor(115, 41, 82, 58);')
+    .replace('const Gdiplus::Color envelopeOuterColor((130U << 24) | colors.outer);','const Gdiplus::Color envelopeOuterColor(130, 36, 118, 72);')
+    .replace('const Gdiplus::Color envelopeInnerColor((85U << 24) | colors.inner);','const Gdiplus::Color envelopeInnerColor(85, 45, 145, 88);')
+    .replace('const Gdiplus::Color mainWaveColor((245U << 24) | colors.trace);','const Gdiplus::Color mainWaveColor(245, 66, 205, 118);');
+  assert.equal(sha(paint),
     '4347aff27bbc33442db2d862f848b2b63f7d6dcb5cd249cb7bc2555b0881f9e3');
   assert.match(between(source,'void drawEnhancedVisualization(', 'void drawEnhancedOverlay('), /if \(!g_overlay\.visualizer\)[\s\S]*drawEnhancedWaveform\(dc\)/);
 });
@@ -18,13 +24,12 @@ test('accepted 1.1.0 waveform paint function remains byte-identical after render
 // Pin the waveform's critical source files to the known working 1.1.2 code.
 // Changes to visualization internals must not silently retune the amplitude,
 // history, button geometry or preview layout of the accepted waveform.
-test('1.2 waveform mapping, history and layouts exactly match working 1.1.2', () => {
+test('waveform mapping, history and preview layout exactly match working 1.1.2', () => {
   const gitBlob = content => createHash('sha1')
     .update(`blob ${Buffer.byteLength(content, 'utf8')}\0`).update(content).digest('hex');
   const baseline = {
     'native/waveform-level.h': '582fd26544c387f35fa52b74fec1e8cb9215f2bf',
     'native/waveform-history.h': '5489ddceeb3dfcf65fb37f9f00ea58158a939784',
-    'native/overlay-layout.h': '3fd73531fc6f42340706ee9086536644b29cf6af',
     'native/preview-layout.h': 'c3e42fb4a9871691c6027f7376238b071b5b4fb7',
   };
   for (const [file, sha] of Object.entries(baseline)) {
@@ -63,4 +68,14 @@ test('TypeScript and native identifiers are compatible, with no fake chromagram 
   for (const value of OVERLAY_VISUALIZATIONS.filter(mode=>mode!=='waveform')) assert.ok(native.includes(`"${value}"`));
   assert.match(native, /return Mode::Waveform/);
   assert.doesNotMatch(native, /chromagram|lowPowerSpectrogram/);
+});
+
+test('production offers no Pause button, command, shortcut or native pause request', () => {
+  const manifest = JSON.parse(read('package.json'));
+  assert.ok(!manifest.contributes.commands.some(c => c.command.endsWith('.pauseResume')));
+  assert.ok(!manifest.contributes.keybindings.some(c => c.key === 'ctrl+alt+p'));
+  assert.doesNotMatch(read('src/extension.ts'), /registerCommand\('universalDictate\.pauseResume/);
+  assert.doesNotMatch(source.slice(source.indexOf('int main(')), /pause\.command|pause\.poll|emitPauseAction/);
+  assert.doesNotMatch(read('native/overlay-buttons.h'), /ButtonSymbol::Pause|ButtonSymbol::Resume|Pause recording/);
+  assert.doesNotMatch(source, /pauseRect|ACTION PAUSE|ACTION RESUME/);
 });

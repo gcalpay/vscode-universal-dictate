@@ -6,14 +6,14 @@ const { OVERLAY_VISUALIZATIONS, OVERLAY_VISUALIZATION_LABELS, DEFAULT_OVERLAY_VI
 const { buildRecorderArguments } = require('../dist/core/recorder');
 const setting = manifest.contributes.configuration.properties['universalDictate.enhancedOverlayVisualization'];
 
-test('five agreed visualization choices have matching metadata and Waveform default', () => {
+test('three agreed visualization choices have matching metadata and Waveform default', () => {
   assert.deepEqual(OVERLAY_VISUALIZATIONS, ['waveform', 'logFrequencyPowerSpectrogram',
-    'linearFrequencyPowerSpectrogram', 'constantQPowerSpectrogram', 'circularSpectrum']);
+    'circularSpectrum']);
   assert.deepEqual(setting.enum, OVERLAY_VISUALIZATIONS);
   assert.deepEqual(setting.enumItemLabels, OVERLAY_VISUALIZATIONS.map(mode => OVERLAY_VISUALIZATION_LABELS[mode]));
   assert.deepEqual(setting.enumItemLabels, ['Waveform / Oscillogram', 'Log-Frequency Power Spectrogram',
-    'Linear-Frequency Power Spectrogram', 'Constant-Q Power Spectrogram', 'Circular Spectrum']);
-  assert.equal(setting.enumDescriptions.length, 5);
+    'Circular Spectrum']);
+  assert.equal(setting.enumDescriptions.length, 3);
   assert.equal(setting.default, DEFAULT_OVERLAY_VISUALIZATION);
   assert.equal(DEFAULT_OVERLAY_VISUALIZATION, 'waveform');
   assert.match(setting.description, /next dictation session/);
@@ -57,4 +57,30 @@ test('display location and all previously saved defaults remain separate', () =>
   assert.equal(properties['universalDictate.livePreview'].default, false);
   assert.equal(properties['universalDictate.overwriteClipboard'].default, false);
   assert.equal(properties['universalDictate.overlaySize'].default, 'medium');
+});
+
+const {OVERLAY_THEMES, OVERLAY_THEME_LABELS, normalizeOverlayTheme} = require('../dist/core/overlay-theme');
+test('five fixed themes, Blue default and independent native arguments', () => {
+  const property=manifest.contributes.configuration.properties['universalDictate.overlayColorTheme'];
+  assert.deepEqual(OVERLAY_THEMES,['blue','green','dark','amber','slate']);
+  assert.deepEqual(property.enum,OVERLAY_THEMES); assert.equal(property.default,'blue');
+  assert.deepEqual(property.enumItemLabels,OVERLAY_THEMES.map(x=>OVERLAY_THEME_LABELS[x]));
+  for (const theme of OVERLAY_THEMES) for (const style of OVERLAY_VISUALIZATIONS) {
+    const args=buildRecorderArguments({recorderPath:'r',outputPath:'a',overlayStyle:'enhanced',overlayColorTheme:theme,enhancedOverlayVisualization:style});
+    assert.equal(args[args.indexOf('--overlay-theme')+1],theme);
+    assert.equal(args[args.indexOf('--overlay-visualization')+1],style);
+  }
+  for (const value of [undefined,null,1,true,{},'','Blue','light']) assert.equal(normalizeOverlayTheme(value),'blue');
+  for (const showOverlay of [false,true]) {
+    const args=buildRecorderArguments({recorderPath:'r',outputPath:'a',showOverlay,overlayStyle:'compact',overlayColorTheme:'amber'});
+    assert.ok(!args.includes('--overlay-theme'));
+  }
+});
+test('retired spectrogram values fall back to log, without changing other preferences', () => {
+  for(const value of ['linearFrequencyPowerSpectrogram','constantQPowerSpectrogram']) {
+    assert.equal(normalizeOverlayVisualization(value),'logFrequencyPowerSpectrogram');
+    const options={recorderPath:'r',outputPath:'a',showOverlay:false,enhancedOverlayVisualization:value};
+    assert.deepEqual(buildRecorderArguments(options),['--output','a','--no-overlay']);
+    assert.equal(options.enhancedOverlayVisualization,value);
+  }
 });

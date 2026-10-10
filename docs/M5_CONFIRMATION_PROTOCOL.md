@@ -48,3 +48,7 @@ Mic input is synthetic; WAV writing, preview IPC, analysis, Win32 drawing and
 Whisper are real. Insertion is a stub. Report Stop-to-stub rather than claiming
 physical mouse-click-to-visible-Codex-text latency. User review requires normal
 use of one integrated candidate, not another prescribed dictation exercise.
+
+## RC4 reduced product matrix
+
+See [RC4_SCOPE.md](RC4_SCOPE.md). Retired Linear/CQT jobs are removed. Four jobs exercise Off and the three retained modes; the long-history pair now uses Log/Preview On. Total 142 observations and 56 gates. All pairing rules and numerical limits above remain unchanged. Older 224-observation datasets remain historical and separate.

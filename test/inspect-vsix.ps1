@@ -74,19 +74,22 @@ try {
     Assert-Valid ($manifest.contributes.configuration.properties.'universalDictate.overwriteClipboard'.default -eq $false) 'Overwrite clipboard must default Off'
     Assert-Valid ($manifest.contributes.configuration.properties.'universalDictate.livePreview'.default -eq $false) 'Live preview must default Off'
     Assert-Valid ($manifest.contributes.configuration.properties.'universalDictate.waveformTimeSpanSeconds'.default -eq 10) 'Ten-second waveform must be the default'
-    Assert-Valid ($manifest.contributes.configuration.properties.Count -eq 7) 'Seven user settings expected'
+    Assert-Valid ($manifest.contributes.configuration.properties.Count -eq 8) 'Eight user settings expected'
     $visualization = $manifest.contributes.configuration.properties.'universalDictate.enhancedOverlayVisualization'
     Assert-Valid ($visualization.default -eq 'waveform') 'Waveform visualization must be the default'
-    Assert-Valid (($visualization.enum -join ',') -eq 'waveform,logFrequencyPowerSpectrogram,linearFrequencyPowerSpectrogram,constantQPowerSpectrogram,circularSpectrum') 'Five visualization modes expected'
+    Assert-Valid (($visualization.enum -join ',') -eq 'waveform,logFrequencyPowerSpectrogram,circularSpectrum') 'Three visualization modes expected'
     Assert-Valid (-not $manifest.contributes.configuration.properties.ContainsKey('universalDictate.overlayButtonStyle')) 'Retired style selector packaged'
-    foreach ($command in @('copyLastTranscript', 'pauseResume')) {
+    foreach ($command in @('copyLastTranscript')) {
         $id = "universalDictate.$command"
         $commandEntries = @($manifest.contributes.commands | Where-Object { $_.command -eq $id })
         Assert-Valid ($commandEntries.Count -eq 1) "missing/duplicate recovery command $id"
     }
-    foreach ($removed in @('insertLastTranscript', 'clearLastTranscript')) {
+    foreach ($removed in @('insertLastTranscript', 'clearLastTranscript', 'pauseResume')) {
         Assert-Valid (@($manifest.contributes.commands | Where-Object { $_.command -eq "universalDictate.$removed" }).Count -eq 0) 'obsolete recovery command packaged'
     }
+    $colors = $manifest.contributes.configuration.properties.'universalDictate.overlayColorTheme'
+    Assert-Valid ($colors.default -eq 'blue' -and ($colors.enum -join ',') -eq 'blue,green,dark,amber,slate') 'Five colors with Blue default expected'
+    Assert-Valid (@($manifest.contributes.keybindings | Where-Object { $_.key -eq 'ctrl+alt+p' }).Count -eq 0) 'obsolete Pause shortcut packaged'
     # Parse XML without any external resolver; do not execute archive content.
     $xml = [System.Xml.XmlDocument]::new()
     $xml.XmlResolver = $null
@@ -100,7 +103,7 @@ try {
     [void](Get-Entry ('extension/' + $source.main.TrimStart([char[]]'./')))
 
     $hashes = [ordered]@{}
-    foreach ($relative in @('media/status-bar-controls.webp', 'media/overlay-visualizations.webp', 'media/overlay-sizes.webp', 'media/live-preview.webp', 'media/enhanced-overlay.webp', 'media/icon.png')) {
+    foreach ($relative in @('media/status-bar-controls.webp', 'media/icon.png')) {
         $entryName = "extension/$relative"
         $actual = Get-EntryHash $entryName
         Assert-Valid ($actual -eq (Get-FileHash -LiteralPath (Join-Path $root $relative) -Algorithm SHA256).Hash.ToLowerInvariant()) "stale release image: $relative"
@@ -109,7 +112,7 @@ try {
     Assert-Valid ($null -eq $zip.GetEntry('extension/media/universal-dictate-overview.webp')) 'obsolete overview image packaged'
     $readme = Read-EntryText 'extension/readme.md'
     $changelog = Read-EntryText 'extension/changelog.md'
-    foreach ($image in @('status-bar-controls.webp', 'overlay-visualizations.webp', 'overlay-sizes.webp', 'live-preview.webp', 'enhanced-overlay.webp')) {
+    foreach ($image in @('status-bar-controls.webp')) {
         Assert-Valid ($readme.Contains("media/$image")) "README screenshot missing: $image"
     }
     Assert-Valid ($changelog.Contains("## $($manifest.version)")) 'current version missing from changelog'
@@ -127,7 +130,7 @@ try {
         $hashes[$entryName] = $actual
     }
     Assert-Valid ((Read-EntryText 'extension/dist/core/input-protocol.js').Contains('--unicode-input-v1')) 'host Unicode input protocol mismatch'
-    Assert-Valid ((Read-EntryText 'extension/dist/core/recorder-pause.js').Contains('PAUSED|RESUMED')) 'host acknowledged pause protocol missing'
+    Assert-Valid ((Read-EntryText 'extension/dist/core/overlay-theme.js').Contains('amber')) 'theme module missing'
 
     foreach ($file in @('windows-text-input.exe', 'universal-dictate-recorder.exe')) {
         $relative = "resources/bin/$file"

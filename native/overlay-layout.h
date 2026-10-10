@@ -53,6 +53,7 @@ struct EnhancedOverlayLayout {
     int panelRadius = 0;
     int regionRadius = 0;
     int indicatorCenterX = 0;
+    int indicatorCenterY = 0;
     int indicatorOuterRadius = 0;
     int indicatorInnerRadius = 0;
     int indicatorDotRadius = 0;
@@ -64,7 +65,6 @@ struct EnhancedOverlayLayout {
     int dividerTop = 0;
     int dividerBottom = 0;
     OverlayRect confirmButton;
-    OverlayRect pauseButton;
     OverlayRect cancelButton;
     int titleFontHeight = 0;
     int subtitleFontHeight = 0;
@@ -149,6 +149,7 @@ inline EnhancedOverlayLayout calculateEnhancedOverlayLayout(
     layout.panelRadius = scaleLogical(spec.panelRadius, dpi);
     layout.regionRadius = scaleLogical(spec.regionRadius, dpi);
     layout.indicatorCenterX = scaleLogical(spec.indicatorCenterX, dpi);
+    layout.indicatorCenterY = layout.height / 2;
     layout.indicatorOuterRadius = scaleLogical(spec.indicatorOuterRadius, dpi);
     layout.indicatorInnerRadius = scaleLogical(spec.indicatorInnerRadius, dpi);
     layout.indicatorDotRadius = scaleLogical(spec.indicatorDotRadius, dpi);
@@ -175,16 +176,16 @@ inline EnhancedOverlayLayout calculateEnhancedOverlayLayout(
         buttonTop,
         layout.width - buttonRightInset,
         buttonTop + buttonHeight};
-    layout.pauseButton = OverlayRect{
+    // Remove one button column, not waveform space. The waveform and preview
+    // rectangles retain their pre-RC4 coordinates at each DPI.
+    const int removedColumn = buttonWidth + buttonGap;
+    layout.width -= removedColumn;
+    layout.cancelButton.left -= removedColumn;
+    layout.cancelButton.right -= removedColumn;
+    layout.confirmButton = OverlayRect{
         layout.cancelButton.left - buttonGap - buttonWidth,
         buttonTop,
         layout.cancelButton.left - buttonGap,
-        buttonTop + buttonHeight};
-
-    layout.confirmButton = OverlayRect{
-        layout.pauseButton.left - buttonGap - buttonWidth,
-        buttonTop,
-        layout.pauseButton.left - buttonGap,
         buttonTop + buttonHeight};
 
     layout.titleFontHeight = scaleLogical(spec.titleFontHeight, dpi);

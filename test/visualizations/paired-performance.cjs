@@ -10,8 +10,7 @@ const crypto = require('node:crypto');
 const { pcmFrom, wav, stats, runCase } = require('./performance.cjs');
 const { WhisperRuntime } = require('../../dist/core/whisper');
 const hash = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
-const STYLES = ['off', 'waveform', 'logFrequencyPowerSpectrogram', 'linearFrequencyPowerSpectrogram',
-  'constantQPowerSpectrogram', 'circularSpectrum'];
+const STYLES = ['off', 'waveform', 'logFrequencyPowerSpectrogram', 'circularSpectrum'];
 const PAIRS = 10;
 
 function pairedSummary(runs, preview) {
@@ -105,7 +104,7 @@ async function main() {
           await record({ policy, style: policy === 'm1' ? reference : style, preview, repeat });
       }
     }
-    if (['linearFrequencyPowerSpectrogram', 'constantQPowerSpectrogram'].includes(style)) {
+    if (['logFrequencyPowerSpectrogram'].includes(style)) {
       for (const policy of ['m1', 'candidate'])
         await record({ policy, style: policy === 'm1' ? reference : style, preview: true, repeat: 0, seconds: 48 });
     }

@@ -6,11 +6,9 @@
 
 ![Universal Dictate status-bar controls](media/status-bar-controls.webp)
 
-*This branch describes the unpublished 1.2.0 integrated review candidate. The settings table below includes all seven current controls.*
+*This branch describes the unpublished 1.2.0 integrated review candidate. The settings table below includes all eight current settings.*
 
-![Recording overlay with live transcript preview](media/live-preview.webp)
 
-![Waveform-only recording overlay with Live preview off](media/enhanced-overlay.webp)
 
 Universal Dictate transcribes locally with the multilingual Whisper `base` model through `whisper.cpp`, including automatic punctuation, and sends the completed transcript as Unicode text to the input that owns keyboard focus at insertion time. It works in VS Code editors and agent/chat prompts and can also insert into compatible text fields in other Windows applications while Universal Dictate is running. **It never submits or sends dictated text automatically.**
 
@@ -26,7 +24,8 @@ Open the settings gear next to **Dictate**, or find **Universal Dictate** in VS 
 | --- | --- | --- |
 | **Language** | Choose the language you intend to speak, or Auto-detect. All 99 Whisper languages are available. | **English** |
 | **Audio visualization** | Choose Enhanced overlay, Both (overlay and status-bar waveform), Status bar only, or Off. | **Enhanced overlay** |
-| **Enhanced Overlay Visualization** | Choose Waveform / Oscillogram, Log-Frequency Power Spectrogram, Linear-Frequency Power Spectrogram, Constant-Q Power Spectrogram or Circular Spectrum. Affects the enhanced overlay only. | **Waveform / Oscillogram** |
+| **Enhanced Overlay Visualization** | Choose Waveform / Oscillogram, Log-Frequency Power Spectrogram or Circular Spectrum. Affects the enhanced overlay only. | **Waveform / Oscillogram** |
+| **Colors** | Blue, Green (restrained emerald), Dark (graphite/silver), Amber, or Slate. Colors affect visualizations, not microphone gain or controls. | **Blue** |
 | **Overlay size** | Choose Small, Medium or Large. | **Medium** |
 | **Overlay history** | Show the latest 1, 3, 5, 10 or 20 seconds of accepted audio in Waveform or a scrolling spectrogram. Circular Spectrum shows the latest frame instead. This does not limit recording length. | **10 seconds** |
 | **Overwrite clipboard** | Also copy the final transcript to the clipboard, replacing its previous contents. Automatic insertion still uses direct text input. | **Off** |
@@ -38,19 +37,11 @@ Change settings before starting a recording. Changes made during a recording app
 
 **Audio visualization** controls *where* feedback appears. **Enhanced Overlay Visualization** controls *what the native overlay draws*. The status-bar waveform is independent. Selecting a renderer neither enables a disabled overlay nor changes the current recording; the preference is retained for the next session using Enhanced overlay or Both.
 
-The existing **Waveform / Oscillogram** remains unchanged and performs no spectral analysis. The **Linear-Frequency Power Spectrogram** uses equally spaced frequencies; the **Log-Frequency Power Spectrogram** displays the same FFT analysis on logarithmically spaced frequency bands. **Constant-Q Power Spectrogram** uses genuinely different, variable-length filters, with finer low-frequency resolution and a longer initial analysis window. **Circular Spectrum** arranges the latest FFT bands clockwise, from low to high frequency; it is not a musical chromagram.
+**Waveform / Oscillogram** preserves the working 1.1.2 amplitude mapping and immutable history; its default ink is now blue. It performs no spectral analysis. **Log-Frequency Power Spectrogram** displays FFT power over time with lower frequencies at the bottom. Blue keeps the original spectrogram palette. **Circular Spectrum** displays the latest FFT bands clockwise, low to high, in its own compact square panel. It is a spectrum, not a scrolling spectrogram or musical chromagram.
 
-Spectrograms scroll from right to left with low frequencies at the bottom. Their colors use a fixed digital power scale, not a microphone-loudness calibration or rolling automatic gain. The same completed sample keeps its color after louder speech. Circular Spectrum is intentionally compact in Small/preview layouts and is easier to distinguish at larger overlay sizes.
+Small, Medium and Large apply to each layout. Circular panels stay square with preview Off or On; the latter reserves readable text beneath the circle. Rectangular modes retain their waveform/preview viewport, with the unused Pause-button column removed. Controls are Insert and Discard only.
 
-All modes retain the existing size presets, preview area and controls. Pause freezes the visualization without appending paused audio or artificial silence. The visual analysis stays local and does not modify the recorded WAV, transcription or clipboard. There are no new runtime dependencies or model downloads. The saved `universalDictate.waveformTimeSpanSeconds` preference also controls spectrogram history; its key and prior values are retained for compatibility.
-
-![Five enhanced overlay styles with preview off and on](media/overlay-visualizations.webp)
-
-*Actual production-renderer output using synthetic speech, with Preview Off and On. These are automated rendering examples, not microphone captures or evidence of recognition quality.*
-
-![Small, Medium and Large overlay layouts with preview off and on](media/overlay-sizes.webp)
-
-*Actual production-renderer output using a synthetic tone to show size and preview geometry. Circular Spectrum keeps the existing viewport, including the small circle in compact preview layouts; the overlay does not expand to accommodate it.*
+All five palettes use a fixed digital scale, not calibrated loudness or automatic gain. Changing Colors does not recolor an active recording or change audio. Removed Linear/Constant-Q saved preferences fall back to Log-Frequency Power Spectrogram without rewriting preferences. No new model or runtime dependencies are introduced.
 
 ### Live preview
 
@@ -65,19 +56,11 @@ Preview and final transcription both run locally. In this review candidate, prev
 | Status bar: **Dictate** | Start recording |
 | Status bar: **Stop** | Stop, transcribe locally and insert |
 | **Ctrl+Alt+D** | Start or stop dictation |
-| **Ctrl+Alt+P** | Pause or resume recording within VS Code |
-| **Esc** | Cancel the current recording, including while paused |
+| **Esc** | Cancel the current recording, without inserting text |
 | Overlay: **Insert** | Stop, transcribe and insert |
-| Overlay: **Pause / Resume** | Pause or continue the same recording |
 | Overlay: **Discard** | Cancel and discard |
 
-The compact overlay buttons are **✓ Insert / Ⅱ Pause (or ▶ Resume) / ✕ Discard**, colored green, amber and red, with descriptive hover labels. The recording overlay does not take keyboard focus when clicked. Review the inserted text before sending it.
-
-### Pause and resume
-
-Pause to think, then Resume to continue the same recording. Audio received while paused is ignored: it is not saved in the WAV, added to any audio visualization or sent to preview recognition. The selected visualization and provisional text freeze; Stop/Insert still transcribes the accepted speech once, and Discard still cancels. There is no silence gap added for the paused time.
-
-The microphone device stays open while paused, so Windows may continue to show its microphone-use indicator. Pause is not a hardware mute. Use Discard to end the session.
+The overlay has two controls: **✓ Insert** (green) and **✕ Discard** (red), with descriptive hover labels. It does not take keyboard focus when clicked. Review the inserted text before sending it. Pause/Resume and its keyboard command have been removed: finish with Insert, then start a new recording when ready.
 
 ## Languages
 

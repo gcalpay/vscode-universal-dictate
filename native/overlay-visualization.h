@@ -6,15 +6,13 @@ namespace universal_dictate::visualization {
 enum class Mode {
     Waveform,
     LogFrequencyPowerSpectrogram,
-    LinearFrequencyPowerSpectrogram,
-    ConstantQPowerSpectrogram,
     CircularSpectrum
 };
 
 inline Mode parseMode(std::string_view value) noexcept {
     if (value == "logFrequencyPowerSpectrogram") return Mode::LogFrequencyPowerSpectrogram;
-    if (value == "linearFrequencyPowerSpectrogram") return Mode::LinearFrequencyPowerSpectrogram;
-    if (value == "constantQPowerSpectrogram") return Mode::ConstantQPowerSpectrogram;
+    if (value == "linearFrequencyPowerSpectrogram") return Mode::LogFrequencyPowerSpectrogram;
+    if (value == "constantQPowerSpectrogram") return Mode::LogFrequencyPowerSpectrogram;
     if (value == "circularSpectrum") return Mode::CircularSpectrum;
     return Mode::Waveform;
 }

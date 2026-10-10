@@ -46,6 +46,7 @@ function extensionFixture() {
     './core/dictation': { DictationEngine: class { constructor(o) { options = o; } async togglePause() { h.calls.pauses = (h.calls.pauses || 0) + 1; } dispose() {} } },
     './transcript-recovery': { TranscriptRecoveryController },
     './core/preview-coordinator': require('../dist/core/preview-coordinator'),
+    './core/overlay-theme': require('../dist/core/overlay-theme'),
     './core/overlay-visualization': require('../dist/core/overlay-visualization'),
     './core/overlay-size': { normalizeOverlaySize: s => s, OVERLAY_SIZES: ['small', 'medium', 'large'] },
     './languages': { normalizeWhisperLanguage: v => v, getWhisperLanguageName: v => v, WHISPER_LANGUAGES: [] },
@@ -79,7 +80,7 @@ test('disposed controller refuses a retained command callback', async () => {
 });
 test('Overwrite clipboard remains Off, with exactly two status-bar items', async () => {
   const h = extensionFixture(); await h.commands.get('universalDictate.openSettings')();
-  assert.equal(h.calls.status.length, 2); assert.equal(h.calls.menus[0].length, 7);
+  assert.equal(h.calls.status.length, 2); assert.equal(h.calls.menus[0].length, 8);
   assert.equal(h.calls.menus[0].find(item => item.action === 'overwriteClipboard').action, 'overwriteClipboard'); assert.match(h.calls.menus[0].find(item => item.action === 'overwriteClipboard').description, /Off/);
   assert.ok(!JSON.stringify(h.calls.menus).includes('Last transcript'));
   assert.equal(manifest.contributes.configuration.properties['universalDictate.overwriteClipboard'].default, false);
@@ -160,20 +161,20 @@ test('English is the manifest and runtime default language', async () => {
   h.cleanup();
 });
 
-test('seven settings retain prior defaults and add only the visualization selector', async () => {
+test('eight settings retain prior defaults and add independent Colors', async () => {
   const h = extensionFixture();
   await h.commands.get('universalDictate.openSettings')();
   assert.deepEqual(Array.from(h.calls.menus[0], item => item.action),
-    ['language', 'visualization', 'enhancedOverlayVisualization', 'overlaySize', 'waveformTimeSpan', 'overwriteClipboard', 'livePreview']);
+    ['language', 'visualization', 'enhancedOverlayVisualization', 'overlayColorTheme', 'overlaySize', 'waveformTimeSpan', 'overwriteClipboard', 'livePreview']);
   const properties = manifest.contributes.configuration.properties;
-  assert.equal(Object.keys(properties).length, 7);
+  assert.equal(Object.keys(properties).length, 8);
   assert.equal(properties['universalDictate.overlayButtonStyle'], undefined);
   assert.equal(properties['universalDictate.overlaySize'].default, 'medium');
   assert.equal(properties['universalDictate.waveformTimeSpanSeconds'].default, 10);
   await h.options.prepare();
   await h.options.startRecorder(() => {}, new AbortController().signal);
   assert.equal(h.calls.recorder[4], 10); assert.equal(h.calls.recorder[5], 'medium');
-  assert.equal(h.calls.recorder.length, 9); assert.deepEqual(h.calls.updates, []);
+  assert.equal(h.calls.recorder.length, 10); assert.deepEqual(h.calls.updates, []);
   h.cleanup();
 });
 
@@ -183,7 +184,7 @@ test('retired test-candidate style preferences are not forwarded, deleted or rew
     await h.commands.get('universalDictate.openSettings')();
     await h.options.prepare();
     await h.options.startRecorder(() => {}, new AbortController().signal);
-    assert.equal(h.calls.recorder.length, 9);
+    assert.equal(h.calls.recorder.length, 10);
     assert.equal(h.config.overlayButtonStyle, style);
     assert.deepEqual(h.calls.updates, []); assert.deepEqual(h.calls.copies, []);
     h.cleanup();
@@ -194,18 +195,16 @@ test('explicit layout preferences survive preparation and are session-stable', a
   const h=extensionFixture();Object.assign(h.config,{overlayButtonStyle:'symbols',waveformTimeSpanSeconds:1,overlaySize:'small',livePreview:true});
   await h.options.prepare();Object.assign(h.config,{overlayButtonStyle:'text',waveformTimeSpanSeconds:20,overlaySize:'large',livePreview:false});
   await h.options.startRecorder(()=>{},new AbortController().signal);
-  assert.equal(h.calls.recorder[4],1);assert.equal(h.calls.recorder[5],'small');assert.equal(h.calls.recorder[7],true);assert.equal(h.calls.recorder.length,9);
+  assert.equal(h.calls.recorder[4],1);assert.equal(h.calls.recorder[5],'small');assert.equal(h.calls.recorder[7],true);assert.equal(h.calls.recorder.length,10);
   assert.deepEqual(h.calls.updates,[]);h.cleanup();
 });
 
-test('invalid preferences fall back; pause command leaves Stop available and requires recording', async () => {
-  const h=extensionFixture();h.config.overlayButtonStyle='emoji';h.config.waveformTimeSpanSeconds='10';
-  await h.options.prepare();await h.options.startRecorder(()=>{},new AbortController().signal);
-  assert.equal(h.calls.recorder[4],10);assert.equal(h.calls.recorder.length,9);
-  await h.commands.get('universalDictate.pauseResume')();assert.equal(h.calls.pauses,1);
-  const binding=manifest.contributes.keybindings.find(x=>x.command==='universalDictate.pauseResume');
-  assert.equal(binding.key,'ctrl+alt+p');assert.match(binding.when,/universalDictate.recording/);
-  for(const state of ['pausing','paused','resuming']){h.options.onStateChanged(state);assert.equal(h.calls.status[0].command,'universalDictate.toggle');}
+test('invalid preferences fall back and Pause is no longer exposed', async () => {
+  const h=extensionFixture(); h.config.waveformTimeSpanSeconds='10';
+  await h.options.prepare(); await h.options.startRecorder(()=>{},new AbortController().signal);
+  assert.equal(h.calls.recorder[4],10); assert.equal(h.calls.recorder[9],'blue');
+  assert.equal(h.commands.has('universalDictate.pauseResume'),false);
+  assert.equal(manifest.contributes.keybindings.some(x=>x.key==='ctrl+alt+p'),false);
   h.cleanup();
 });
 
@@ -236,21 +235,20 @@ for (const display of ['enhancedOverlay', 'both', 'statusBar', 'off']) {
     h.vscode.window.showQuickPick = async items => {
       h.calls.menus.push(items);
       return items.find(item => item.action === 'enhancedOverlayVisualization')
-        || items.find(item => item.visualization === 'constantQPowerSpectrogram');
+        || items.find(item => item.visualization === 'logFrequencyPowerSpectrogram');
     };
     await h.commands.get('universalDictate.openSettings')();
     assert.equal(h.calls.menus.length, 2);
     assert.deepEqual(Array.from(h.calls.menus[1], item=>item.label), [
-      'Waveform / Oscillogram', 'Log-Frequency Power Spectrogram', 'Linear-Frequency Power Spectrogram',
-      'Constant-Q Power Spectrogram', 'Circular Spectrum']);
+      'Waveform / Oscillogram', 'Log-Frequency Power Spectrogram', 'Circular Spectrum']);
     assert.equal(h.calls.menus[1][0].description, 'Current');
-    assert.deepEqual(h.calls.updates, [['enhancedOverlayVisualization','constantQPowerSpectrogram',1]]);
+    assert.deepEqual(h.calls.updates, [['enhancedOverlayVisualization','logFrequencyPowerSpectrogram',1]]);
     assert.equal(h.config.visualization, display);
     assert.equal(h.calls.copies.length, 0);
     if (['off','statusBar'].includes(display)) assert.match(h.calls.info.at(-1), /disabled.*retained/);
     await h.options.prepare(); await h.options.startRecorder(()=>{},new AbortController().signal);
     assert.equal(h.calls.recorder[2], ['enhancedOverlay','both'].includes(display));
-    assert.equal(h.calls.recorder[8], 'constantQPowerSpectrogram');
+    assert.equal(h.calls.recorder[8], 'logFrequencyPowerSpectrogram');
     h.cleanup();
   });
 }
@@ -270,15 +268,15 @@ test('visualization choice uses the effective workspace override in its confirma
     return {...configuration, get: (key,fallback)=>key==='enhancedOverlayVisualization' ? 'circularSpectrum' : configuration.get(key,fallback)};
   };
   h.vscode.window.showQuickPick = async items => items.find(item=>item.action==='enhancedOverlayVisualization')
-    || items.find(item=>item.visualization==='linearFrequencyPowerSpectrogram');
+    || items.find(item=>item.visualization==='logFrequencyPowerSpectrogram');
   await h.commands.get('universalDictate.openSettings')();
   assert.match(h.calls.info.at(-1), /Circular Spectrum/);
   assert.match(h.calls.info.at(-1), /workspace setting overrides/);
-  assert.deepEqual(h.calls.updates, [['enhancedOverlayVisualization','linearFrequencyPowerSpectrogram',1]]);
+  assert.deepEqual(h.calls.updates, [['enhancedOverlayVisualization','logFrequencyPowerSpectrogram',1]]);
   h.cleanup();
 });
 
-for (const mode of ['waveform','logFrequencyPowerSpectrogram','linearFrequencyPowerSpectrogram','constantQPowerSpectrogram','circularSpectrum']) {
+for (const mode of ['waveform','logFrequencyPowerSpectrogram','circularSpectrum']) {
   test(`${mode}: visualization is snapshotted before asynchronous preparation and not live-switched`, async () => {
     const h=extensionFixture(); h.config.enhancedOverlayVisualization=mode;
     const preparing=h.options.prepare(); h.config.enhancedOverlayVisualization='not-valid'; await preparing;
@@ -303,7 +301,7 @@ test('a saved style reappears after switching the overlay off and back on', asyn
 test('latency report retains session overlay style after a setting changes', async () => {
   const h = extensionFixture();
   h.config.visualization = 'both';
-  h.config.enhancedOverlayVisualization = 'constantQPowerSpectrogram';
+  h.config.enhancedOverlayVisualization = 'logFrequencyPowerSpectrogram';
   await h.options.prepare();
   h.config.visualization = 'off';
   h.config.enhancedOverlayVisualization = 'waveform';
@@ -312,7 +310,18 @@ test('latency report retains session overlay style after a setting changes', asy
   }
   const line = h.calls.output.at(-1)[1];
   assert.match(line, /display=both/);
-  assert.match(line, /overlayStyle=constantQPowerSpectrogram/);
+  assert.match(line, /overlayStyle=logFrequencyPowerSpectrogram/);
   assert.equal(h.calls.copies.length, 0);
+  h.cleanup();
+});
+
+test('Colors is session-stable, persists only its key and honors a workspace override', async () => {
+  const h=extensionFixture(); h.config.overlayColorTheme='amber';
+  await h.options.prepare(); h.config.overlayColorTheme='green';
+  await h.options.startRecorder(()=>{},new AbortController().signal);
+  assert.equal(h.calls.recorder[9],'amber'); assert.deepEqual(h.calls.updates,[]);
+  h.vscode.window.showQuickPick=async items=>items.find(i=>i.action==='overlayColorTheme')||items.find(i=>i.theme==='slate');
+  await h.commands.get('universalDictate.openSettings')();
+  assert.deepEqual(h.calls.updates,[['overlayColorTheme','slate',1]]);
   h.cleanup();
 });

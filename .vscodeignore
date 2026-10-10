@@ -46,3 +46,9 @@ resources/whisper/whisper-quantize.exe
 resources/whisper/whisper-stream.exe
 resources/whisper/whisper-talk-llama.exe
 resources/whisper/whisper-vad-speech-segments.exe
+
+# Previous-candidate overlay illustrations show retired modes and Pause.
+media/overlay-visualizations.webp
+media/overlay-sizes.webp
+media/live-preview.webp
+media/enhanced-overlay.webp

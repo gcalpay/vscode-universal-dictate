@@ -6,7 +6,8 @@
 
 namespace universal_dictate::visualization {
 inline void drawSpectralVisualization(HDC dc, const OverlayRect& rect, unsigned dpi,
-                                      SpectralVisualizer& visualizer) {
+                                      SpectralVisualizer& visualizer,
+                                      OverlayTheme theme = OverlayTheme::Blue) {
     const int width = rect.right - rect.left, height = rect.bottom - rect.top;
     if (width <= 0 || height <= 0) return;
     Gdiplus::Graphics graphics(dc);
@@ -15,7 +16,7 @@ inline void drawSpectralVisualization(HDC dc, const OverlayRect& rect, unsigned 
         graphics.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
         graphics.SetPixelOffsetMode(Gdiplus::PixelOffsetModeHighQuality);
         const auto geometry = circularGeometry(rect, dpi, visualizer.latest());
-        Gdiplus::Pen ring(Gdiplus::Color(255, 44, 69, 92), geometry.stroke);
+        Gdiplus::Pen ring(Gdiplus::Color(0xff000000U | waveformColors(theme).axis), geometry.stroke);
         const auto radius = geometry.innerRadius;
         if (radius > 0) graphics.DrawEllipse(&ring, geometry.centerX - radius,
             geometry.centerY - radius, 2 * radius, 2 * radius);
@@ -25,12 +26,12 @@ inline void drawSpectralVisualization(HDC dc, const OverlayRect& rect, unsigned 
         for (std::size_t i = 0; i < geometry.count; ++i) {
             const auto& segment = geometry.bars[i];
             if (segment.level == 0) continue;
-            bar.SetColor(Gdiplus::Color(spectralColor(segment.level)));
+            bar.SetColor(Gdiplus::Color(spectralColor(segment.level, theme)));
             graphics.DrawLine(&bar, segment.x1, segment.y1, segment.x2, segment.y2);
         }
         return;
     }
-    prepareSpectrogramPixels(visualizer, static_cast<std::size_t>(width), static_cast<std::size_t>(height));
+    prepareSpectrogramPixels(visualizer, static_cast<std::size_t>(width), static_cast<std::size_t>(height), theme);
     auto pixels = visualizer.pixels();
     if (pixels.empty()) return;
     const auto columns = static_cast<INT>(visualizer.pixelColumns());

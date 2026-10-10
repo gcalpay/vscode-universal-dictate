@@ -17,10 +17,13 @@ Keep PR #55 and its M1 evidence intact; visualization work builds on that source
 ## Invariants
 
 Preserve the isolated warm final/preview worker design, pinned model and inference
-parameters. Preserve Pause/Resume, full accepted WAV, one final insertion, clipboard
+parameters. Preserve full accepted WAV, one final insertion, clipboard
 Off as no access, non-activating controls and Issue #38 scope boundary.
-Keep the 1.1.2 waveform mapping, immutable buckets/history, native paint,
-overlay/preview layout and raw snapshot unchanged; the RC2 Medium-only gain is
+RC4 scope is in docs/RC4_SCOPE.md: three modes, five Colors, a square circular
+panel and two controls. The user explicitly removed Pause button/command/shortcut.
+Keep the 1.1.2 waveform mapping, immutable buckets/history, raw snapshot and
+amplitude geometry unchanged; theme recoloring and control/circular layout changes
+are authorized; the RC2 Medium-only gain is
 explicitly excluded pending root-cause evidence. Do not mask fluctuating raw
 microphone input with unvalidated visual gain. Spectral analysis is enhanced-
 overlay-only, absent when Waveform/Status-bar-only/Off is effective. No FFT/CQT,

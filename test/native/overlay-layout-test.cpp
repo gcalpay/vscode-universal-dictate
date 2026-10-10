@@ -1,91 +1,48 @@
-#include "../../native/overlay-layout.h"
-
+#include "../../native/circular-layout.h"
 #include <array>
 #include <cassert>
-
-using universal_dictate::OverlaySize;
-using universal_dictate::calculateEnhancedOverlayLayout;
-
-void assertInside(const universal_dictate::EnhancedOverlayLayout& layout) {
-    assert(layout.width > 0);
-    assert(layout.height > 0);
-    assert(layout.waveform.left >= 0);
-    assert(layout.waveform.right <= layout.width);
-    assert(layout.waveform.top >= 0);
-    assert(layout.waveform.bottom <= layout.height);
-    assert(layout.waveform.left < layout.waveform.right);
-    assert(layout.waveform.top < layout.waveform.bottom);
-    assert(layout.confirmButton.left >= 0);
-    assert(layout.confirmButton.right <= layout.width);
-    assert(layout.cancelButton.left >= 0);
-    assert(layout.cancelButton.right <= layout.width);
-    assert(layout.confirmButton.top < layout.confirmButton.bottom);
-    assert(layout.cancelButton.top < layout.cancelButton.bottom);
-    assert(layout.confirmButton.right < layout.pauseButton.left);
-    assert(layout.pauseButton.right < layout.cancelButton.left);
-    assert(layout.pauseButton.top == layout.confirmButton.top);
-    assert(layout.pauseButton.bottom == layout.confirmButton.bottom);
-    assert(layout.waveform.right < layout.dividerX);
-    assert(layout.dividerX <= layout.confirmButton.left);
-    assert(layout.titleFontHeight > 0);
+#include <iostream>
+using namespace universal_dictate;
+bool overlaps(OverlayRect a, OverlayRect b) {
+    return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
 }
-
+void inside(const EnhancedOverlayLayout& layout, OverlayRect r) {
+    assert(r.left >= 0 && r.top >= 0 && r.right <= layout.width && r.bottom <= layout.height);
+    assert(r.right > r.left && r.bottom > r.top);
+}
 int main() {
-    const auto small = calculateEnhancedOverlayLayout(OverlaySize::Small, 96);
-    const auto medium = calculateEnhancedOverlayLayout(OverlaySize::Medium, 96);
-    const auto large = calculateEnhancedOverlayLayout(OverlaySize::Large, 96);
-
-    assert(small.width == 380 && small.height == 48);
-    assert(medium.width == 520 && medium.height == 72);
-    assert(large.width == 740 && large.height == 112);
-    assert(!small.showSubtitle);
-    assert(medium.showSubtitle);
-    assert(large.showSubtitle);
-
-    // Narrow symbols return horizontal room to the waveform without changing width.
-    assert(large.waveform.left == 148);
-    assert(large.waveform.right == 604);
-    assert(large.dividerX == 608);
-    assert(large.confirmButton.left == 614);
-    assert(large.confirmButton.right == 650);
-    assert(large.cancelButton.left == 698);
-    assert(large.cancelButton.right == 734);
-
-    const std::array<OverlaySize, 3> sizes{
-        OverlaySize::Small,
-        OverlaySize::Medium,
-        OverlaySize::Large};
-    const std::array<unsigned int, 4> dpis{96, 120, 144, 192};
-
-    for (OverlaySize size : sizes) {
-        for (unsigned int dpi : dpis) {
-            for (bool preview : {false, true}) {
-                const auto layout = calculateEnhancedOverlayLayout(size, dpi, preview);
-                assertInside(layout);
-                const int width = layout.pauseButton.right - layout.pauseButton.left;
-                const int height = layout.pauseButton.bottom - layout.pauseButton.top;
-                assert(width >= height && width <= height + universal_dictate::scaleLogical(6, dpi) + 1);
-                assert(height >= universal_dictate::scaleLogical(24, dpi));
-                assert(layout.waveform.top <= universal_dictate::scaleLogical(3, dpi));
-                assert(layout.height - layout.waveform.bottom <= universal_dictate::scaleLogical(3, dpi));
-                assert(layout.pauseButton.top == (layout.height - height) / 2);
+    unsigned cases = 0;
+    for (auto size : {OverlaySize::Small, OverlaySize::Medium, OverlaySize::Large})
+        for (unsigned dpi : {0U,96U,120U,144U,168U,192U,240U,288U})
+            for (bool preview : {false,true}) {
+                const auto spec = enhancedOverlaySpec(size);
+                const auto rect = calculateEnhancedOverlayLayout(size,dpi,preview);
+                // The entire waveform viewport is exactly the pre-RC4 rectangle.
+                assert(rect.waveform.left == scaleLogical(spec.waveformLeft,dpi));
+                assert(rect.waveform.right == scaleLogical(spec.width,dpi)-scaleLogical(spec.waveformRightInset,dpi));
+                assert(rect.waveform.top == scaleLogical(spec.waveformTop,dpi));
+                assert(rect.waveform.bottom == scaleLogical(enhancedOverlayHeight(size,preview),dpi)-scaleLogical(spec.waveformBottomInset,dpi));
+                inside(rect,rect.waveform); inside(rect,rect.confirmButton); inside(rect,rect.cancelButton);
+                assert(rect.confirmButton.right < rect.cancelButton.left);
+                assert(rect.dividerX < rect.confirmButton.left);
+                const auto circle = calculateCircularOverlayLayout(size,dpi,preview);
+                assert(circle.width == circle.height);
+                inside(circle,circle.waveform); inside(circle,circle.title);
+                inside(circle,circle.confirmButton); inside(circle,circle.cancelButton);
+                assert(circle.waveform.bottom <= circle.confirmButton.top-scaleLogical(8,dpi));
+                assert(!overlaps(circle.waveform,circle.title));
+                assert(!overlaps(circle.confirmButton,circle.cancelButton));
+                assert(circle.waveform.bottom-circle.waveform.top >= scaleLogical(88,dpi)-1);
+                if (preview) {
+                    const auto text = calculateCircularPreviewLayout(size,dpi);
+                    inside(circle,text.text); inside(circle,text.label);
+                    assert(!overlaps(text.text,circle.waveform));
+                    assert(!overlaps(text.text,circle.confirmButton));
+                    assert(!overlaps(text.text,circle.cancelButton));
+                    assert(!overlaps(text.title,text.label));
+                    assert(text.maxLines == (size == OverlaySize::Small ? 1U : 2U));
+                }
+                ++cases;
             }
-            const auto compact = calculateEnhancedOverlayLayout(size, dpi);
-            const auto preview = calculateEnhancedOverlayLayout(size, dpi, true);
-            assert(preview.width == compact.width && preview.height > compact.height);
-        }
-    }
-
-    const auto small125 = calculateEnhancedOverlayLayout(OverlaySize::Small, 120);
-    assert(small125.width == 475 && small125.height == 60);
-
-    const auto medium150 = calculateEnhancedOverlayLayout(OverlaySize::Medium, 144);
-    assert(medium150.width == 780 && medium150.height == 108);
-
-    const auto large200 = calculateEnhancedOverlayLayout(OverlaySize::Large, 192);
-    assert(large200.width == 1480 && large200.height == 224);
-    assert(large200.confirmButton.left == 1228);
-    assert(large200.cancelButton.right == 1468);
-
-    return 0;
+    std::cout << cases << " two-control rectangular/square size/DPI/preview layouts passed\n";
 }

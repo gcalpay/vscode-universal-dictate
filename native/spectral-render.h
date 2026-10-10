@@ -1,6 +1,7 @@
 /* Shared, testable spectral presentation geometry. SPDX-License-Identifier: MIT */
 #pragma once
 #include "overlay-layout.h"
+#include "overlay-theme.h"
 #include "spectral-visualizer.h"
 #include <array>
 #include <cmath>
@@ -8,33 +9,22 @@
 
 namespace universal_dictate::visualization {
 // Opaque ARGB. Zero matches the existing panel, not an animated noise texture.
-inline std::uint32_t spectralColor(std::uint8_t level) noexcept {
-    constexpr std::array<std::array<int, 3>, 6> stops{{
-        {14, 18, 27}, {25, 34, 74}, {52, 63, 142},
-        {64, 149, 191}, {85, 222, 194}, {239, 249, 219}
-    }};
-    const auto scaled = static_cast<unsigned>(level) * (stops.size() - 1);
-    const auto index = std::min(stops.size() - 2, scaled / 255);
-    const int fraction = static_cast<int>(scaled - index * 255);
-    std::uint32_t color = 0xff000000U;
-    for (std::size_t channel = 0; channel < 3; ++channel) {
-        const auto value = (stops[index][channel] * (255 - fraction)
-                          + stops[index + 1][channel] * fraction + 127) / 255;
-        color |= static_cast<std::uint32_t>(value) << (16 - 8 * channel);
-    }
-    return color;
+inline std::uint32_t spectralColor(std::uint8_t level, OverlayTheme theme = OverlayTheme::Blue) noexcept {
+    return paletteColor(level, theme);
 }
 
 inline void prepareSpectrogramPixels(SpectralVisualizer& visualizer,
-                                      std::size_t width = 0, std::size_t height = 0) noexcept {
+                                      std::size_t width = 0, std::size_t height = 0,
+                                      OverlayTheme theme = OverlayTheme::Blue) noexcept {
     auto pixels = visualizer.pixels();
     if (pixels.empty()) return;
     visualizer.setPixelExtent(width, height);
+    visualizer.setPixelTheme(static_cast<unsigned>(theme));
     if (visualizer.pixelsCurrent()) return;
     const auto columns = visualizer.pixelColumns(), rows = visualizer.pixelRows();
     std::array<std::uint32_t, 256> palette{};
     for (std::size_t i = 0; i < palette.size(); ++i)
-        palette[i] = spectralColor(static_cast<std::uint8_t>(i));
+        palette[i] = spectralColor(static_cast<std::uint8_t>(i), theme);
     if (columns == visualizer.columns() && rows == visualizer.bands()) {
         for (std::size_t y = 0; y < rows; ++y)
             for (std::size_t x = 0; x < columns; ++x)

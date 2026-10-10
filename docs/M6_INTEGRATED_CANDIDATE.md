@@ -1,5 +1,7 @@
 # M6 — integrated 1.2.0 candidate and acceptance
 
+**Current RC4 revision:** [RC4_SCOPE.md](RC4_SCOPE.md) supersedes mode count, colors, geometry and Pause references below. Earlier source/run identities are historical evidence, not new-run results.
+
 This is the current M6 plan. [M6_RELEASE.md](M6_RELEASE.md) records the historical
 1.0.0 release process; its authorization does not authorize a new release.
 Current roadmap: M0 baseline → M1 final-inference isolation → M2 settings/routing →

@@ -6,28 +6,17 @@
 
 ### Added
 
-- Enhanced Overlay Visualization: Waveform / Oscillogram (default), Log-Frequency
-  Power Spectrogram, Linear-Frequency Power Spectrogram, Constant-Q Power
-  Spectrogram and Circular Spectrum. Selection is independent of display location.
-- Bounded visual-only FFT and variable-window constant-Q analysis, outside capture.
-- Session visualization metadata in the accumulated latency report.
-- **Universal Dictate: Show Latency Report** retains up to 100 completed timing
-  records in one in-memory document, with no audio or transcript diagnostics.
+- Three enhanced-overlay visualizations: Waveform / Oscillogram, Log-Frequency Power Spectrogram and Circular Spectrum.
+- Colors: Blue (default), restrained Green, Dark, Amber and Slate. Blue preserves the original log-spectrogram palette; waveform ink is blue without an amplitude change.
+- A dedicated square Circular Spectrum panel for every size and preview state, with Insert and Discard beneath the display.
+- Accumulated timing reports; isolated warm final/preview workers from M1.
 
 ### Changed
 
-- Overlay history reuses the existing saved waveform time-span preference for
-  waveform and spectrograms; Circular Spectrum shows the latest spectrum instead.
-- Final transcription keeps its dedicated warm Whisper worker. Preview uses a
-  separate lazy worker with at most two inference threads and bounded, confirmed
-  shutdown before final dispatch. Preview Off avoids the second model instance.
-- Preserve the 1.1.2 waveform mapping, immutable history, overlay/preview layout,
-  and accepted paint function; retain status bar, Pause/Resume, clipboard Off
-  as no automatic access, and one final insertion of the full recording.
-- Do not include the experimental RC2 Medium-only gain change. The cause of the
-  earlier intermittent nearly flat waveform is unknown; gain was not a verified fix.
-- Cache unchanged preview text and increase bounded visual-queue scheduling
-  headroom, while retaining existing capture audio and per-update analysis limits.
+- Removed Linear-Frequency and Constant-Q modes; older preferences fall back to Log-Frequency without rewriting saved settings.
+- Removed the Pause button, command and keyboard shortcut. Original low-level admission/lifecycle regression coverage remains.
+- Preserved 1.1.2 waveform amplitude mapping, immutable history and preview viewport. RC2's experimental gain is excluded.
+- Preserved clipboard Off as no access, final-only insertion, local model/runtime pins and attribution.
 
 ### Validation and release status
 

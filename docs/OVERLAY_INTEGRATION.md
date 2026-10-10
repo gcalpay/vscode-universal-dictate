@@ -1,5 +1,7 @@
 # Overlay integration — current M5 closeout and M6 preparation
 
+**Current RC4 revision:** [RC4_SCOPE.md](RC4_SCOPE.md) supersedes mode count, colors, geometry and Pause references below. Earlier source/run identities are historical evidence, not new-run results.
+
 Verified recovery baseline: `feat/overlay-visualizations` at
 `410094fb898e15170cd985ff1f7c060900b1873c`, tree
 `bee76fa88913183d6089c1d2ced1c7b0350f505a`, 8 October 2026.
