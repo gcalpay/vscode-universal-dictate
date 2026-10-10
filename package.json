@@ -2,7 +2,7 @@
   "name": "vscode-universal-dictate",
   "displayName": "Universal Dictate",
   "description": "Local, offline dictation for VS Code on Windows and Remote - WSL. 99 languages, optional live transcript preview, clipboard recovery, and no automatic sending.",
-  "version": "1.1.3",
+  "version": "1.2.0",
   "license": "MIT",
   "publisher": "gcalpay",
   "icon": "media/icon.png",
@@ -56,7 +56,6 @@
     "onCommand:universalDictate.openSettings",
     "onCommand:universalDictate.showDiagnostics",
     "onCommand:universalDictate.copyLastTranscript",
-    "onCommand:universalDictate.pauseResume",
     "onCommand:universalDictate.showLatencyReport"
   ],
   "contributes": {
@@ -86,11 +85,6 @@
         "title": "Universal Dictate: Copy Last Transcript"
       },
       {
-        "command": "universalDictate.pauseResume",
-        "title": "Universal Dictate: Pause/Resume Recording",
-        "enablement": "universalDictate.recording"
-      },
-      {
         "command": "universalDictate.showLatencyReport",
         "title": "Universal Dictate: Show Latency Report"
       }
@@ -104,11 +98,6 @@
       {
         "command": "universalDictate.cancel",
         "key": "escape",
-        "when": "universalDictate.recording && !terminalFocus"
-      },
-      {
-        "command": "universalDictate.pauseResume",
-        "key": "ctrl+alt+p",
         "when": "universalDictate.recording && !terminalFocus"
       }
     ],
@@ -132,10 +121,30 @@
             "Show the enhanced native recording overlay and the animated status-bar waveform.",
             "Show the enhanced native overlay; keep static recording feedback in the status bar.",
             "Show only the animated status-bar waveform; do not create the native overlay.",
-            "Disable both waveform visualizations; keep static recording feedback in the status bar."
+            "Disable overlay and status-bar audio visualizations; keep static recording feedback in the status bar."
           ],
           "default": "enhancedOverlay",
           "description": "Controls recording visualizations. Default: enhanced overlay. Changes apply from the next dictation session."
+        },
+        "universalDictate.enhancedOverlayVisualization": {
+          "type": "string",
+          "enum": [
+            "waveform",
+            "logFrequencyPowerSpectrogram",
+            "circularSpectrum"
+          ],
+          "enumItemLabels": [
+            "Waveform / Oscillogram",
+            "Log-Frequency Power Spectrogram",
+            "Circular Spectrum"
+          ],
+          "enumDescriptions": [
+            "Keep the existing scrolling speech waveform. Default; no spectral analysis.",
+            "Show FFT power over time with logarithmic frequency spacing (62.5 Hz to 8 kHz).",
+            "Arrange the latest FFT spectrum around a circle. Not a chromagram; the history duration does not apply."
+          ],
+          "default": "waveform",
+          "description": "Visualization drawn inside the enhanced native recording overlay. Used only when Audio visualization is Enhanced overlay or Both. Does not change the status bar or enable the overlay. Changes apply from the next dictation session. Retired Linear/Constant-Q preferences display the log-frequency spectrogram instead."
         },
         "universalDictate.overlaySize": {
           "type": "string",
@@ -162,7 +171,7 @@
             20
           ],
           "default": 10,
-          "description": "Amount of recent audio, in seconds, shown across the enhanced native waveform. Changes apply from the next dictation session."
+          "description": "Amount of recent active audio, in seconds, shown across the enhanced waveform or scrolling spectrogram. Does not apply to Circular Spectrum. The existing saved preference is preserved. Changes apply from the next dictation session."
         },
         "universalDictate.overwriteClipboard": {
           "type": "boolean",
@@ -173,6 +182,32 @@
           "type": "boolean",
           "default": false,
           "description": "Show provisional text while recording in the enhanced overlay. Disabled by default; when disabled no preview audio snapshots or extra inference run. Requires Enhanced overlay or Both visualization. Changes apply from the next recording. The complete recording is still transcribed and inserted once after Stop."
+        },
+        "universalDictate.overlayColorTheme": {
+          "type": "string",
+          "enum": [
+            "blue",
+            "green",
+            "dark",
+            "amber",
+            "slate"
+          ],
+          "enumItemLabels": [
+            "Blue",
+            "Green",
+            "Dark",
+            "Amber",
+            "Slate"
+          ],
+          "enumDescriptions": [
+            "Blue/cyan; retains the original log-spectrogram palette.",
+            "Restrained medium-dark emerald green.",
+            "Neutral graphite and silver.",
+            "Warm amber and gold.",
+            "Muted steel-blue and cool grey."
+          ],
+          "default": "blue",
+          "description": "Colors of the enhanced overlay visualization. Does not change microphone gain, the status bar, controls or display location. Applies from the next recording."
         }
       }
     }
@@ -186,7 +221,8 @@
     "test:m2": "npm run compile && node --test test/transcript-recovery.test.cjs test/transcript-recovery-ui.test.cjs test/text-input.test.cjs test/lifecycle.test.cjs test/recorder-lifecycle.test.cjs",
     "test:m3": "npm run compile && node --unhandled-rejections=strict --test test/preview-*.test.cjs",
     "test:m7": "npm run compile && node --unhandled-rejections=strict --test test/pause-*.test.cjs",
-    "test:latency": "npm run compile && node --unhandled-rejections=strict --test test/*latency*.test.cjs test/whisper-worker.test.cjs test/preview-runtime.test.cjs"
+    "test:latency": "npm run compile && node --unhandled-rejections=strict --test test/*latency*.test.cjs test/whisper-worker.test.cjs test/preview-runtime.test.cjs",
+    "test:visualizations": "npm run compile && node --unhandled-rejections=strict --test test/overlay-visualization.test.cjs test/overlay-visualization-source.test.cjs"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

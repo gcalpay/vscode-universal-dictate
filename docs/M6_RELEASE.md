@@ -2,7 +2,16 @@
 
 > Closed out by PR #53 at `eda02a512d3feb70989b89a3efc6714d12b833e7`. The user
 > reports Marketplace publication. The material below records the original release
-> gate, not instructions to republish. Current work: [M7](M7_PAUSE_RESUME.md).
+> gate, not instructions to republish. Current work: [M5 review closeout](M5_REVIEW_CLOSEOUT.md)
+> and [M6 integrated 1.2.0 candidate](M6_INTEGRATED_CANDIDATE.md).
+
+The authorization, branch/version/defaults and milestone labels below are
+historical. They do not authorize merging, tagging or publishing the current
+candidate. The historical M7 Pause/Resume document is unrelated to the current
+M7 history-curation safeguards. The 8 October recovery verification found no
+GitHub v1.0.0/v1.1.0/v1.2.0 tags/releases; the historical plan below is not proof
+that those GitHub publication steps occurred. Marketplace reports and GitHub
+release state remain separate.
 
 Updated: 2026-10-01. Branch: `release/next`.
 Accepted M3 merge: `d1408904409c8636a4ffada6ef342a5d04b6ed3a` (PR #52).

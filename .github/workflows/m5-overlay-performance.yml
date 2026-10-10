@@ -1,0 +1,117 @@
+name: M5 integrated overlay performance
+on:
+  push:
+    branches: [feat/overlay-visualizations, review/rc4-themes-no-pause]
+    paths:
+      - "native/**"
+      - "src/**"
+      - "test/**"
+      - ".github/workflows/m5-overlay-performance.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  replay:
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        style: [off, waveform, logFrequencyPowerSpectrogram, circularSpectrum]
+    env:
+      M5_STYLE: ${{ matrix.style }}
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v7
+        with:
+          ref: d4c52d2d153545a7a8bef6ed1680261e199ef22b
+          path: .deps/m1-baseline
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Compile host and verify unchanged inference implementation
+        shell: pwsh
+        run: |
+          npm ci --no-audit --no-fund
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run compile
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node --test test/visualizations/*.test.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          foreach ($file in @('dictation.ts','whisper.ts','whisper-worker.ts','whisper-transport.ts','preview-coordinator.ts')) {
+            if ((Get-FileHash "src/core/$file").Hash -ne (Get-FileHash ".deps/m1-baseline/src/core/$file").Hash) { throw "M1 inference changed: $file" }
+          }
+      - name: Build frozen M1 and candidate replay shells
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force .deps/miniaudio,.deps/m5-evidence | Out-Null
+          Invoke-WebRequest https://raw.githubusercontent.com/mackron/miniaudio/0.11.25/miniaudio.h -OutFile .deps/miniaudio/miniaudio.h
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vs = (& $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath | Select-Object -First 1)
+          if (-not $vs) { throw 'MSVC installation missing' }
+          $vcvars = Join-Path $vs 'VC\Auxiliary\Build\vcvars64.bat'
+          $commands = @(
+            "call `"$vcvars`"",
+            'cl /nologo /utf-8 /O2 /std:c++20 /EHsc test\native\preview-text-cache-test.cpp /Fe:.deps\preview-text-cache-test.exe user32.lib gdi32.lib',
+            'cl /nologo /utf-8 /O2 /std:c++20 /EHsc /DUD_REPLAY_BASELINE /I .deps\miniaudio test\native\overlay-replay.cpp native\miniaudio-impl.cpp /Fe:.deps\overlay-replay-m1.exe user32.lib gdi32.lib /link /MANIFEST:EMBED',
+            'cl /nologo /utf-8 /O2 /std:c++20 /EHsc /I .deps\miniaudio test\native\overlay-replay.cpp native\miniaudio-impl.cpp /Fe:.deps\overlay-replay-candidate.exe user32.lib gdi32.lib /link /MANIFEST:EMBED',
+            'cl /nologo /utf-8 /O2 /std:c++20 /EHsc /I .deps\miniaudio test\native\overlay-speech-render.cpp native\miniaudio-impl.cpp /Fe:.deps\overlay-speech-render.exe user32.lib gdi32.lib /link /MANIFEST:EMBED'
+          ) -join ' && '
+          cmd.exe /D /S /C $commands
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Verify unchanged multilingual pixels and preview raster cache
+        shell: pwsh
+        run: |
+          & .deps/preview-text-cache-test.exe | Tee-Object .deps/m5-evidence/preview-cache-pixels.txt
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Fetch checksum-pinned Whisper and generate synthetic speech
+        shell: pwsh
+        run: |
+          Invoke-WebRequest https://github.com/ggml-org/whisper.cpp/releases/download/v1.9.1/whisper-bin-x64.zip -OutFile .deps/whisper.zip
+          if ((Get-FileHash .deps/whisper.zip -Algorithm SHA256).Hash.ToLowerInvariant() -ne '7d8be46ecd31828e1eb7a2ecdd0d6b314feafd82163038ab6092594b0a063539') { throw 'Whisper checksum mismatch' }
+          Expand-Archive .deps/whisper.zip .deps/whisper-runtime
+          Invoke-WebRequest https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin -OutFile .deps/ggml-base.bin
+          if ((Get-FileHash .deps/ggml-base.bin -Algorithm SHA256).Hash.ToLowerInvariant() -ne '60ed5bc3dd14eea856493d334349b405782ddcaf0028d4b5df4088345fba2efe') { throw 'Model checksum mismatch' }
+          Add-Type -AssemblyName System.Speech
+          $synth = [System.Speech.Synthesis.SpeechSynthesizer]::new()
+          try {
+            $voice = $synth.GetInstalledVoices() | Where-Object { $_.Enabled -and $_.VoiceInfo.Culture.Name.StartsWith('en-') } | Select-Object -First 1
+            if (-not $voice) { throw 'Synthetic English voice unavailable' }
+            $synth.SelectVoice($voice.VoiceInfo.Name)
+            $format = [System.Speech.AudioFormat.SpeechAudioFormatInfo]::new(16000, [System.Speech.AudioFormat.AudioBitsPerSample]::Sixteen, [System.Speech.AudioFormat.AudioChannel]::Mono)
+            $synth.SetOutputToWaveFile((Join-Path $pwd '.deps/preview-fixture.wav'), $format)
+            $synth.Speak(('This is a synthetic test of local dictation. The pump pressure is five bar, and the water temperature is twenty degrees. Do not submit the message. We are checking whether provisional words remain responsive during a longer recording. ' * 4))
+            $synth.SetOutputToNull()
+            $voice.VoiceInfo.Name | Set-Content .deps/m5-evidence/synthetic-voice.txt
+          } finally { $synth.Dispose() }
+      - name: Scripted speech screenshots through the production renderer
+        shell: pwsh
+        run: |
+          & .deps/overlay-speech-render.exe --allow-disposable-desktop .deps/preview-fixture.wav .deps/m5-evidence/speech-rendering
+          exit $LASTEXITCODE
+      - name: Real-time combined capture rendering and Whisper comparison
+        shell: pwsh
+        timeout-minutes: 20
+        run: |
+          node --unhandled-rejections=strict test/visualizations/paired-performance.cjs .deps/overlay-replay-m1.exe .deps/overlay-replay-candidate.exe .deps/whisper-runtime/Release/whisper-server.exe .deps/ggml-base.bin .deps/preview-fixture.wav .deps/m5-evidence/performance.json
+          exit $LASTEXITCODE
+      - name: Record source identity and upload evidence
+        if: always()
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force .deps/m5-evidence | Out-Null
+          git rev-parse HEAD | Set-Content .deps/m5-evidence/source-sha.txt
+          git rev-parse 'HEAD^{tree}' | Set-Content .deps/m5-evidence/tree-sha.txt
+          git archive --format=tar.gz --output=.deps/m5-evidence/source.tgz HEAD
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: m5-paired-${{ matrix.style }}
+          path: .deps/m5-evidence/
+          retention-days: 30
+          if-no-files-found: error

@@ -24,7 +24,20 @@ jobs:
           package-manager-cache: false
 
       - name: Install extension dependencies
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
+
+      - name: Record resolved build dependencies
+        id: build_identity
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force .deps/build-identity | Out-Null
+          npm ls --all --json | Set-Content .deps/build-identity/npm-tree.json -Encoding utf8
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Copy-Item package-lock.json .deps/build-identity/package-lock.json
+          node -p "JSON.stringify({node:process.version,versions:process.versions,platform:process.platform,arch:process.arch},null,2)" | Set-Content .deps/build-identity/node.json -Encoding utf8
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm --version | Set-Content .deps/build-identity/npm-version.txt
+          $PSVersionTable.PSVersion.ToString() | Set-Content .deps/build-identity/powershell-version.txt
 
       - name: Type-check
         run: npm run check
@@ -38,7 +51,10 @@ jobs:
       - name: M3 preview scheduling and PCM snapshot tests
         run: node --unhandled-rejections=strict --test test/preview-pipeline.test.cjs test/preview-recorder.test.cjs test/preview-runtime.test.cjs
 
-      - name: M7 pause/resume state and command tests
+      - name: Enhanced overlay visualization settings and source guards
+        run: node --unhandled-rejections=strict --test test/overlay-visualization.test.cjs test/overlay-visualization-source.test.cjs
+
+      - name: Internal lifecycle regression (legacy pause gates, no public Pause control)
         run: node --unhandled-rejections=strict --test test/pause-controls.test.cjs
 
       - name: M0 stop-to-insert timing instrumentation
@@ -74,9 +90,14 @@ jobs:
           # the production binary must carry its own common-controls dependency.
           $commands = @(
             "call `"$vcvars`"",
+            'where cl > .deps/build-identity/msvc-path.txt',
             "if not exist resources\bin mkdir resources\bin",
             "cl /nologo /utf-8 /O2 /std:c++20 /EHsc native\windows-text-input.cpp /Fe:resources\bin\windows-text-input.exe user32.lib",
             "cl /nologo /utf-8 /O2 /std:c++20 /EHsc /I .deps\miniaudio native\record-audio.cpp native\miniaudio-impl.cpp /Fe:resources\bin\universal-dictate-recorder.exe user32.lib gdi32.lib /link /MANIFEST:EMBED",
+            "cl /nologo /utf-8 /O2 /std:c++20 /EHsc test\native\recorder-streams-test.cpp /Fe:.deps\recorder-streams-test.exe",
+            "cl /nologo /utf-8 /O2 /std:c++20 /EHsc test\native\spectral-visualizer-test.cpp /Fe:.deps\spectral-visualizer-test.exe",
+            "cl /nologo /utf-8 /O2 /std:c++20 /EHsc test\native\spectral-benchmark.cpp /Fe:.deps\spectral-benchmark.exe",
+            "cl /nologo /utf-8 /O2 /std:c++20 /EHsc /I .deps\miniaudio test\native\spectral-windows-test.cpp native\miniaudio-impl.cpp /Fe:.deps\spectral-windows-test.exe user32.lib gdi32.lib /link /MANIFEST:EMBED",
             "cl /nologo /utf-8 /O2 /std:c++20 /EHsc test\native\recording-pause-test.cpp /Fe:.deps\recording-pause-test.exe",
             "cl /nologo /utf-8 /O2 /std:c++20 /EHsc /I .deps\miniaudio test\native\recorder-pause-capture-test.cpp native\miniaudio-impl.cpp /Fe:.deps\recorder-pause-capture-test.exe user32.lib gdi32.lib /link /MANIFEST:EMBED",
             "cl /nologo /utf-8 /O2 /std:c++20 /EHsc test\native\overlay-layout-test.cpp /Fe:.deps\overlay-layout-test.exe",
@@ -97,6 +118,9 @@ jobs:
             exit $LASTEXITCODE
           }
 
+          $compilerPath = Get-Content .deps/build-identity/msvc-path.txt | Select-Object -First 1
+          (Get-Item -LiteralPath $compilerPath).VersionInfo | Select-Object FileVersion, ProductVersion, OriginalFilename | ConvertTo-Json | Set-Content .deps/build-identity/msvc-version.json
+
           # Check the actual embedded resource, not a build-directory sidecar.
           # The later VSIX audit requires byte-identical packaged/native helpers.
           $manifest = [System.Xml.XmlDocument]::new()
@@ -108,7 +132,7 @@ jobs:
           }
           Write-Output 'Recorder embedded manifest verified: Windows common controls 6.0.0.0'
 
-      - name: Pause gate, production PCM capture and actual Node pause pipe
+      - name: Internal admission gate and production PCM/IPC regression
         if: ${{ !cancelled() && steps.native_build.outcome == 'success' }}
         shell: pwsh
         timeout-minutes: 3
@@ -179,6 +203,31 @@ jobs:
           & .deps/preview-presentation-test.exe --allow-disposable-desktop .deps/preview-presentation
           exit $LASTEXITCODE
 
+      - name: Spectral numerics, native renderer and admitted PCM regression
+        if: ${{ !cancelled() && steps.native_build.outcome == 'success' }}
+        shell: pwsh
+        timeout-minutes: 4
+        run: |
+          & .deps/recorder-streams-test.exe
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & .deps/spectral-visualizer-test.exe
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & .deps/spectral-benchmark.exe .deps/spectral-benchmark.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & .deps/spectral-windows-test.exe --allow-disposable-desktop .deps/spectral-presentation
+          exit $LASTEXITCODE
+
+      - name: Upload spectral renderer and cost evidence
+        if: ${{ always() && steps.native_build.outcome == 'success' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: spectral-windows-evidence
+          path: |
+            .deps/spectral-presentation/*.bmp
+            .deps/spectral-benchmark.json
+          if-no-files-found: warn
+          retention-days: 14
+
       - name: Upload scripted production-renderer images
         if: ${{ always() && steps.native_build.outcome == 'success' }}
         uses: actions/upload-artifact@v7
@@ -215,7 +264,7 @@ jobs:
           }
 
       - name: Measure real Node preview adapter (synthetic speech, no microphone)
-        if: github.head_ref == 'feat/live-transcript-preview' || github.head_ref == 'release/next' || github.head_ref == 'feat/pause-resume-controls' || github.head_ref == 'perf/stop-insert-latency'
+        if: github.head_ref == 'feat/live-transcript-preview' || github.head_ref == 'release/next' || github.head_ref == 'feat/pause-resume-controls' || github.head_ref == 'perf/stop-insert-latency' || github.head_ref == 'feat/overlay-visualizations'
         shell: pwsh
         timeout-minutes: 6
         run: |
@@ -242,7 +291,7 @@ jobs:
           exit 0
 
       - name: Upload Node preview timing evidence
-        if: ${{ always() && (github.head_ref == 'feat/live-transcript-preview' || github.head_ref == 'release/next' || github.head_ref == 'feat/pause-resume-controls' || github.head_ref == 'perf/stop-insert-latency') }}
+        if: ${{ always() && (github.head_ref == 'feat/live-transcript-preview' || github.head_ref == 'release/next' || github.head_ref == 'feat/pause-resume-controls' || github.head_ref == 'perf/stop-insert-latency' || github.head_ref == 'feat/overlay-visualizations') }}
         uses: actions/upload-artifact@v7
         with:
           name: m3-preview-adapter-results
@@ -303,6 +352,20 @@ jobs:
         shell: pwsh
         run: |
           & ./test/inspect-vsix.ps1 -Path universal-dictate-win32-x64.vsix -ReportPath .deps/vsix-inspection.json
+          if (-not $?) { throw 'Package audit failed' }
+          git rev-parse HEAD | Set-Content .deps/build-identity/source-sha.txt
+          git rev-parse 'HEAD^{tree}' | Set-Content .deps/build-identity/tree-sha.txt
+          Get-FileHash .deps/miniaudio/miniaudio.h -Algorithm SHA256 | Select-Object Hash | ConvertTo-Json | Set-Content .deps/build-identity/miniaudio-sha256.json
+          Get-ChildItem .deps/build-identity -File | Where-Object Name -ne 'SHA256SUMS.txt' | Sort-Object Name | ForEach-Object { "{0}  {1}" -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant(), $_.Name } | Set-Content .deps/build-identity/SHA256SUMS.txt
+
+      - name: Upload resolved build identity
+        if: ${{ always() && steps.build_identity.outcome == 'success' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-build-identity
+          path: .deps/build-identity/
+          if-no-files-found: error
+          retention-days: 90
 
       - name: Upload win32-x64 VSIX
         uses: actions/upload-artifact@v7

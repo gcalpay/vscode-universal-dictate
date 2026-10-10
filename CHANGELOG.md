@@ -1,5 +1,40 @@
 # Changelog
 
+## 1.2.0
+
+### Integrated review candidate — not published
+
+### Added
+
+- Three enhanced-overlay visualizations: Waveform / Oscillogram, Log-Frequency Power Spectrogram and Circular Spectrum.
+- Colors: Blue (default), restrained Green, Dark, Amber and Slate. Blue preserves the original log-spectrogram palette; waveform ink is blue without an amplitude change.
+- A dedicated square Circular Spectrum panel for every size and preview state, with Insert and Discard beneath the display.
+- Accumulated timing reports; isolated warm final/preview workers from M1.
+
+### Changed
+
+- Removed Linear-Frequency and Constant-Q modes; older preferences fall back to Log-Frequency without rewriting saved settings.
+- Removed the Pause button, command and keyboard shortcut. Original low-level admission/lifecycle regression coverage remains.
+- Preserved 1.1.2 waveform amplitude mapping, immutable history and preview viewport. RC2's experimental gain is excluded.
+- Preserved clipboard Off as no access, final-only insertion, local model/runtime pins and attribution.
+
+### Validation and release status
+
+- Original M5 run `37765259320` and independent post-review run `37778677667`
+  each completed 224 observations and passed all 88 revision-2 aggregate gates.
+  These are paired Windows-runner results with synthetic audio and stub insertion,
+  not measured user-PC latency.
+- Preserve the earlier failed comparisons and the explicit UI-aggregation revision.
+  The [M5 closeout record](docs/M5_REVIEW_CLOSEOUT.md) individually reviews all eight
+  original Codacy additions. Three maintainability additions are absent from the
+  new report; five intentional assertions/requirements remain `action_required`.
+- Fixed cache probes passed 36,660 exact pixel comparisons across six Windows
+  jobs. The earlier mismatch's cause remains unknown and is disclosed as a reviewed
+  residual risk for integrated acceptance; no production-cache fix is claimed.
+- 1.2.0 remains unpublished. One integrated normal-use acceptance and exact accepted
+  source/artifact freeze precede the separately safeguarded M7 history work and
+  M8 final build/publication. Issue #38 remains unresolved.
+
 ## 1.1.3
 
 ### M1 review candidate — not published
@@ -11,7 +46,7 @@
 
 ## 1.1.2
 
-### Diagnostic build
+### Internal diagnostic build — not published
 
 - Add M0.2 Stop-to-Insert timing diagnostics for local latency investigation.
 - Record whether live-preview Whisper inference is active at Stop, how long it has been active, or how long since the previous preview inference finished.
