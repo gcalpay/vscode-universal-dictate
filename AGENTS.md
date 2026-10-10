@@ -1,8 +1,12 @@
 # Agent guidance
 
 Current work: [docs/OVERLAY_INTEGRATION.md](docs/OVERLAY_INTEGRATION.md).
-Branch: `feat/overlay-visualizations`, based on M1 `d4c52d2d153545a7a8bef6ed1680261e199ef22b`.
+Branch: `review/rc4-themes-no-pause`, based on M1 `d4c52d2d153545a7a8bef6ed1680261e199ef22b`.
 Published main remains 1.1.0 `8017f1950bbacb67c37add2c31315e7a6139bcd3`.
+
+This review branch preserves concurrent work on `feat/overlay-visualizations`.
+Do not overwrite that branch or PR #56. The new review PR is stacked on the
+same M1 base; reconcile branches only after explicit acceptance.
 
 ## Authorization and delivery
 

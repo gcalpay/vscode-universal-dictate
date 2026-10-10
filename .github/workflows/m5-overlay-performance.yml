@@ -1,7 +1,7 @@
 name: M5 integrated overlay performance
 on:
   push:
-    branches: [feat/overlay-visualizations]
+    branches: [feat/overlay-visualizations, review/rc4-themes-no-pause]
     paths:
       - "native/**"
       - "src/**"
@@ -37,7 +37,7 @@ jobs:
       - name: Compile host and verify unchanged inference implementation
         shell: pwsh
         run: |
-          npm install --no-audit --no-fund
+          npm ci --no-audit --no-fund
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           npm run compile
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
