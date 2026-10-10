@@ -1,5 +1,59 @@
 # Changelog
 
+## 1.2.0
+
+### Integrated review candidate — not published
+
+### Added
+
+- Enhanced Overlay Visualization: Waveform / Oscillogram (default), Log-Frequency
+  Power Spectrogram and Circular Spectrum. Selection is independent of display location.
+- Bounded visual-only FFT analysis, outside capture.
+- Colors: Blue (default), Green, Amber and Violet. The Blue log-spectrogram palette is unchanged.
+- Dedicated rounded-square Circular Spectrum overlay, with separate preview and control regions.
+- Session visualization metadata in the accumulated latency report.
+- **Universal Dictate: Show Latency Report** retains up to 100 completed timing
+  records in one in-memory document, with no audio or transcript diagnostics.
+
+### Changed
+
+- Overlay history reuses the existing saved waveform time-span preference for
+  waveform and spectrograms; Circular Spectrum shows the latest spectrum instead.
+- Final transcription keeps its dedicated warm Whisper worker. Preview uses a
+  separate lazy worker with at most two inference threads and bounded, confirmed
+  shutdown before final dispatch. Preview Off avoids the second model instance.
+- Preserve the 1.1.2 waveform mapping, immutable history, rectangular overlay/preview layout
+  and paint geometry; only its colors are themed; retain status bar, Pause/Resume, clipboard Off
+  as no automatic access, and one final insertion of the full recording.
+- Do not include the experimental RC2 Medium-only gain change. The cause of the
+  earlier intermittent nearly flat waveform is unknown; gain was not a verified fix.
+- Cache unchanged preview text and increase bounded visual-queue scheduling
+  headroom, while retaining existing capture audio and per-update analysis limits.
+
+- Retire Linear and Constant-Q from the selector and native DSP. Saved retired
+  choices use Log-Frequency Power Spectrogram without rewriting preferences.
+
+### Validation and release status
+
+- RC4 uses three modes and four palettes. Current performance coverage is four jobs,
+  142 observations and 56 aggregate gates, retaining revision-2 pairing and budgets.
+  Prior 224-observation/five-mode datasets below remain historical, not current scope.
+
+- Original M5 run `37765259320` and independent post-review run `37778677667`
+  each completed 224 observations and passed all 88 revision-2 aggregate gates.
+  These are paired Windows-runner results with synthetic audio and stub insertion,
+  not measured user-PC latency.
+- Preserve the earlier failed comparisons and the explicit UI-aggregation revision.
+  The [M5 closeout record](docs/M5_REVIEW_CLOSEOUT.md) individually reviews all eight
+  original Codacy additions. Three maintainability additions are absent from the
+  new report; five intentional assertions/requirements remain `action_required`.
+- Fixed cache probes passed 36,660 exact pixel comparisons across six Windows
+  jobs. The earlier mismatch's cause remains unknown and is disclosed as a reviewed
+  residual risk for integrated acceptance; no production-cache fix is claimed.
+- 1.2.0 remains unpublished. One integrated normal-use acceptance and exact accepted
+  source/artifact freeze precede the separately safeguarded M7 history work and
+  M8 final build/publication. Issue #38 remains unresolved.
+
 ## 1.1.3
 
 ### M1 review candidate — not published
@@ -11,7 +65,7 @@
 
 ## 1.1.2
 
-### Diagnostic build
+### Internal diagnostic build — not published
 
 - Add M0.2 Stop-to-Insert timing diagnostics for local latency investigation.
 - Record whether live-preview Whisper inference is active at Stop, how long it has been active, or how long since the previous preview inference finished.

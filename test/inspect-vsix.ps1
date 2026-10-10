@@ -58,7 +58,7 @@ try {
         Assert-Valid ($name -notmatch '(^/|\\|(^|/)\.\.(/|$))') "unsafe archive path $name"
         Assert-Valid ($name -notmatch '^extension/(\.git|\.github|\.vscode|\.deps|docs|native|test|src|node_modules)/') "development directory packaged: $name"
         Assert-Valid ($name -notmatch '(^|/)(AGENTS\.md|tsconfig\.json|\.gitignore|windows-fast-paste\.exe|windows-clipboard-paste\.exe|clipboard-protocol\.js)$') "development/legacy file packaged: $name"
-        Assert-Valid ($name -notmatch '\.(ts|map|obj|lib|exp|pdb|vsix|ttf|otf|woff|woff2)$') "source/debug/build file packaged: $name"
+        Assert-Valid ($name -notmatch '\.(ts|map|obj|lib|exp|pdb|vsix|ttf|otf|woff|woff2|wav|bin)$') "source/debug/build/model/fixture file packaged: $name"
         Assert-Valid ($name -notmatch '(?i)(^|/)[^/]*-test\.exe$') "test executable packaged: $name"
         Assert-Valid ($name -notmatch '^extension/resources/whisper/.*\.exe$' -or $name -match '^extension/resources/whisper/whisper-(cli|server)\.exe$') "unused upstream executable packaged: $name"
     }
@@ -74,7 +74,12 @@ try {
     Assert-Valid ($manifest.contributes.configuration.properties.'universalDictate.overwriteClipboard'.default -eq $false) 'Overwrite clipboard must default Off'
     Assert-Valid ($manifest.contributes.configuration.properties.'universalDictate.livePreview'.default -eq $false) 'Live preview must default Off'
     Assert-Valid ($manifest.contributes.configuration.properties.'universalDictate.waveformTimeSpanSeconds'.default -eq 10) 'Ten-second waveform must be the default'
-    Assert-Valid ($manifest.contributes.configuration.properties.Count -eq 6) 'Six user settings expected'
+    Assert-Valid ($manifest.contributes.configuration.properties.Count -eq 8) 'Eight user settings expected'
+    Assert-Valid ($manifest.contributes.configuration.properties.'universalDictate.colors'.default -eq 'blue') 'Blue palette must be the default'
+    Assert-Valid (($manifest.contributes.configuration.properties.'universalDictate.colors'.enum -join ',') -eq 'blue,green,amber,violet') 'Four color presets expected'
+    $visualization = $manifest.contributes.configuration.properties.'universalDictate.enhancedOverlayVisualization'
+    Assert-Valid ($visualization.default -eq 'waveform') 'Waveform visualization must be the default'
+    Assert-Valid (($visualization.enum -join ',') -eq 'waveform,logFrequencyPowerSpectrogram,circularSpectrum') 'Three visualization modes expected'
     Assert-Valid (-not $manifest.contributes.configuration.properties.ContainsKey('universalDictate.overlayButtonStyle')) 'Retired style selector packaged'
     foreach ($command in @('copyLastTranscript', 'pauseResume')) {
         $id = "universalDictate.$command"
@@ -93,22 +98,26 @@ try {
     Assert-Valid ($identity.GetAttribute('Id') -eq $source.name) 'VSIX extension ID mismatch'
     Assert-Valid ($identity.GetAttribute('Publisher') -eq $source.publisher) 'VSIX publisher mismatch'
     Assert-Valid ($identity.GetAttribute('Version') -eq $source.version) 'VSIX version mismatch'
+    Assert-Valid ($identity.GetAttribute('TargetPlatform') -eq 'win32-x64') 'VSIX target mismatch'
     [void](Get-Entry ('extension/' + $source.main.TrimStart([char[]]'./')))
 
     $hashes = [ordered]@{}
-    foreach ($relative in @('media/status-bar-controls.webp', 'media/settings-menu.webp', 'media/live-preview.webp', 'media/enhanced-overlay.webp', 'media/icon.png')) {
+    foreach ($relative in @('media/status-bar-controls.webp', 'media/overlay-sizes.webp', 'media/live-preview.webp', 'media/enhanced-overlay.webp', 'media/icon.png')) {
         $entryName = "extension/$relative"
         $actual = Get-EntryHash $entryName
         Assert-Valid ($actual -eq (Get-FileHash -LiteralPath (Join-Path $root $relative) -Algorithm SHA256).Hash.ToLowerInvariant()) "stale release image: $relative"
         $hashes[$entryName] = $actual
     }
+    Assert-Valid ($null -eq $zip.GetEntry('extension/media/overlay-visualizations.webp')) 'retired five-mode collage packaged'
     Assert-Valid ($null -eq $zip.GetEntry('extension/media/universal-dictate-overview.webp')) 'obsolete overview image packaged'
     $readme = Read-EntryText 'extension/readme.md'
     $changelog = Read-EntryText 'extension/changelog.md'
-    foreach ($image in @('status-bar-controls.webp', 'settings-menu.webp', 'live-preview.webp', 'enhanced-overlay.webp')) {
+    foreach ($image in @('status-bar-controls.webp', 'overlay-sizes.webp', 'live-preview.webp', 'enhanced-overlay.webp')) {
         Assert-Valid ($readme.Contains("media/$image")) "README screenshot missing: $image"
     }
     Assert-Valid ($changelog.Contains("## $($manifest.version)")) 'current version missing from changelog'
+    Assert-Valid ($null -eq $zip.GetEntry('extension/media/settings-menu.webp')) 'obsolete six-setting screenshot packaged'
+    Assert-Valid ($null -eq $zip.GetEntry('extension/package-lock.json')) 'development dependency lock packaged'
     $hashes['extension/readme.md'] = Get-EntryHash 'extension/readme.md'
     $hashes['extension/changelog.md'] = Get-EntryHash 'extension/changelog.md'
     $compiled = @(Get-ChildItem -LiteralPath (Join-Path $root 'dist') -Filter '*.js' -File -Recurse)
@@ -134,7 +143,24 @@ try {
     foreach ($file in @('whisper-cli.exe', 'whisper-server.exe')) {
         $entryName = "extension/resources/whisper/$file"
         Assert-X64Executable $entryName
-        $hashes[$entryName] = Get-EntryHash $entryName
+        $actual = Get-EntryHash $entryName
+        Assert-Valid ($actual -eq (Get-FileHash -LiteralPath (Join-Path $root "resources/whisper/$file") -Algorithm SHA256).Hash.ToLowerInvariant()) "packaged Whisper executable differs: $file"
+        $hashes[$entryName] = $actual
+    }
+    $runtimeLibraries = @(Get-ChildItem -LiteralPath (Join-Path $root 'resources/whisper') -Filter '*.dll' -File)
+    Assert-Valid ($runtimeLibraries.Count -gt 0) 'Whisper runtime libraries missing'
+    foreach ($file in $runtimeLibraries) {
+        $entryName = "extension/resources/whisper/$($file.Name)"
+        Assert-X64Executable $entryName
+        $actual = Get-EntryHash $entryName
+        Assert-Valid ($actual -eq (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()) "packaged runtime library differs: $($file.Name)"
+        $hashes[$entryName] = $actual
+    }
+    foreach ($relative in @('LICENSE', 'THIRD_PARTY_NOTICES.md', 'third_party/whisper.cpp-LICENSE.txt', 'third_party/SDL2-LICENSE.txt', 'third_party/OpenWhispr-LICENSE.txt', 'third_party/OpenAI-Whisper-LICENSE.txt', 'third_party/miniaudio-NOTICE.txt', 'third_party/miniaudio-LICENSE.txt')) {
+        $entryName = if ($relative -eq 'LICENSE') { 'extension/LICENSE.txt' } else { "extension/$relative" }
+        $actual = Get-EntryHash $entryName
+        Assert-Valid ($actual -eq (Get-FileHash -LiteralPath (Join-Path $root $relative) -Algorithm SHA256).Hash.ToLowerInvariant()) "packaged license/notice differs: $relative"
+        $hashes[$entryName] = $actual
     }
 
     $report = [ordered]@{
@@ -142,6 +168,7 @@ try {
         run_id = $env:GITHUB_RUN_ID
         run_attempt = $env:GITHUB_RUN_ATTEMPT
         checked_out_commit = $env:GITHUB_SHA
+        checked_out_tree = (& git -C $root rev-parse 'HEAD^{tree}').Trim()
         source_branch = $env:GITHUB_HEAD_REF
         extension_version = $manifest.version
         sha256 = (Get-FileHash -LiteralPath $vsix -Algorithm SHA256).Hash.ToLowerInvariant()

@@ -1,6 +1,8 @@
+// Frozen uncached renderer from 9def8d87005be589f79187686fdb2ff2ae110673.
+// Only include path and namespace differ; used as an independent pixel oracle.
 /* Multilingual, clipped preview text on the existing GDI surface. SPDX-License-Identifier: MIT */
 #pragma once
-#include "preview-layout.h"
+#include "../../native/preview-layout.h"
 #include <d2d1.h>
 #include <dwrite.h>
 #include <wrl/client.h>
@@ -10,7 +12,8 @@
 #pragma comment(lib, "d2d1.lib")
 #pragma comment(lib, "dwrite.lib")
 
-namespace universal_dictate::preview {
+namespace universal_dictate::preview_reference {
+using universal_dictate::preview::TextLayout;
 using Microsoft::WRL::ComPtr;
 
 inline bool rightToLeft(const std::wstring& text) {
@@ -26,18 +29,11 @@ inline bool rightToLeft(const std::wstring& text) {
 
 class TextRenderer {
 public:
-    TextRenderer() = default;
-    TextRenderer(const TextRenderer&) = delete;
-    TextRenderer& operator=(const TextRenderer&) = delete;
-    ~TextRenderer() { reset(); }
-
     void reset() noexcept {
-        resetSurface();
-        layout_.Reset(); format_.Reset();
+        layout_.Reset(); format_.Reset(); brush_.Reset(); target_.Reset();
         drawFactory_.Reset(); writeFactory_.Reset();
         text_.clear(); width_ = height_ = fontHeight_ = 0; maxLines_ = 0;
         visibleHeight_ = 0; visibleLines_ = skippedLines_ = 0; unavailable_ = false;
-        rasterizations_ = 0;
     }
 
     // No HWND operations, input events or clipboard access. Initialization is lazy:
@@ -46,12 +42,22 @@ public:
         if (unavailable_) return false;
         try {
             if (!prepare(geometry, text)) { unavailable_ = true; return false; }
-            if (!dc || !ensureSurface()) return false;
-            if (rasterDirty_ && !rasterize()) return false;
-            // The opaque preview background and shaped glyphs change only with
-            // text/font/viewport, not on every 50 ms waveform refresh.
-            return BitBlt(dc, geometry.text.left, geometry.text.top, width_, height_,
-                cacheDc_, 0, 0, SRCCOPY) != 0;
+            const RECT bounds{geometry.text.left, geometry.text.top, geometry.text.right, geometry.text.bottom};
+            if (!ensureTarget() || FAILED(target_->BindDC(dc, &bounds))) return false;
+            target_->BeginDraw();
+            // Coordinates/font sizes are already device pixels. A 96-DPI target
+            // avoids double scaling when Windows moves the overlay between monitors.
+            target_->SetDpi(96, 96);
+            target_->SetTransform(D2D1::Matrix3x2F::Identity());
+            target_->Clear(D2D1::ColorF(14.0f/255, 18.0f/255, 27.0f/255));
+            target_->PushAxisAlignedClip(D2D1::RectF(0, 0, static_cast<float>(width_),
+                visibleHeight_), D2D1_ANTIALIAS_MODE_ALIASED);
+            target_->DrawTextLayout(D2D1::Point2F(0, 0), layout_.Get(), brush_.Get(),
+                D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT);
+            target_->PopAxisAlignedClip();
+            const HRESULT result = target_->EndDraw();
+            if (result == D2DERR_RECREATE_TARGET) { brush_.Reset(); target_.Reset(); }
+            return SUCCEEDED(result);
         } catch (...) {
             // Presentation errors must not escape WM_PAINT or stop microphone capture.
             unavailable_ = true;
@@ -62,60 +68,8 @@ public:
     unsigned int skippedLines() const noexcept { return skippedLines_; }
     unsigned int visibleLines() const noexcept { return visibleLines_; }
     bool initialized() const noexcept { return writeFactory_ != nullptr; }
-    unsigned int rasterizations() const noexcept { return rasterizations_; }
 
 private:
-    void resetSurface() noexcept {
-        // Release the DC render target before deleting its bound GDI surface.
-        brush_.Reset(); target_.Reset();
-        if (cacheDc_ && cachePrevious_) SelectObject(cacheDc_, cachePrevious_);
-        if (cacheBitmap_) DeleteObject(cacheBitmap_);
-        if (cacheDc_) DeleteDC(cacheDc_);
-        cacheDc_ = nullptr; cacheBitmap_ = nullptr; cachePrevious_ = nullptr;
-        cacheWidth_ = cacheHeight_ = 0; rasterDirty_ = true;
-    }
-
-    bool ensureSurface() noexcept {
-        if (cacheDc_ && cacheWidth_ == width_ && cacheHeight_ == height_) return true;
-        resetSurface();
-        cacheDc_ = CreateCompatibleDC(nullptr);
-        if (!cacheDc_) return false;
-        BITMAPINFO info{};
-        info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
-        info.bmiHeader.biWidth = width_; info.bmiHeader.biHeight = -height_;
-        info.bmiHeader.biPlanes = 1; info.bmiHeader.biBitCount = 32;
-        info.bmiHeader.biCompression = BI_RGB;
-        void* pixels = nullptr;
-        cacheBitmap_ = CreateDIBSection(cacheDc_, &info, DIB_RGB_COLORS, &pixels, nullptr, 0);
-        if (!cacheBitmap_ || !pixels) { resetSurface(); return false; }
-        const auto previous = SelectObject(cacheDc_, cacheBitmap_);
-        if (!previous || previous == HGDI_ERROR) { resetSurface(); return false; }
-        cachePrevious_ = previous;
-        cacheWidth_ = width_; cacheHeight_ = height_;
-        return true;
-    }
-
-    bool rasterize() {
-        const RECT bounds{0, 0, width_, height_};
-        if (!ensureTarget() || FAILED(target_->BindDC(cacheDc_, &bounds))) return false;
-        target_->BeginDraw();
-        // Geometry already uses device pixels; keep the accepted 96-DPI path.
-        target_->SetDpi(96, 96);
-        target_->SetTransform(D2D1::Matrix3x2F::Identity());
-        target_->Clear(D2D1::ColorF(14.0f/255, 18.0f/255, 27.0f/255));
-        target_->PushAxisAlignedClip(D2D1::RectF(0, 0, static_cast<float>(width_),
-            visibleHeight_), D2D1_ANTIALIAS_MODE_ALIASED);
-        target_->DrawTextLayout(D2D1::Point2F(0, 0), layout_.Get(), brush_.Get(),
-            D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT);
-        target_->PopAxisAlignedClip();
-        const HRESULT result = target_->EndDraw();
-        if (result == D2DERR_RECREATE_TARGET) { brush_.Reset(); target_.Reset(); }
-        if (FAILED(result)) return false; // Never mark an incomplete raster valid.
-        rasterDirty_ = false;
-        ++rasterizations_;
-        return true;
-    }
-
     bool ensureTarget() {
         if (target_) return true;
         if (!drawFactory_ && FAILED(D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, drawFactory_.GetAddressOf())))
@@ -180,7 +134,6 @@ private:
         }
         text_ = text; width_ = width; height_ = height;
         fontHeight_ = geometry.fontHeight; maxLines_ = geometry.maxLines;
-        rasterDirty_ = true;
         return true;
     }
 
@@ -195,11 +148,5 @@ private:
     unsigned int maxLines_ = 0, visibleLines_ = 0, skippedLines_ = 0;
     float visibleHeight_ = 0;
     bool unavailable_ = false;
-    HDC cacheDc_ = nullptr;
-    HBITMAP cacheBitmap_ = nullptr;
-    HGDIOBJ cachePrevious_ = nullptr;
-    int cacheWidth_ = 0, cacheHeight_ = 0;
-    unsigned int rasterizations_ = 0;
-    bool rasterDirty_ = true;
 };
-} // namespace universal_dictate::preview
+} // namespace universal_dictate::preview_reference

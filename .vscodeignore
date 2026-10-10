@@ -16,6 +16,8 @@ tsconfig.json
 **/*.pdb
 **/*.vsix
 node_modules/**
+package-lock.json
+media/settings-menu.webp
 resources/bin/windows-fast-paste.exe
 .deps-clipboard-transaction-test
 resources/bin/windows-clipboard-paste.exe
@@ -44,3 +46,6 @@ resources/whisper/whisper-quantize.exe
 resources/whisper/whisper-stream.exe
 resources/whisper/whisper-talk-llama.exe
 resources/whisper/whisper-vad-speech-segments.exe
+
+# Historical five-mode candidate collage; three-mode RC4 omits retired styles.
+media/overlay-visualizations.webp
