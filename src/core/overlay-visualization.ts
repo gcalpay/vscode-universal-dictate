@@ -1,33 +1,24 @@
 /** Enhanced-overlay style is independent of the visualization display location. */
 export const OVERLAY_VISUALIZATIONS = [
-  'waveform',
-  'logFrequencyPowerSpectrogram',
-  'linearFrequencyPowerSpectrogram',
-  'constantQPowerSpectrogram',
-  'circularSpectrum'
+  'waveform', 'logFrequencyPowerSpectrogram', 'circularSpectrum'
 ] as const;
-
 export type OverlayVisualization = (typeof OVERLAY_VISUALIZATIONS)[number];
 export const DEFAULT_OVERLAY_VISUALIZATION: OverlayVisualization = 'waveform';
-
 export const OVERLAY_VISUALIZATION_LABELS: Readonly<Record<OverlayVisualization, string>> = {
   waveform: 'Waveform / Oscillogram',
   logFrequencyPowerSpectrogram: 'Log-Frequency Power Spectrogram',
-  linearFrequencyPowerSpectrogram: 'Linear-Frequency Power Spectrogram',
-  constantQPowerSpectrogram: 'Constant-Q Power Spectrogram',
   circularSpectrum: 'Circular Spectrum'
 };
-
 export const OVERLAY_VISUALIZATION_DETAILS: Readonly<Record<OverlayVisualization, string>> = {
-  waveform: 'The existing fixed-gain, scrolling speech waveform. Default; no spectral analysis.',
-  logFrequencyPowerSpectrogram: 'Scrolling FFT power with logarithmic frequency spacing, emphasizing lower-frequency speech detail.',
-  linearFrequencyPowerSpectrogram: 'Scrolling FFT power with equally spaced frequencies from 0 to 8 kHz.',
-  constantQPowerSpectrogram: 'Scrolling power from variable-length, logarithmically spaced constant-Q filters. Greater low-frequency resolution, with a longer startup window.',
-  circularSpectrum: 'The latest FFT spectrum arranged around a circle. This is a live spectrum, not a pitch-class chromagram; the history duration does not apply.'
+  waveform: 'The original fixed-gain scrolling waveform. No spectral analysis.',
+  logFrequencyPowerSpectrogram: 'Scrolling FFT power with logarithmic frequency spacing, emphasizing speech detail.',
+  circularSpectrum: 'The latest FFT spectrum in a dedicated rounded-square overlay. Not a scrolling spectrogram; Overlay history does not apply.'
 };
-
 export function normalizeOverlayVisualization(value: unknown): OverlayVisualization {
+  // Retired unpublished RC selections resolve to the remaining spectrogram.
+  // Do not rewrite the saved setting or enable an otherwise disabled overlay.
+  if (value === 'linearFrequencyPowerSpectrogram' || value === 'constantQPowerSpectrogram')
+    return 'logFrequencyPowerSpectrogram';
   return typeof value === 'string' && OVERLAY_VISUALIZATIONS.includes(value as OverlayVisualization)
-    ? (value as OverlayVisualization)
-    : DEFAULT_OVERLAY_VISUALIZATION;
+    ? value as OverlayVisualization : DEFAULT_OVERLAY_VISUALIZATION;
 }

@@ -10,8 +10,7 @@ const crypto = require('node:crypto');
 const { pcmFrom, wav, stats, runCase } = require('./performance.cjs');
 const { WhisperRuntime } = require('../../dist/core/whisper');
 const hash = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
-const STYLES = ['off', 'waveform', 'logFrequencyPowerSpectrogram', 'linearFrequencyPowerSpectrogram',
-  'constantQPowerSpectrogram', 'circularSpectrum'];
+const STYLES = ['off', 'waveform', 'logFrequencyPowerSpectrogram', 'circularSpectrum'];
 const PAIRS = 10;
 
 function pairedSummary(runs, preview) {
@@ -73,7 +72,7 @@ async function main() {
   fs.copyFileSync(fixture, path.join(path.dirname(path.resolve(output)), 'synthetic-12s.wav'));
   fs.copyFileSync(longFixture, path.join(path.dirname(path.resolve(output)), 'synthetic-48s.wav'));
   const result = { kind: 'M5 adjacent paired confirmation; real native capture/paint/IPC, real Whisper, insertion stub',
-    protocol: 2, style, pairsPerCondition: PAIRS, sourceSha: process.env.GITHUB_SHA ?? null,
+    protocol: 2, scope: 'three-mode RC4; unchanged budgets; 142 observations and 56 aggregate gates across four jobs', style, pairsPerCondition: PAIRS, sourceSha: process.env.GITHUB_SHA ?? null,
     m1Sha: 'd4c52d2d153545a7a8bef6ed1680261e199ef22b', cpu: os.cpus()[0]?.model,
     logicalProcessors: os.cpus().length, node: process.version, fixtureSha256: hash(fs.readFileSync(fixture)),
     modelSha256: hash(fs.readFileSync(model)), runs: [], summary: [], gates: [], failures: [] };
@@ -105,7 +104,7 @@ async function main() {
           await record({ policy, style: policy === 'm1' ? reference : style, preview, repeat });
       }
     }
-    if (['linearFrequencyPowerSpectrogram', 'constantQPowerSpectrogram'].includes(style)) {
+    if (['logFrequencyPowerSpectrogram'].includes(style)) {
       for (const policy of ['m1', 'candidate'])
         await record({ policy, style: policy === 'm1' ? reference : style, preview: true, repeat: 0, seconds: 48 });
     }

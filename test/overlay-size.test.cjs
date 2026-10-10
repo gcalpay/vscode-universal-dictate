@@ -39,7 +39,9 @@ test('enhanced recorder arguments propagate overlay size', () => {
       '--overlay-size',
       'small',
       '--overlay-visualization',
-      'waveform'
+      'waveform',
+      '--overlay-colors',
+      'blue'
     ]
   );
 });
@@ -63,7 +65,9 @@ test('enhanced recorder arguments validate invalid size and span', () => {
       '--overlay-size',
       'medium',
       '--overlay-visualization',
-      'waveform'
+      'waveform',
+      '--overlay-colors',
+      'blue'
     ]
   );
 });

@@ -21,7 +21,7 @@ test('performance budgets fail closed and compare with the matching frozen M1 di
     stopToStubMs: stats([1400]), callbackMeanMs: stats([.03]), callbackP95Ms: stats([.2]),
     uiTickP95Ms: stats([3]), recorderCpuOneCorePercent: stats([2]), privateCommitBytes: stats([10000000]), visualDroppedFrames: 0 };
   const baseline = { ...common, policy: 'm1', style: 'waveform' };
-  const candidate = { ...common, policy: 'candidate', style: 'constantQPowerSpectrogram', key: 'cqt' };
+  const candidate = { ...common, policy: 'candidate', style: 'logFrequencyPowerSpectrogram', key: 'log' };
   assert.ok(evaluate([baseline, candidate]).every(g => g.pass));
   assert.throws(() => evaluate([candidate]));
   for (const change of [{ stopToStubMs: stats([1600]) }, { callbackMeanMs: stats([.4]) },

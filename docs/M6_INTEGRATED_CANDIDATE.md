@@ -6,7 +6,16 @@ Current roadmap: M0 baseline → M1 final-inference isolation → M2 settings/ro
 M3 FFT styles → M4 CQT/circular → M5 integrated performance → **M6 acceptance and
 freeze** → M7 curated history → M8 final build and publication.
 
-## Gate record at source closeout
+## Current RC4 acceptance scope
+
+Three modes: Waveform, Log-Frequency Power Spectrogram, Circular Spectrum. Four
+palettes: Blue (default), Green, Amber, Violet. Circular gets its own rounded-square
+geometry; waveform amplitude and rectangular geometry stay at 1.1.2. The earlier
+RC2 gain experiment is excluded. Current tests include palette/alias/square controls
+and 142 observations / 56 unchanged-budget M5 gates. Freeze only after this revised
+candidate's user acceptance. Earlier five-mode gate counts below are historical.
+
+## Historical gate record at source closeout
 
 M0–M4 are implemented. Original M5 run `37765259320` at `410094f` and the independent
 post-review run `37778677667` at `980877b` each completed 224 observations with
@@ -44,8 +53,8 @@ publication.
 ## M6.1 — prepare and preserve one coherent checkpoint
 
 README, changelog, architecture/dependencies/testing and active navigation are
-reconciled in the source closeout. There are seven independent settings and five
-exact style labels.
+reconciled for RC4. There are eight independent settings and three
+exact style labels; colors default to Blue.
 Keep English / Enhanced overlay / Waveform / Medium / 10 seconds / clipboard Off /
 preview Off defaults, explicit preferences, next-recording snapshots, the accepted
 waveform, Pause/Resume, local model/runtime and OpenWhispr/third-party attribution.
@@ -56,11 +65,11 @@ does not identify the candidate when multiple unpublished builds share that vers
 The historical GitHub tags/releases and live Marketplace state are separate records.
 
 The prepared examples use actual production-renderer images and identify synthetic
-inputs. The current seven-setting table is authoritative; the old six-entry menu
+inputs. The current eight-setting table is authoritative; the old six-entry menu
 is excluded from active presentation. Small/Medium/Large and preview geometry are
-shown honestly, including compact circular mode. No waveform retuning or overlay
-resizing was made. Production source fingerprints are unchanged; generated binary
-equivalence is checked separately in the final package audit.
+shown honestly. Circular now has its own square layout; waveform amplitude and
+rectangular geometry remain unchanged while its palette is selectable. Runtime
+changes require fresh native/render/performance checks and package validation.
 
 For test/doc-only changes, verify affected tests and unchanged production
 fingerprints. Runtime/render changes require the corresponding Windows and
@@ -91,7 +100,7 @@ The final delivery record must contain:
 - audit result, resolved tool/dependency versions and native/runtime payload hashes;
 - M5 protocol/run identity and any targeted post-review validation;
 - individual analyzer disposition, actual analyzer status and cache residual risk;
-- direct download of one integrated VSIX containing M1 and all five styles.
+- direct download of one integrated VSIX containing M1 and the three retained styles.
 
 Keep the Windows UI-host target, required helpers/runtime DLLs, no source/tests/
 fonts/models/audio fixtures in the package, model-download behavior, notices and

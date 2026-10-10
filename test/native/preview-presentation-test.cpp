@@ -86,9 +86,10 @@ void checkFocus(HWND scratch, HWND edit) {
 }
 
 universal_dictate::EnhancedOverlayLayout configurePresentation(OverlaySize size, unsigned int dpi, bool preview) {
+    check(g_overlay.overlaySize == size, "presentation size fixture mismatch");
     g_overlay.previewEnabled = preview;
     applyEnhancedDpi(dpi);
-    const auto layout = calculateEnhancedOverlayLayout(size, dpi, preview);
+    const auto layout = currentEnhancedLayout(dpi);
     const RECT suggested{70, 220, 70 + layout.width, 220 + layout.height};
     SendMessageW(g_overlay.window, WM_DPICHANGED, MAKELONG(dpi,dpi), reinterpret_cast<LPARAM>(&suggested));
     RECT client{}; GetClientRect(g_overlay.window, &client);
@@ -173,7 +174,7 @@ int waveformInkHeight(const Canvas& canvas, const OverlayRect& box) {
         const int red = (pixel >> 16) & 255, green = (pixel >> 8) & 255, blue = pixel & 255;
         // Include the original subtle envelope inks as well as the bright center trace.
         // The axis/background stay below this threshold.
-        if (green > 55 && green > red + 15 && green > blue + 5) {
+        if (std::max({red,green,blue}) > 55 && std::max({red,green,blue}) - std::min({red,green,blue}) > 15) {
             first = std::min(first, y); last = std::max(last, y);
         }
     }
@@ -216,7 +217,7 @@ void checkNoMirroredLowerEnvelope(OverlaySize size, unsigned int dpi) {
         for (int x = box.left + scaleLogical(3, dpi); x < box.right - scaleLogical(3, dpi); ++x) {
             const auto pixel = pixels[y * layout.width + x];
             const int red = (pixel >> 16) & 255, green = (pixel >> 8) & 255, blue = pixel & 255;
-            check(!(green > 55 && green > red + 15 && green > blue + 5),
+            check(!(std::max({red,green,blue}) > 55 && std::max({red,green,blue}) - std::min({red,green,blue}) > 15),
                   "positive waveform produced mirrored lower-envelope ink");
         }
     }
@@ -472,6 +473,42 @@ int main(int argc, char** argv) {
             RECT compact{}; GetClientRect(g_overlay.window, &compact);
             check(compact.bottom == scaleLogical(universal_dictate::enhancedOverlayHeight(size,false),g_overlay.dpi), "compact startup height");
             checkFocus(scratch,edit);
+            destroyOverlay();
+        }
+        // Circular-only geometry: all preset/DPI combinations, shaped text and
+        // real own-window controls. Existing rectangular tests remain above.
+        const auto circularOutput = output / "circular-controls";
+        std::filesystem::create_directories(circularOutput);
+        for (auto size : {OverlaySize::Small,OverlaySize::Medium,OverlaySize::Large}) {
+            auto visualizer = std::make_unique<universal_dictate::visualization::SpectralVisualizer>(
+                universal_dictate::visualization::Mode::CircularSpectrum);
+            check(createOverlay(nullptr,true,size,true,visualizer.get()), "create circular overlay");
+            for (unsigned dpi : {96U,120U,144U,192U}) {
+                renderControlCases(circularOutput,size,dpi);
+                for (bool enabled : {false,true}) {
+                    const auto layout = configurePresentation(size,dpi,enabled);
+                    check(layout.width == layout.height, "circular overlay is not square");
+                    checkControlTooltips(layout,false);
+                    if (enabled) {
+                        const auto text = currentPreviewLayout();
+                        Canvas canvas(layout.width,layout.height);
+                        check(g_overlay.previewRenderer.draw(canvas.dc,text,L"Latest words. Grüße. 压力五巴."), "circular text draw");
+                        check(g_overlay.previewRenderer.visibleLines() >= 1, "circular complete text line missing");
+                        const auto pixels=canvas.snapshot();
+                        for(int y=0;y<layout.height;++y) for(int x=0;x<layout.width;++x)
+                            if(!inside(x,y,text.text)) check(pixels[y*layout.width+x]==0x00335577U,"circular preview escaped text viewport");
+                    }
+                }
+                checkFocus(scratch,edit);
+            }
+            for (bool enabled : {false,true}) {
+                const auto layout = configurePresentation(size,96,enabled);
+                updateEnhancedRegion();UpdateWindow(g_overlay.window);
+                clickOwnRect(g_overlay.window,layout.waveform);checkFocus(scratch,edit);
+                check(!g_overlay.actionSent.load(), "circular body triggered action");
+                clickPauseControls(scratch,edit);
+                checkControlTooltips(layout,false);
+            }
             destroyOverlay();
         }
         DestroyWindow(scratch); scratch = nullptr;

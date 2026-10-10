@@ -15,7 +15,7 @@ inline void drawSpectralVisualization(HDC dc, const OverlayRect& rect, unsigned 
         graphics.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
         graphics.SetPixelOffsetMode(Gdiplus::PixelOffsetModeHighQuality);
         const auto geometry = circularGeometry(rect, dpi, visualizer.latest());
-        Gdiplus::Pen ring(Gdiplus::Color(255, 44, 69, 92), geometry.stroke);
+        Gdiplus::Pen ring(Gdiplus::Color(spectralColor(75, visualizer.colorTheme())), geometry.stroke);
         const auto radius = geometry.innerRadius;
         if (radius > 0) graphics.DrawEllipse(&ring, geometry.centerX - radius,
             geometry.centerY - radius, 2 * radius, 2 * radius);
@@ -25,7 +25,7 @@ inline void drawSpectralVisualization(HDC dc, const OverlayRect& rect, unsigned 
         for (std::size_t i = 0; i < geometry.count; ++i) {
             const auto& segment = geometry.bars[i];
             if (segment.level == 0) continue;
-            bar.SetColor(Gdiplus::Color(spectralColor(segment.level)));
+            bar.SetColor(Gdiplus::Color(spectralColor(segment.level, visualizer.colorTheme())));
             graphics.DrawLine(&bar, segment.x1, segment.y1, segment.x2, segment.y2);
         }
         return;

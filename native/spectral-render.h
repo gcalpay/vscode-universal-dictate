@@ -8,21 +8,8 @@
 
 namespace universal_dictate::visualization {
 // Opaque ARGB. Zero matches the existing panel, not an animated noise texture.
-inline std::uint32_t spectralColor(std::uint8_t level) noexcept {
-    constexpr std::array<std::array<int, 3>, 6> stops{{
-        {14, 18, 27}, {25, 34, 74}, {52, 63, 142},
-        {64, 149, 191}, {85, 222, 194}, {239, 249, 219}
-    }};
-    const auto scaled = static_cast<unsigned>(level) * (stops.size() - 1);
-    const auto index = std::min(stops.size() - 2, scaled / 255);
-    const int fraction = static_cast<int>(scaled - index * 255);
-    std::uint32_t color = 0xff000000U;
-    for (std::size_t channel = 0; channel < 3; ++channel) {
-        const auto value = (stops[index][channel] * (255 - fraction)
-                          + stops[index + 1][channel] * fraction + 127) / 255;
-        color |= static_cast<std::uint32_t>(value) << (16 - 8 * channel);
-    }
-    return color;
+inline std::uint32_t spectralColor(std::uint8_t level, colors::Theme theme = colors::Theme::Blue) noexcept {
+    return colors::powerColor(level, theme);
 }
 
 inline void prepareSpectrogramPixels(SpectralVisualizer& visualizer,
@@ -34,7 +21,7 @@ inline void prepareSpectrogramPixels(SpectralVisualizer& visualizer,
     const auto columns = visualizer.pixelColumns(), rows = visualizer.pixelRows();
     std::array<std::uint32_t, 256> palette{};
     for (std::size_t i = 0; i < palette.size(); ++i)
-        palette[i] = spectralColor(static_cast<std::uint8_t>(i));
+        palette[i] = spectralColor(static_cast<std::uint8_t>(i), visualizer.colorTheme());
     if (columns == visualizer.columns() && rows == visualizer.bands()) {
         for (std::size_t y = 0; y < rows; ++y)
             for (std::size_t x = 0; x < columns; ++x)
@@ -78,7 +65,7 @@ inline RadialGeometry circularGeometry(const OverlayRect& rect, unsigned dpi,
     if (width <= 0 || height <= 0) return result;
     result.centerX = static_cast<float>(rect.left) + width * 0.5f;
     result.centerY = static_cast<float>(rect.top) + height * 0.5f;
-    result.stroke = std::max(0.6f, 0.95f * scale);
+    result.stroke = std::max(0.8f * scale, std::min(2.8f * scale, std::min(width, height) * 0.014f));
     const float radius = std::max(0.0f, std::min(width, height) * 0.5f - result.stroke - scale);
     result.innerRadius = radius * 0.43f;
     if (radius < scale) return result;

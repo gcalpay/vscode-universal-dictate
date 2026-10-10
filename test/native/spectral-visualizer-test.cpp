@@ -1,7 +1,9 @@
 /* Synthetic, microphone-free spectral regression tests. SPDX-License-Identifier: MIT */
 #include "../../native/spectral-render.h"
 #include "../../native/preview-layout.h"
+#include "../../native/circular-layout.h"
 #include "../../native/recording-pause.h"
+#include "overlay-design-test.h"
 #include <chrono>
 #include <iostream>
 #include <random>
@@ -41,13 +43,13 @@ std::vector<std::uint8_t> history(const vis::SpectralVisualizer& visualizer) {
 std::size_t peak(std::span<const float> values) {
     return static_cast<std::size_t>(std::max_element(values.begin(), values.end()) - values.begin());
 }
-constexpr std::array modes{Mode::LogFrequencyPowerSpectrogram, Mode::LinearFrequencyPowerSpectrogram,
-    Mode::ConstantQPowerSpectrogram, Mode::CircularSpectrum};
+constexpr std::array modes{Mode::LogFrequencyPowerSpectrogram, Mode::CircularSpectrum};
 
 void testModeAndScale() {
     check(vis::parseMode("waveform") == Mode::Waveform, "waveform mode");
     check(vis::parseMode("unknown") == Mode::Waveform, "unknown mode fallback");
-    check(vis::parseMode("constantQPowerSpectrogram") == Mode::ConstantQPowerSpectrogram, "CQT mode");
+    check(vis::parseMode("constantQPowerSpectrogram") == Mode::LogFrequencyPowerSpectrogram, "retired CQT maps to log");
+    check(vis::parseMode("linearFrequencyPowerSpectrogram") == Mode::LogFrequencyPowerSpectrogram, "retired linear maps to log");
     check(vis::powerLevel(0) == 0 && vis::powerLevel(-1) == 0, "zero and negative power");
     check(vis::powerLevel(std::numeric_limits<float>::quiet_NaN()) == 0, "nonfinite power");
     check(vis::powerLevel(1e-8f) == 0 && vis::powerLevel(1) == 255 && vis::powerLevel(100) == 255, "fixed scale bounds");
@@ -92,30 +94,6 @@ void testFourier() {
     }
 }
 
-void testConstantQ() {
-    const auto kernels = vis::makeCqtKernels();
-    check(kernels.size() == 84, "seven octaves of CQT bins");
-    const auto longest = kernels.front().weights.size();
-    check(longest > 4000 && longest < 4500, "real long low-frequency window");
-    for (std::size_t k = 0; k < kernels.size(); ++k) {
-        const auto& kernel = kernels[k];
-        check(kernel.offset + kernel.weights.size() <= longest, "aligned CQT kernel fits");
-        near(kernel.offset + (kernel.weights.size() - 1) * 0.5, (longest - 1) * 0.5, 0.5001, "common CQT frame center");
-        if (k) {
-            check(kernel.weights.size() < kernels[k-1].weights.size(), "variable CQT window length");
-            near(kernel.frequency / kernels[k-1].frequency, std::pow(2.0, 1.0/12), 1e-12, "constant frequency ratio");
-        }
-    }
-    for (std::size_t target : {std::size_t{6}, std::size_t{36}, std::size_t{60}, std::size_t{80}}) {
-        auto visualizer = std::make_unique<vis::SpectralVisualizer>(Mode::ConstantQPowerSpectrogram);
-        const auto audio = tone(kernels[target].frequency, 0.25, 16000);
-        feed(*visualizer, audio);
-        check(peak(visualizer->lastPower()) == target, "CQT tone maps to correct bin");
-        near(visualizer->lastPower()[target], 0.25*0.25, 0.001, "CQT amplitude normalization");
-        check(visualizer->lastPower()[target] > visualizer->lastPower()[target-3] * 20, "CQT frequency selectivity");
-    }
-}
-
 void testStreamAndMapping() {
     const auto audio = tone(1000, 0.15, 32000);
     for (const auto mode : modes) {
@@ -125,10 +103,8 @@ void testStreamAndMapping() {
         check(a->revision() == audio.size() / vis::kHopFrames, "one history column per audio hop");
         check(history(*a) == history(*b) && a->latest() == b->latest(), "callback chunk invariance");
         check(a->receivedFrames() == audio.size() && a->droppedFrames() == 0, "received frame identity");
-        if (mode == Mode::LinearFrequencyPowerSpectrogram) check(peak(a->lastPower()) == 12, "linear 1 kHz row");
         if (mode == Mode::LogFrequencyPowerSpectrogram) check(peak(a->lastPower()) == 54, "logarithmic 1 kHz row");
         if (mode == Mode::CircularSpectrum) check(peak(a->lastPower()) == 27, "circular logarithmic bin ordering");
-        if (mode == Mode::ConstantQPowerSpectrogram) check(peak(a->lastPower()) == 48, "CQT 1 kHz row");
         const auto before = history(*a); const auto revision = a->revision();
         std::array<std::int16_t, vis::kHopFrames-1> partial{};
         // Align to the next exact hop before checking a partial publication.
@@ -196,7 +172,7 @@ void testImmutableHistoryAndPause() {
 }
 
 void testQueueAndOverflow() {
-    auto visualizer = std::make_unique<vis::SpectralVisualizer>(Mode::LinearFrequencyPowerSpectrogram, 10000);
+    auto visualizer = std::make_unique<vis::SpectralVisualizer>(Mode::LogFrequencyPowerSpectrogram, 10000);
     const auto audio = tone(500, 0.15, vis::kPcmQueueCapacity);
     const auto copy = audio;
     visualizer->push(audio.data(), audio.size()); visualizer->push(audio.data(), audio.size());
@@ -205,9 +181,9 @@ void testQueueAndOverflow() {
     visualizer->push(audio.data(), audio.size());
     while (visualizer->update()) {}
     check(visualizer->revision() == 3 * audio.size() / vis::kHopFrames, "overflow retains active-audio time gaps");
-    check(visualizer->latest()[6] > 0, "analyzer recovers after overflow");
+    check(visualizer->latest()[41] > 0, "analyzer recovers after overflow");
     check(audio == copy, "caller PCM remains untouched");
-    bool blank = false; for (std::size_t x = 0; x < visualizer->columns(); ++x) if (visualizer->level(x, 6) == 0) blank = true;
+    bool blank = false; for (std::size_t x = 0; x < visualizer->columns(); ++x) if (visualizer->level(x, 41) == 0) blank = true;
     check(blank, "missing visualization frames are blank, not invented data");
     auto queue = std::make_unique<vis::PcmQueue>();
     std::atomic<bool> done{false}; std::uint64_t readCount = 0, last = 0;
@@ -270,8 +246,7 @@ void testGeometry() {
     std::size_t layouts = 0;
     for (const auto size : {OverlaySize::Small, OverlaySize::Medium, OverlaySize::Large})
         for (const unsigned dpi : {96U,120U,144U,192U}) for (const bool preview : {false,true}) {
-            const auto rect = preview ? preview::calculateTextLayout(size, dpi).waveform
-                : calculateEnhancedOverlayLayout(size, dpi).waveform;
+            const auto rect = calculateCircularOverlayLayout(size, dpi, preview).waveform;
             const auto geometry = vis::circularGeometry(rect, dpi, spectrum);
             check(geometry.count >= 12 && geometry.count <= vis::kCircularBands, "readable bounded radial groups");
             for (std::size_t i = 0; i < geometry.count; ++i) {
@@ -288,7 +263,8 @@ void testGeometry() {
 }
 int main() {
     try {
-        testModeAndScale(); testFourier(); testConstantQ(); testStreamAndMapping();
+        overlay_design_test::run();
+        testModeAndScale(); testFourier(); testStreamAndMapping();
         testImmutableHistoryAndPause(); testQueueAndOverflow(); testBoundedSchedulingStall(); testGeometry();
         std::cout << "spectral-visualizer: " << assertions << " checks passed\n";
         return 0;

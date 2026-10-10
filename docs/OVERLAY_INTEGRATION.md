@@ -9,6 +9,16 @@ Draft PR #56 is stacked on draft PR #55 / `perf/stop-insert-latency` at
 
 ## Current state and navigation
 
+**RC4 design update (10 October):** user approved three modes (Waveform, Log,
+Circular), four fixed palettes (Blue default / Green / Amber / Violet), and a
+rounded-square Circular card. Linear/CQT are retired. Waveform amplitude stays
+at the known working 1.1.2 response; colors only. See the current specification
+below. Historical five-mode results remain valid for their recorded sources,
+not a claim about current validation. Current M5 scope is 142 observations / 56
+gates with unchanged per-condition pairing/budgets. Acceptance remains pending.
+
+### Historical M5 closeout
+
 M0/M1 and all five visualization implementations are saved. Original M5 run
 [37765259320](https://github.com/gcalpay/vscode-universal-dictate/actions/runs/37765259320)
 and post-review run
@@ -42,7 +52,7 @@ records the old pause milestone. They are not current M6/M7 authorization.
 The user removed individual M1/M2/M3/M4 manual VSIX gates. Continue internal
 validation and renderer inspection in bounded, recoverable batches. Preserve a
 coherent source/evidence checkpoint after each batch. Deliver one integrated
-candidate containing M1 and all five styles after internal review, with normal-use
+candidate containing M1 and the three retained styles after internal review, with normal-use
 acceptance. There is no prescribed repeated dictation, per-run diagnostics or
 screenshot exercise. Do not require installation of the older 1.1.3 M1 candidate.
 
@@ -54,19 +64,19 @@ separate M7/M8 safeguards. Preserve PR #55 and its evidence.
 ## Implemented scope and preserved behavior
 
 **Enhanced Overlay Visualization** independently selects Waveform / Oscillogram
-(default), Log-Frequency Power Spectrogram, Linear-Frequency Power Spectrogram,
-Constant-Q Power Spectrogram or Circular Spectrum. All modes are implemented.
+(default), Log-Frequency Power Spectrogram or Circular Spectrum. Four fixed
+color presets are Blue (default), Green, Amber and Violet.
 Selecting a style does not enable the overlay or change the active recording;
 settings are snapshotted before asynchronous preparation for the next recording.
 
 Preserve the isolated M1 final/preview workers, model and inference parameters,
-accepted waveform, status-bar behavior, seven independent settings, Pause/Resume,
+accepted waveform amplitude, status-bar behavior, eight independent settings, Pause/Resume,
 clipboard policy, non-activating controls and final-only insertion. Waveform,
 Status bar only and Off do not perform spectral analysis. Do not replace current
 source with an earlier 1.1.0-based visualization bundle. Issue #38 stays outside
 this release's scope.
 
-## Completed automated comparison
+## Historical five-mode automated comparison
 
 Revision 2 uses six independent Windows jobs. Each compares its candidate style
 against frozen M1 on the same runner and warm final worker, with ten adjacent
@@ -101,5 +111,6 @@ Earlier failed runs, including `37689421812` and `37762121955`, remain failures.
 The first cache-validation RGB mismatch at `37764925817` remains unexplained.
 The completed bounded probes did not reproduce it; source review permits a
 disclosed residual risk in the integrated candidate, not a resolved-defect claim.
-Codacy remains `action_required` for five explicitly retained findings.
+The RC3 Codacy report remained `action_required` for six retained additions;
+current-head findings must be reviewed separately.
 See the individual records in [M5_REVIEW_CLOSEOUT.md](M5_REVIEW_CLOSEOUT.md).

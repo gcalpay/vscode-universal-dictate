@@ -134,27 +134,38 @@ void verifyVisualizationViewport(const SpectralCanvas& canvas, const universal_d
 }
 
 void renderCase(vis::Mode mode, OverlaySize size, unsigned dpi, bool previewEnabled,
-                const std::filesystem::path& output) {
+                universal_dictate::colors::Theme theme, const std::filesystem::path& output) {
     std::unique_ptr<vis::SpectralVisualizer> visualizer;
     if (mode != vis::Mode::Waveform) {
-        visualizer = std::make_unique<vis::SpectralVisualizer>(mode,1000);
+        visualizer = std::make_unique<vis::SpectralVisualizer>(mode,1000,theme);
         auto audio = syntheticAudio(32000,250);
         for (std::size_t i=0; i<audio.size(); i+=800) { visualizer->push(audio.data()+i,800); visualizer->update(); }
     }
     const HWND foreground = GetForegroundWindow();
-    verify(createOverlay(nullptr,true,size,previewEnabled,visualizer.get()), "production overlay creation");
+    verify(createOverlay(nullptr,true,size,previewEnabled,visualizer.get(),theme), "production overlay creation");
     struct OverlayCleanup { ~OverlayCleanup() { destroyOverlay(); } } cleanup;
     verify(GetForegroundWindow() == foreground, "spectral overlay activated foreground");
     applyEnhancedDpi(dpi);
-    const auto layout = calculateEnhancedOverlayLayout(size,dpi,previewEnabled);
+    const auto layout = mode == vis::Mode::CircularSpectrum
+        ? universal_dictate::calculateCircularOverlayLayout(size,dpi,previewEnabled)
+        : calculateEnhancedOverlayLayout(size,dpi,previewEnabled);
     const RECT suggested{80,200,80+layout.width,200+layout.height};
     SendMessageW(g_overlay.window,WM_DPICHANGED,MAKELONG(dpi,dpi),reinterpret_cast<LPARAM>(&suggested));
     RECT client{}; GetClientRect(g_overlay.window,&client);
     verify(client.right == layout.width && client.bottom == layout.height, "spectral mode changed overlay dimensions");
+    if (mode == vis::Mode::CircularSpectrum) {
+        verify(layout.width == layout.height, "circular overlay must be square at every DPI");
+        const auto rect = currentVisualizationRect();
+        verify(rect.bottom < layout.confirmButton.top, "circle overlaps controls");
+        if (previewEnabled) {
+            const auto text = currentPreviewLayout().text;
+            verify(rect.bottom <= text.top && text.bottom < layout.confirmButton.top, "circular preview overlaps spectrum or controls");
+        }
+    }
     g_overlay.previewText = L"Lokale Vorschau. 压力五巴. Provisional text.";
     if (!visualizer) for (std::size_t i=0;i<g_overlay.enhancedSignalHistory.size();++i)
         g_overlay.enhancedSignalHistory[i] = universal_dictate::visualPeakSample(static_cast<int>(1300*std::sin(i*0.31)));
-    const auto rect = previewEnabled ? universal_dictate::preview::calculateTextLayout(size,dpi).waveform : layout.waveform;
+    const auto rect = currentVisualizationRect();
     SpectralCanvas guard(layout.width,layout.height);
     drawEnhancedVisualization(guard.dc);
     verifyVisualizationViewport(guard,rect);
@@ -165,7 +176,7 @@ void renderCase(vis::Mode mode, OverlaySize size, unsigned dpi, bool previewEnab
     const auto again = canvas.snapshot();
     for (std::size_t i = 0; i < original.size(); ++i)
         verify((again[i] & 0x00ffffffU) == (original[i] & 0x00ffffffU), "unchanged audio repainted differently");
-    const auto prefix=std::to_string(static_cast<int>(mode))+"-"+std::to_string(static_cast<int>(size))+"-"+std::to_string(dpi)+(previewEnabled?"-preview":"-off");
+    const auto prefix=std::to_string(static_cast<int>(theme))+"-"+std::to_string(static_cast<int>(mode))+"-"+std::to_string(static_cast<int>(size))+"-"+std::to_string(dpi)+(previewEnabled?"-preview":"-off");
     canvas.save(output/(prefix+".bmp"));
     g_overlay.paused=true;
     drawEnhancedOverlay(canvas.dc,client);
@@ -187,11 +198,13 @@ int main(int argc,char** argv) {
         const std::filesystem::path output(argv[2]); std::filesystem::create_directories(output);
         unsigned captures=0, renders=0;
         for (const auto mode : {vis::Mode::Waveform,vis::Mode::LogFrequencyPowerSpectrogram,
-                vis::Mode::LinearFrequencyPowerSpectrogram,vis::Mode::ConstantQPowerSpectrogram,vis::Mode::CircularSpectrum}) {
+                vis::Mode::CircularSpectrum}) {
             for (const bool preview : {false,true}) { captureCase(mode,preview,output); ++captures; }
-            for (const auto size : {OverlaySize::Small,OverlaySize::Medium,OverlaySize::Large})
-                for (const unsigned dpi : {96U,120U,144U,192U})
-                    for (const bool preview : {false,true}) { renderCase(mode,size,dpi,preview,output); ++renders; }
+            for (const auto theme : {universal_dictate::colors::Theme::Blue,universal_dictate::colors::Theme::Green,
+                    universal_dictate::colors::Theme::Amber,universal_dictate::colors::Theme::Violet})
+                for (const auto size : {OverlaySize::Small,OverlaySize::Medium,OverlaySize::Large})
+                    for (const unsigned dpi : {96U,120U,144U,192U})
+                        for (const bool preview : {false,true}) { renderCase(mode,size,dpi,preview,theme,output); ++renders; }
         }
         std::cout << captures << " production PCM/pause/preview cases and " << renders
                   << " native rendering layouts passed; no microphone or VS Code acceptance implied\n";

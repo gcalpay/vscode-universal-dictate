@@ -36,7 +36,7 @@ int main(int argc,char** argv) {
         requireImage((status==MA_SUCCESS || status==MA_AT_END) && count==pcm.size());
         const std::filesystem::path output(argv[3]);std::filesystem::create_directories(output);
         for(const auto mode:{vis::Mode::Waveform,vis::Mode::LogFrequencyPowerSpectrogram,
-                vis::Mode::LinearFrequencyPowerSpectrogram,vis::Mode::ConstantQPowerSpectrogram,vis::Mode::CircularSpectrum}) {
+                vis::Mode::CircularSpectrum}) {
             CaptureState capture{};
             std::unique_ptr<vis::SpectralVisualizer> visualizer;
             if(mode!=vis::Mode::Waveform) visualizer=std::make_unique<vis::SpectralVisualizer>(mode,10000);
@@ -53,6 +53,6 @@ int main(int argc,char** argv) {
                 destroyOverlay();
             }
         }
-        std::cout<<"10 scripted production-renderer speech snapshots saved\n";return 0;
+        std::cout<<"6 scripted production-renderer speech snapshots saved\n";return 0;
     } catch(const std::exception& e) {destroyOverlay();std::cerr<<e.what()<<'\n';return 1;}
 }

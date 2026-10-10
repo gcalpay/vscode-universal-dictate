@@ -19,11 +19,13 @@ Keep PR #55 and its M1 evidence intact; visualization work builds on that source
 Preserve the isolated warm final/preview worker design, pinned model and inference
 parameters. Preserve Pause/Resume, full accepted WAV, one final insertion, clipboard
 Off as no access, non-activating controls and Issue #38 scope boundary.
-Keep the 1.1.2 waveform mapping, immutable buckets/history, native paint,
-overlay/preview layout and raw snapshot unchanged; the RC2 Medium-only gain is
+Keep the 1.1.2 waveform mapping, immutable buckets/history, paint geometry,
+rectangular waveform/preview layout and raw snapshot unchanged. User-approved
+RC4 changes are three modes, palette-only waveform recoloring, and a separate
+rounded-square Circular Spectrum layout. The RC2 Medium-only gain is
 explicitly excluded pending root-cause evidence. Do not mask fluctuating raw
 microphone input with unvalidated visual gain. Spectral analysis is enhanced-
-overlay-only, absent when Waveform/Status-bar-only/Off is effective. No FFT/CQT,
+overlay-only, absent when Waveform/Status-bar-only/Off is effective. No FFT,
 allocation, blocking wait or disk I/O added to the capture callback. Use bounded
 buffers and intentional dropped visualization updates rather than dropped audio.
 Settings are session snapshots; selecting a style must not enable the overlay.

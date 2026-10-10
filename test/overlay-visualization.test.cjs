@@ -6,14 +6,14 @@ const { OVERLAY_VISUALIZATIONS, OVERLAY_VISUALIZATION_LABELS, DEFAULT_OVERLAY_VI
 const { buildRecorderArguments } = require('../dist/core/recorder');
 const setting = manifest.contributes.configuration.properties['universalDictate.enhancedOverlayVisualization'];
 
-test('five agreed visualization choices have matching metadata and Waveform default', () => {
+test('three agreed visualization choices have matching metadata and Waveform default', () => {
   assert.deepEqual(OVERLAY_VISUALIZATIONS, ['waveform', 'logFrequencyPowerSpectrogram',
-    'linearFrequencyPowerSpectrogram', 'constantQPowerSpectrogram', 'circularSpectrum']);
+    'circularSpectrum']);
   assert.deepEqual(setting.enum, OVERLAY_VISUALIZATIONS);
   assert.deepEqual(setting.enumItemLabels, OVERLAY_VISUALIZATIONS.map(mode => OVERLAY_VISUALIZATION_LABELS[mode]));
   assert.deepEqual(setting.enumItemLabels, ['Waveform / Oscillogram', 'Log-Frequency Power Spectrogram',
-    'Linear-Frequency Power Spectrogram', 'Constant-Q Power Spectrogram', 'Circular Spectrum']);
-  assert.equal(setting.enumDescriptions.length, 5);
+    'Circular Spectrum']);
+  assert.equal(setting.enumDescriptions.length, 3);
   assert.equal(setting.default, DEFAULT_OVERLAY_VISUALIZATION);
   assert.equal(DEFAULT_OVERLAY_VISUALIZATION, 'waveform');
   assert.match(setting.description, /next dictation session/);
@@ -58,3 +58,13 @@ test('display location and all previously saved defaults remain separate', () =>
   assert.equal(properties['universalDictate.overwriteClipboard'].default, false);
   assert.equal(properties['universalDictate.overlaySize'].default, 'medium');
 });
+
+for (const retired of ['linearFrequencyPowerSpectrogram','constantQPowerSpectrogram']) {
+  test(`${retired}: compatibility resolves to log without mutating stored options`, () => {
+    const options = {recorderPath:'r.exe',outputPath:'a.wav',overlayStyle:'enhanced',enhancedOverlayVisualization:retired};
+    const args=buildRecorderArguments(options);
+    assert.equal(normalizeOverlayVisualization(retired),'logFrequencyPowerSpectrogram');
+    assert.equal(args[args.indexOf('--overlay-visualization')+1],'logFrequencyPowerSpectrogram');
+    assert.equal(options.enhancedOverlayVisualization,retired);
+  });
+}

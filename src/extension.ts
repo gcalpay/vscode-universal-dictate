@@ -13,6 +13,8 @@ import {
   OVERLAY_VISUALIZATION_DETAILS,
   type OverlayVisualization
 } from './core/overlay-visualization';
+import { normalizeOverlayColor, OVERLAY_COLORS, OVERLAY_COLOR_LABELS,
+  OVERLAY_COLOR_DETAILS, type OverlayColor } from './core/overlay-colors';
 import {
   getWhisperLanguageName,
   normalizeWhisperLanguage,
@@ -82,6 +84,10 @@ function getConfiguredOverlayVisualization(): OverlayVisualization {
   );
 }
 
+function getConfiguredOverlayColor(): OverlayColor {
+  return normalizeOverlayColor(vscode.workspace.getConfiguration('universalDictate').get<unknown>('colors'));
+}
+
 function getConfiguredLivePreview(): boolean {
   return vscode.workspace.getConfiguration('universalDictate').get<unknown>('livePreview', false) === true;
 }
@@ -125,6 +131,7 @@ class DictationController implements vscode.Disposable {
   private activeLanguage = 'en';
   private activeOverlaySize: OverlaySize = 'medium';
   private activeOverlayVisualization: OverlayVisualization = 'waveform';
+  private activeOverlayColor: OverlayColor = 'blue';
   private activeWaveformSpan: WaveformTimeSpanSeconds = 10;
   private latencyTrace: { operationId: number; stages: Partial<Record<DictationLatencyStage, number>>; preview: boolean; language: string; display: VisualizationMode; overlayStyle: OverlayVisualization; warm: boolean; previewActiveAtStop: boolean; previewActiveForMs?: number; sincePreviewFinishedMs?: number; path?: WhisperInferencePath } | undefined;
   private previewInferenceStartedAt: number | undefined;
@@ -165,6 +172,7 @@ class DictationController implements vscode.Disposable {
         this.activeLanguage = normalizeWhisperLanguage(vscode.workspace.getConfiguration('universalDictate').get<string>('language', 'en'));
         this.activeOverlaySize = getConfiguredOverlaySize();
         this.activeOverlayVisualization = getConfiguredOverlayVisualization();
+        this.activeOverlayColor = getConfiguredOverlayColor();
         this.activeWaveformSpan = getConfiguredWaveformTimeSpanSeconds();
         this.previewInferenceStartedAt = undefined;
         this.previewInferenceFinishedAt = undefined;
@@ -181,7 +189,8 @@ class DictationController implements vscode.Disposable {
           this.activeOverlaySize,
           signal,
           this.activeLivePreview,
-          this.activeOverlayVisualization
+          this.activeOverlayVisualization,
+          this.activeOverlayColor
         );
       },
       transcribe: (audioPath) => transcribe(this.context, audioPath, this.activeLanguage, path => { if (this.latencyTrace) this.latencyTrace.path = path; }),
@@ -434,7 +443,7 @@ Last 100 completed dictations; no audio or transcript text.
 
 type LanguageQuickPickItem = vscode.QuickPickItem & { code: string };
 type SettingsQuickPickItem = vscode.QuickPickItem & {
-  action: 'language' | 'visualization' | 'enhancedOverlayVisualization' | 'overlaySize' | 'waveformTimeSpan' | 'overwriteClipboard' | 'livePreview';
+  action: 'language' | 'visualization' | 'colors' | 'enhancedOverlayVisualization' | 'overlaySize' | 'waveformTimeSpan' | 'overwriteClipboard' | 'livePreview';
 };
 type VisualizationQuickPickItem = vscode.QuickPickItem & { mode: VisualizationMode };
 type OverlayVisualizationQuickPickItem = vscode.QuickPickItem & { visualization: OverlayVisualization };
@@ -550,6 +559,24 @@ async function selectOverlayVisualization(): Promise<void> {
   );
 }
 
+async function selectOverlayColors(): Promise<void> {
+  const configuration = vscode.workspace.getConfiguration('universalDictate');
+  const current = getConfiguredOverlayColor();
+  const items = OVERLAY_COLORS.map(color => ({ label: OVERLAY_COLOR_LABELS[color],
+    description: current === color ? 'Current' : undefined,
+    detail: OVERLAY_COLOR_DETAILS[color], color }));
+  const selected = await vscode.window.showQuickPick(items, {
+    placeHolder: 'Colors · enhanced overlay only · applies from the next recording',
+    matchOnDescription: true, matchOnDetail: true
+  });
+  if (!selected) return;
+  await configuration.update('colors', selected.color, vscode.ConfigurationTarget.Global);
+  const effective = getConfiguredOverlayColor();
+  void vscode.window.showInformationMessage(
+    `Universal Dictate colors: ${OVERLAY_COLOR_LABELS[effective]}. Applies from the next recording.${effective !== selected.color ? ' A workspace setting overrides the user setting.' : ''}`
+  );
+}
+
 async function selectOverlaySize(): Promise<void> {
   const configuration = vscode.workspace.getConfiguration('universalDictate');
   const current = getConfiguredOverlaySize();
@@ -640,6 +667,12 @@ async function openSettings(): Promise<void> {
       action: 'enhancedOverlayVisualization'
     },
     {
+      label: '$(symbol-color) Colors',
+      description: OVERLAY_COLOR_LABELS[getConfiguredOverlayColor()],
+      detail: 'Blue, Green, Amber or Violet. Visualization colors only; audio, controls and status bar are unchanged.',
+      action: 'colors'
+    },
+    {
       label: '$(screen-full) Overlay size',
       description: OVERLAY_SIZE_LABELS[currentOverlaySize],
       detail: 'Choose Small, Medium or Large for the enhanced native recording overlay.',
@@ -689,6 +722,11 @@ async function openSettings(): Promise<void> {
 
   if (selected.action === 'enhancedOverlayVisualization') {
     await selectOverlayVisualization();
+    return;
+  }
+
+  if (selected.action === 'colors') {
+    await selectOverlayColors();
     return;
   }
 
@@ -775,6 +813,7 @@ export function activate(context: vscode.ExtensionContext): void {
           `language=${configuredLanguage}`,
           `overlaySize=${getConfiguredOverlaySize()}`,
           `enhancedOverlayVisualization=${getConfiguredOverlayVisualization()}`,
+          `colors=${getConfiguredOverlayColor()}`,
           `waveformSeconds=${getConfiguredWaveformTimeSpanSeconds()}`,
           `livePreview=${getConfiguredLivePreview()}`,
           `previewEffective=${getConfiguredLivePreview() && showsOverlay(getConfiguredVisualization())}`,

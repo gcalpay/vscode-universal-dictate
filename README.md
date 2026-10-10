@@ -6,11 +6,11 @@
 
 ![Universal Dictate status-bar controls](media/status-bar-controls.webp)
 
-*This branch describes the unpublished 1.2.0 integrated review candidate. The settings table below includes all seven current controls.*
+*Blue is the new default; the waveform illustrations show the optional Green palette. This branch describes the unpublished 1.2.0 integrated review candidate. The settings table below includes all eight current controls.*
 
-![Recording overlay with live transcript preview](media/live-preview.webp)
+![Green-palette waveform with live transcript preview](media/live-preview.webp)
 
-![Waveform-only recording overlay with Live preview off](media/enhanced-overlay.webp)
+![Green-palette waveform with Live preview off](media/enhanced-overlay.webp)
 
 Universal Dictate transcribes locally with the multilingual Whisper `base` model through `whisper.cpp`, including automatic punctuation, and sends the completed transcript as Unicode text to the input that owns keyboard focus at insertion time. It works in VS Code editors and agent/chat prompts and can also insert into compatible text fields in other Windows applications while Universal Dictate is running. **It never submits or sends dictated text automatically.**
 
@@ -26,31 +26,32 @@ Open the settings gear next to **Dictate**, or find **Universal Dictate** in VS 
 | --- | --- | --- |
 | **Language** | Choose the language you intend to speak, or Auto-detect. All 99 Whisper languages are available. | **English** |
 | **Audio visualization** | Choose Enhanced overlay, Both (overlay and status-bar waveform), Status bar only, or Off. | **Enhanced overlay** |
-| **Enhanced Overlay Visualization** | Choose Waveform / Oscillogram, Log-Frequency Power Spectrogram, Linear-Frequency Power Spectrogram, Constant-Q Power Spectrogram or Circular Spectrum. Affects the enhanced overlay only. | **Waveform / Oscillogram** |
+| **Enhanced Overlay Visualization** | Choose Waveform / Oscillogram, Log-Frequency Power Spectrogram or Circular Spectrum. Affects the enhanced overlay only. | **Waveform / Oscillogram** |
+| **Colors** | Choose Blue, Green, Amber or Violet for any native visualization; control and status-bar colors stay unchanged. | **Blue** |
 | **Overlay size** | Choose Small, Medium or Large. | **Medium** |
 | **Overlay history** | Show the latest 1, 3, 5, 10 or 20 seconds of accepted audio in Waveform or a scrolling spectrogram. Circular Spectrum shows the latest frame instead. This does not limit recording length. | **10 seconds** |
 | **Overwrite clipboard** | Also copy the final transcript to the clipboard, replacing its previous contents. Automatic insertion still uses direct text input. | **Off** |
 | **Live preview** | Show provisional text while speaking. Requires Enhanced overlay or Both. | **Off** |
 
-Change settings before starting a recording. Changes made during a recording apply to the next one. Saved choices take precedence over the defaults. Medium is the default overlay size. With Live preview Off, the overlay is shorter; enabling preview reserves room for readable text without narrowing the waveform.
+Change settings before starting a recording. Changes made during a recording apply to the next one. Saved choices take precedence over the defaults. Medium is the default overlay size. With Live preview Off, the rectangular overlay is shorter; enabling preview reserves room for readable text without narrowing the waveform. Circular Spectrum uses a larger square when preview is enabled.
 
 ### Enhanced overlay visualizations (unreleased)
 
 **Audio visualization** controls *where* feedback appears. **Enhanced Overlay Visualization** controls *what the native overlay draws*. The status-bar waveform is independent. Selecting a renderer neither enables a disabled overlay nor changes the current recording; the preference is retained for the next session using Enhanced overlay or Both.
 
-The existing **Waveform / Oscillogram** remains unchanged and performs no spectral analysis. The **Linear-Frequency Power Spectrogram** uses equally spaced frequencies; the **Log-Frequency Power Spectrogram** displays the same FFT analysis on logarithmically spaced frequency bands. **Constant-Q Power Spectrogram** uses genuinely different, variable-length filters, with finer low-frequency resolution and a longer initial analysis window. **Circular Spectrum** arranges the latest FFT bands clockwise, from low to high frequency; it is not a musical chromagram.
+**Waveform / Oscillogram** retains the original 1.1.2 amplitude, history and line geometry. Its default color is now **Blue**; **Green** retains the earlier green trace. **Log-Frequency Power Spectrogram** retains the original blue/teal power palette by default. **Circular Spectrum** shows the latest FFT frame in a dedicated **rounded-square card**, with a header, large central spectrum and a separate row of Insert / Pause / Discard controls. Live preview gets its own complete text lines above the buttons; the card remains square.
 
-Spectrograms scroll from right to left with low frequencies at the bottom. Their colors use a fixed digital power scale, not a microphone-loudness calibration or rolling automatic gain. The same completed sample keeps its color after louder speech. Circular Spectrum is intentionally compact in Small/preview layouts and is easier to distinguish at larger overlay sizes.
+All four palettes contain dark-to-light shades. Color selection changes only appearance, not microphone gain or signal scaling. Blue, Green, Amber and Violet apply independently of style, size, language, clipboard and live-preview preferences, from the next recording. Button action colors and the status bar remain unchanged.
 
-All modes retain the existing size presets, preview area and controls. Pause freezes the visualization without appending paused audio or artificial silence. The visual analysis stays local and does not modify the recorded WAV, transcription or clipboard. There are no new runtime dependencies or model downloads. The saved `universalDictate.waveformTimeSpanSeconds` preference also controls spectrogram history; its key and prior values are retained for compatibility.
+The log spectrogram scrolls right to left with low frequencies at the bottom. Its fixed digital power scale is not acoustic loudness or automatic gain. Circular Spectrum is not a scrolling spectrogram; Overlay history does not apply to it. Both spectral modes use the unchanged 16 kHz speech audio.
 
-![Five enhanced overlay styles with preview off and on](media/overlay-visualizations.webp)
+Linear and Constant-Q were retired from the review candidates because they duplicated the intended choices for this dictation app. Existing saved values resolve to Log-Frequency Power Spectrogram without rewriting preferences or enabling a disabled overlay. Waveform remains the default for missing or invalid values.
 
-*Actual production-renderer output using synthetic speech, with Preview Off and On. These are automated rendering examples, not microphone captures or evidence of recognition quality.*
+All modes preserve Pause/Resume, original accepted WAV samples, local transcription, clipboard policy and one final insertion. No new runtime dependencies or model downloads are required. Earlier green waveform illustrations below show the retained **Green** palette; Circular Spectrum uses its own square size presets.
 
 ![Small, Medium and Large overlay layouts with preview off and on](media/overlay-sizes.webp)
 
-*Actual production-renderer output using a synthetic tone to show size and preview geometry. Circular Spectrum keeps the existing viewport, including the small circle in compact preview layouts; the overlay does not expand to accommodate it.*
+*These earlier production-renderer illustrations show the unchanged rectangular Waveform layout in Green. Circular Spectrum now uses the dedicated rounded-square layout described above.*
 
 ### Live preview
 

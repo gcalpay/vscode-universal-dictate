@@ -40,7 +40,7 @@ jobs:
         run: node --unhandled-rejections=strict --test test/preview-pipeline.test.cjs test/preview-recorder.test.cjs test/preview-runtime.test.cjs
 
       - name: Enhanced overlay visualization settings and source guards
-        run: node --unhandled-rejections=strict --test test/overlay-visualization.test.cjs test/overlay-visualization-source.test.cjs
+        run: node --unhandled-rejections=strict --test test/overlay-visualization.test.cjs test/overlay-visualization-source.test.cjs test/overlay-colors.test.cjs
 
       - name: M7 pause/resume state and command tests
         run: node --unhandled-rejections=strict --test test/pause-controls.test.cjs

@@ -16,8 +16,7 @@ const { RecorderLines, MAX_PREVIEW_LINE } = require('../../dist/core/preview-rec
 const { createPreviewAudio } = require('../../dist/core/preview-audio');
 const { WhisperRuntime } = require('../../dist/core/whisper');
 const hash = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
-const STYLES = ['waveform', 'logFrequencyPowerSpectrogram', 'linearFrequencyPowerSpectrogram',
-  'constantQPowerSpectrogram', 'circularSpectrum'];
+const STYLES = ['waveform', 'logFrequencyPowerSpectrogram', 'circularSpectrum'];
 
 function pcmFrom(file) {
   const raw = fs.readFileSync(file);
@@ -218,7 +217,7 @@ async function main() {
     }
     // Additional longer recordings fill/wrap the longest (20 s) history without
     // inventing an audio backlog. Not mixed into the 12 s latency medians.
-    for (const style of ['linearFrequencyPowerSpectrogram', 'constantQPowerSpectrogram']) {
+    for (const style of ['logFrequencyPowerSpectrogram']) {
       result.runs.push(await runCase(runtime, workerEvents, { policy: 'candidate', style, preview: true, repeat: 0, seconds: 48 },
         { baseline, candidate, fixture, longFixture }, root, result.runs.length));
     }

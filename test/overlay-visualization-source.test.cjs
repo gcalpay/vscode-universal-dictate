@@ -9,9 +9,19 @@ const sha = text => createHash('sha256').update(text).digest('hex');
 const source = read('native/record-audio.cpp');
 const between = (text, begin, end) => text.slice(text.indexOf(begin),text.indexOf(end));
 
-test('accepted 1.1.0 waveform paint function remains byte-identical after renderer dispatch', () => {
-  assert.equal(sha(between(source,'void drawEnhancedWaveform(', 'void drawEnhancedVisualization(')),
-    '4347aff27bbc33442db2d862f848b2b63f7d6dcb5cd249cb7bc2555b0881f9e3');
+test('1.1.2 waveform geometry is unchanged; only colors are theme-driven', () => {
+  const paint = between(source,'void drawEnhancedWaveform(', 'void drawEnhancedVisualization(');
+  const themed = `    const auto palette = universal_dictate::colors::waveform(g_overlay.colorTheme);
+    const Gdiplus::Color axisColor(palette.axis);
+    const Gdiplus::Color envelopeOuterColor(palette.outer);
+    const Gdiplus::Color envelopeInnerColor(palette.inner);
+    const Gdiplus::Color mainWaveColor(palette.trace);`;
+  const original = `    const Gdiplus::Color axisColor(115, 41, 82, 58);
+    const Gdiplus::Color envelopeOuterColor(130, 36, 118, 72);
+    const Gdiplus::Color envelopeInnerColor(85, 45, 145, 88);
+    const Gdiplus::Color mainWaveColor(245, 66, 205, 118);`;
+  assert.ok(paint.includes(themed));
+  assert.equal(sha(paint.replace(themed,original)), '4347aff27bbc33442db2d862f848b2b63f7d6dcb5cd249cb7bc2555b0881f9e3');
   assert.match(between(source,'void drawEnhancedVisualization(', 'void drawEnhancedOverlay('), /if \(!g_overlay\.visualizer\)[\s\S]*drawEnhancedWaveform\(dc\)/);
 });
 

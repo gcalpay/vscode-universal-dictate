@@ -1,6 +1,7 @@
 /* Bounded, visual-only streaming spectra. SPDX-License-Identifier: MIT */
 #pragma once
 #include "overlay-visualization.h"
+#include "overlay-colors.h"
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -21,7 +22,6 @@ constexpr std::size_t kSampleRate = 16000;
 constexpr std::size_t kFftSize = 1024;
 constexpr std::size_t kHopFrames = 256;
 constexpr std::size_t kMaxBands = 96;
-constexpr std::size_t kCqtBands = 84;
 constexpr std::size_t kCircularBands = 48;
 constexpr std::size_t kMaxHistoryColumns = 1250; // Twenty seconds at 62.5 columns/s.
 // Absorb bounded scheduling/preview-IPC stalls without putting work on capture.
@@ -147,41 +147,6 @@ private:
     std::array<float, kFftSize / 2 + 1> power_{};
 };
 
-struct CqtKernel {
-    double frequency = 0;
-    std::size_t offset = 0;
-    float scale = 0;
-    std::vector<std::complex<float>> weights;
-};
-
-// A real direct constant-Q filter bank: f[k] = fmin * 2^(k/12),
-// N[k] = ceil(Q * fs / f[k]), Q = 1/(2^(1/12)-1). Kernels have different
-// lengths and a common center, not a log-remapped fixed-window FFT.
-inline std::vector<CqtKernel> makeCqtKernels() {
-    constexpr double binsPerOctave = 12.0;
-    const double quality = 1.0 / (std::pow(2.0, 1.0 / binsPerOctave) - 1.0);
-    const auto longest = static_cast<std::size_t>(std::ceil(quality * kSampleRate / kMinFrequency));
-    std::vector<CqtKernel> kernels;
-    kernels.reserve(kCqtBands);
-    for (std::size_t bin = 0; bin < kCqtBands; ++bin) {
-        CqtKernel kernel;
-        kernel.frequency = kMinFrequency * std::pow(2.0, bin / binsPerOctave);
-        const auto length = static_cast<std::size_t>(std::ceil(quality * kSampleRate / kernel.frequency));
-        kernel.offset = (longest - length) / 2;
-        kernel.weights.resize(length);
-        double sum = 0;
-        for (std::size_t i = 0; i < length; ++i) {
-            const double window = 0.5 - 0.5 * std::cos(2.0 * kPi * i / (length - 1));
-            const double angle = -2.0 * kPi * kernel.frequency * (static_cast<double>(i) - (length - 1) / 2.0) / kSampleRate;
-            kernel.weights[i] = {static_cast<float>(window * std::cos(angle)), static_cast<float>(window * std::sin(angle))};
-            sum += window;
-        }
-        kernel.scale = static_cast<float>(2.0 / sum);
-        kernels.push_back(std::move(kernel));
-    }
-    return kernels;
-}
-
 // Owned by the recorder, constructed only for an enabled spectral overlay.
 // push() is the entire callback-side path. update(), history and pixel access
 // belong solely to the overlay thread. Every update consumes at most one fixed
@@ -189,23 +154,17 @@ inline std::vector<CqtKernel> makeCqtKernels() {
 // that bound drops only visualization copies, never audio or an unbounded queue.
 class SpectralVisualizer {
 public:
-    explicit SpectralVisualizer(Mode mode, int milliseconds = 10000)
-        : mode_(mode), columns_(historyColumns(milliseconds)),
-          bands_(mode == Mode::ConstantQPowerSpectrogram ? kCqtBands :
-                 mode == Mode::CircularSpectrum ? kCircularBands : kMaxBands) {
+    explicit SpectralVisualizer(Mode mode, int milliseconds = 10000,
+                                colors::Theme theme = colors::Theme::Blue)
+        : mode_(mode), theme_(theme), columns_(historyColumns(milliseconds)),
+          bands_(mode == Mode::CircularSpectrum ? kCircularBands : kMaxBands) {
         if (mode == Mode::Waveform) throw std::invalid_argument("Waveform does not use a spectral analyzer");
-        if (mode == Mode::ConstantQPowerSpectrogram) {
-            kernels_ = makeCqtKernels();
-            windowFrames_ = kernels_.front().weights.size();
-        } else {
-            fourier_ = std::make_unique<Fourier>();
-            windowFrames_ = kFftSize;
-        }
-        ring_.resize(windowFrames_);
-        ordered_.resize(windowFrames_);
+        fourier_ = std::make_unique<Fourier>();
+        windowFrames_ = kFftSize;
+        ring_.resize(windowFrames_); ordered_.resize(windowFrames_);
         if (mode != Mode::CircularSpectrum) pixels_.resize(columns_ * bands_);
         pixelColumns_ = columns_; pixelRows_ = bands_;
-        if (fourier_) prepareFftBands();
+        prepareFftBands();
     }
 
     void push(const std::int16_t* samples, std::size_t count) noexcept {
@@ -222,6 +181,7 @@ public:
     }
 
     Mode mode() const noexcept { return mode_; }
+    colors::Theme colorTheme() const noexcept { return theme_; }
     std::size_t bands() const noexcept { return bands_; }
     std::size_t columns() const noexcept { return columns_; }
     std::size_t windowFrames() const noexcept { return windowFrames_; }
@@ -256,23 +216,21 @@ public:
 
     std::size_t storageBytes() const noexcept {
         std::size_t bytes = sizeof(*this) + (ring_.capacity() + ordered_.capacity()) * sizeof(float)
-            + pixels_.capacity() * sizeof(std::uint32_t) + kernels_.capacity() * sizeof(CqtKernel);
+            + pixels_.capacity() * sizeof(std::uint32_t);
         if (fourier_) bytes += sizeof(Fourier);
-        for (const auto& kernel : kernels_) bytes += kernel.weights.capacity() * sizeof(std::complex<float>);
         return bytes;
     }
 private:
     void prepareFftBands() noexcept {
         for (std::size_t band = 0; band < bands_; ++band) {
-            const bool linear = mode_ == Mode::LinearFrequencyPowerSpectrogram;
-            const double low = linear ? kNyquist * band / bands_ : kMinFrequency * std::pow(kNyquist / kMinFrequency, static_cast<double>(band) / bands_);
-            const double high = linear ? kNyquist * (band + 1) / bands_ : kMinFrequency * std::pow(kNyquist / kMinFrequency, static_cast<double>(band + 1) / bands_);
+            const double low = kMinFrequency * std::pow(kNyquist / kMinFrequency, static_cast<double>(band) / bands_);
+            const double high = kMinFrequency * std::pow(kNyquist / kMinFrequency, static_cast<double>(band + 1) / bands_);
             auto first = static_cast<std::size_t>(std::ceil(low * kFftSize / kSampleRate));
             auto end = std::min(kFftSize / 2 + 1, static_cast<std::size_t>(std::ceil(high * kFftSize / kSampleRate)));
             if (band + 1 == bands_) end = kFftSize / 2 + 1;
             if (first >= end) {
                 // A narrow low-frequency row cannot invent additional FFT resolution.
-                first = static_cast<std::size_t>(std::lround((linear ? (low + high) / 2 : std::sqrt(low * high)) * kFftSize / kSampleRate));
+                first = static_cast<std::size_t>(std::lround(std::sqrt(low * high) * kFftSize / kSampleRate));
                 first = std::min(first, kFftSize / 2);
                 end = first + 1;
             }
@@ -309,28 +267,16 @@ private:
     }
 
     void analyze() noexcept {
-        if (fourier_) {
-            fourier_->transform(std::span<const float, kFftSize>(ordered_.data(), kFftSize));
-            const auto& bins = fourier_->power();
-            for (std::size_t band = 0; band < bands_; ++band) {
-                const auto [first, end] = fftBands_[band];
-                power_[band] = *std::max_element(bins.begin() + first, bins.begin() + end);
-            }
-        } else {
-            float mean = 0;
-            for (float sample : ordered_) mean += sample;
-            mean /= static_cast<float>(windowFrames_);
-            for (std::size_t band = 0; band < kernels_.size(); ++band) {
-                const auto& kernel = kernels_[band];
-                std::complex<float> sum{};
-                for (std::size_t i = 0; i < kernel.weights.size(); ++i)
-                    sum += (ordered_[kernel.offset + i] - mean) * kernel.weights[i];
-                power_[band] = std::norm(sum) * kernel.scale * kernel.scale;
-            }
+        fourier_->transform(std::span<const float, kFftSize>(ordered_.data(), kFftSize));
+        const auto& bins = fourier_->power();
+        for (std::size_t band = 0; band < bands_; ++band) {
+            const auto [first, end] = fftBands_[band];
+            power_[band] = *std::max_element(bins.begin() + first, bins.begin() + end);
         }
     }
 
     const Mode mode_;
+    const colors::Theme theme_;
     const std::size_t columns_, bands_;
     std::atomic<bool> enabled_{true};
     PcmQueue queue_;
@@ -340,7 +286,6 @@ private:
     Levels latest_{};
     std::array<std::pair<std::size_t, std::size_t>, kMaxBands> fftBands_{};
     std::unique_ptr<Fourier> fourier_;
-    std::vector<CqtKernel> kernels_;
     std::vector<float> ring_, ordered_;
     std::vector<std::uint32_t> pixels_;
     std::size_t pixelColumns_ = 0, pixelRows_ = 0;

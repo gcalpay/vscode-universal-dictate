@@ -7,9 +7,10 @@
 ### Added
 
 - Enhanced Overlay Visualization: Waveform / Oscillogram (default), Log-Frequency
-  Power Spectrogram, Linear-Frequency Power Spectrogram, Constant-Q Power
-  Spectrogram and Circular Spectrum. Selection is independent of display location.
-- Bounded visual-only FFT and variable-window constant-Q analysis, outside capture.
+  Power Spectrogram and Circular Spectrum. Selection is independent of display location.
+- Bounded visual-only FFT analysis, outside capture.
+- Colors: Blue (default), Green, Amber and Violet. The Blue log-spectrogram palette is unchanged.
+- Dedicated rounded-square Circular Spectrum overlay, with separate preview and control regions.
 - Session visualization metadata in the accumulated latency report.
 - **Universal Dictate: Show Latency Report** retains up to 100 completed timing
   records in one in-memory document, with no audio or transcript diagnostics.
@@ -21,15 +22,22 @@
 - Final transcription keeps its dedicated warm Whisper worker. Preview uses a
   separate lazy worker with at most two inference threads and bounded, confirmed
   shutdown before final dispatch. Preview Off avoids the second model instance.
-- Preserve the 1.1.2 waveform mapping, immutable history, overlay/preview layout,
-  and accepted paint function; retain status bar, Pause/Resume, clipboard Off
+- Preserve the 1.1.2 waveform mapping, immutable history, rectangular overlay/preview layout
+  and paint geometry; only its colors are themed; retain status bar, Pause/Resume, clipboard Off
   as no automatic access, and one final insertion of the full recording.
 - Do not include the experimental RC2 Medium-only gain change. The cause of the
   earlier intermittent nearly flat waveform is unknown; gain was not a verified fix.
 - Cache unchanged preview text and increase bounded visual-queue scheduling
   headroom, while retaining existing capture audio and per-update analysis limits.
 
+- Retire Linear and Constant-Q from the selector and native DSP. Saved retired
+  choices use Log-Frequency Power Spectrogram without rewriting preferences.
+
 ### Validation and release status
+
+- RC4 uses three modes and four palettes. Current performance coverage is four jobs,
+  142 observations and 56 aggregate gates, retaining revision-2 pairing and budgets.
+  Prior 224-observation/five-mode datasets below remain historical, not current scope.
 
 - Original M5 run `37765259320` and independent post-review run `37778677667`
   each completed 224 observations and passed all 88 revision-2 aggregate gates.

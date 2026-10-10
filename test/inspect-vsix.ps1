@@ -74,10 +74,12 @@ try {
     Assert-Valid ($manifest.contributes.configuration.properties.'universalDictate.overwriteClipboard'.default -eq $false) 'Overwrite clipboard must default Off'
     Assert-Valid ($manifest.contributes.configuration.properties.'universalDictate.livePreview'.default -eq $false) 'Live preview must default Off'
     Assert-Valid ($manifest.contributes.configuration.properties.'universalDictate.waveformTimeSpanSeconds'.default -eq 10) 'Ten-second waveform must be the default'
-    Assert-Valid ($manifest.contributes.configuration.properties.Count -eq 7) 'Seven user settings expected'
+    Assert-Valid ($manifest.contributes.configuration.properties.Count -eq 8) 'Eight user settings expected'
+    Assert-Valid ($manifest.contributes.configuration.properties.'universalDictate.colors'.default -eq 'blue') 'Blue palette must be the default'
+    Assert-Valid (($manifest.contributes.configuration.properties.'universalDictate.colors'.enum -join ',') -eq 'blue,green,amber,violet') 'Four color presets expected'
     $visualization = $manifest.contributes.configuration.properties.'universalDictate.enhancedOverlayVisualization'
     Assert-Valid ($visualization.default -eq 'waveform') 'Waveform visualization must be the default'
-    Assert-Valid (($visualization.enum -join ',') -eq 'waveform,logFrequencyPowerSpectrogram,linearFrequencyPowerSpectrogram,constantQPowerSpectrogram,circularSpectrum') 'Five visualization modes expected'
+    Assert-Valid (($visualization.enum -join ',') -eq 'waveform,logFrequencyPowerSpectrogram,circularSpectrum') 'Three visualization modes expected'
     Assert-Valid (-not $manifest.contributes.configuration.properties.ContainsKey('universalDictate.overlayButtonStyle')) 'Retired style selector packaged'
     foreach ($command in @('copyLastTranscript', 'pauseResume')) {
         $id = "universalDictate.$command"
@@ -100,16 +102,17 @@ try {
     [void](Get-Entry ('extension/' + $source.main.TrimStart([char[]]'./')))
 
     $hashes = [ordered]@{}
-    foreach ($relative in @('media/status-bar-controls.webp', 'media/overlay-visualizations.webp', 'media/overlay-sizes.webp', 'media/live-preview.webp', 'media/enhanced-overlay.webp', 'media/icon.png')) {
+    foreach ($relative in @('media/status-bar-controls.webp', 'media/overlay-sizes.webp', 'media/live-preview.webp', 'media/enhanced-overlay.webp', 'media/icon.png')) {
         $entryName = "extension/$relative"
         $actual = Get-EntryHash $entryName
         Assert-Valid ($actual -eq (Get-FileHash -LiteralPath (Join-Path $root $relative) -Algorithm SHA256).Hash.ToLowerInvariant()) "stale release image: $relative"
         $hashes[$entryName] = $actual
     }
+    Assert-Valid ($null -eq $zip.GetEntry('extension/media/overlay-visualizations.webp')) 'retired five-mode collage packaged'
     Assert-Valid ($null -eq $zip.GetEntry('extension/media/universal-dictate-overview.webp')) 'obsolete overview image packaged'
     $readme = Read-EntryText 'extension/readme.md'
     $changelog = Read-EntryText 'extension/changelog.md'
-    foreach ($image in @('status-bar-controls.webp', 'overlay-visualizations.webp', 'overlay-sizes.webp', 'live-preview.webp', 'enhanced-overlay.webp')) {
+    foreach ($image in @('status-bar-controls.webp', 'overlay-sizes.webp', 'live-preview.webp', 'enhanced-overlay.webp')) {
         Assert-Valid ($readme.Contains("media/$image")) "README screenshot missing: $image"
     }
     Assert-Valid ($changelog.Contains("## $($manifest.version)")) 'current version missing from changelog'

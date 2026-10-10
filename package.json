@@ -142,26 +142,43 @@
           "enum": [
             "waveform",
             "logFrequencyPowerSpectrogram",
-            "linearFrequencyPowerSpectrogram",
-            "constantQPowerSpectrogram",
             "circularSpectrum"
           ],
           "enumItemLabels": [
             "Waveform / Oscillogram",
             "Log-Frequency Power Spectrogram",
-            "Linear-Frequency Power Spectrogram",
-            "Constant-Q Power Spectrogram",
             "Circular Spectrum"
           ],
           "enumDescriptions": [
             "Keep the existing scrolling speech waveform. Default; no spectral analysis.",
             "Show FFT power over time with logarithmic frequency spacing (62.5 Hz to 8 kHz).",
-            "Show FFT power over time with linear frequency spacing (0 to 8 kHz).",
-            "Show power from variable-length constant-Q filters (62.5 Hz to about 7.55 kHz); more low-frequency resolution and a longer startup window.",
-            "Arrange the latest FFT spectrum around a circle. Not a chromagram; the history duration does not apply."
+            "Show the latest FFT spectrum in a dedicated rounded-square overlay. Not a scrolling spectrogram; Overlay history does not apply."
           ],
           "default": "waveform",
           "description": "Visualization drawn inside the enhanced native recording overlay. Used only when Audio visualization is Enhanced overlay or Both. Does not change the status bar or enable the overlay. Changes apply from the next dictation session."
+        },
+        "universalDictate.colors": {
+          "type": "string",
+          "enum": [
+            "blue",
+            "green",
+            "amber",
+            "violet"
+          ],
+          "enumItemLabels": [
+            "Blue",
+            "Green",
+            "Amber",
+            "Violet"
+          ],
+          "enumDescriptions": [
+            "Original blue/teal spectrogram palette with a cool blue waveform.",
+            "Dark green shadows and green highlights.",
+            "Copper shadows and golden highlights.",
+            "Deep violet shadows and lavender highlights."
+          ],
+          "default": "blue",
+          "description": "Colors for all enhanced-overlay visualizations. Does not change microphone gain, waveform amplitude, control-button colors or status bar. Changes apply from the next recording."
         },
         "universalDictate.overlaySize": {
           "type": "string",
@@ -213,7 +230,7 @@
     "test:m3": "npm run compile && node --unhandled-rejections=strict --test test/preview-*.test.cjs",
     "test:m7": "npm run compile && node --unhandled-rejections=strict --test test/pause-*.test.cjs",
     "test:latency": "npm run compile && node --unhandled-rejections=strict --test test/*latency*.test.cjs test/whisper-worker.test.cjs test/preview-runtime.test.cjs",
-    "test:visualizations": "npm run compile && node --unhandled-rejections=strict --test test/overlay-visualization.test.cjs test/overlay-visualization-source.test.cjs"
+    "test:visualizations": "npm run compile && node --unhandled-rejections=strict --test test/overlay-visualization.test.cjs test/overlay-visualization-source.test.cjs test/overlay-colors.test.cjs"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
