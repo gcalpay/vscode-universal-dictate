@@ -1,5 +1,6 @@
 import { performance } from 'node:perf_hooks';
 import { validatePreviewAudio, type PreviewAudio, type PreviewLease } from './preview-audio';
+import { LocalWhisperRequestTimeoutError } from './whisper-transport';
 
 export type PreviewFailure = 'snapshot' | 'invalid-snapshot' | 'decode' | 'invalid-text' |
   'display' | 'cleanup' | 'timeout';
@@ -40,8 +41,12 @@ export interface PreviewOptions {
   readonly onPreview: (update: PreviewUpdate) => void;
   /** Fixed error category only; never pass transcript text or raw backend output. */
   readonly onFailure: (failure: PreviewFailure) => void;
+  /** Diagnostic only: a dropped speculative update, not a completed decode. */
+  readonly onTransientTimeout?: () => void;
   readonly intervalMs?: number;
   readonly timeoutMs?: number;
+  /** Maximum consecutive transient timeouts before stopping preview (0 or 1). */
+  readonly maxTimeoutRetries?: 0 | 1;
   readonly clock?: PreviewClock;
 }
 
@@ -61,6 +66,8 @@ export class PreviewCoordinator {
   private readonly clock: PreviewClock;
   private readonly intervalMs: number;
   private readonly timeoutMs: number;
+  private readonly maxTimeoutRetries: 0 | 1;
+  private consecutiveTimeouts = 0;
   private state: 'idle' | 'running' | 'paused' | 'stopped' | 'failed' = 'idle';
   private origin = 0;
   private timer: unknown;
@@ -75,8 +82,10 @@ export class PreviewCoordinator {
     }
     this.intervalMs = options.intervalMs ?? 2_000;
     this.timeoutMs = options.timeoutMs ?? 10_000;
+    this.maxTimeoutRetries = options.maxTimeoutRetries ?? 0;
     if (!Number.isFinite(this.intervalMs) || this.intervalMs < 1 || this.intervalMs > 60_000 ||
-        !Number.isFinite(this.timeoutMs) || this.timeoutMs < 1 || this.timeoutMs > 60_000) {
+        !Number.isFinite(this.timeoutMs) || this.timeoutMs < 1 || this.timeoutMs > 60_000 ||
+        (this.maxTimeoutRetries !== 0 && this.maxTimeoutRetries !== 1)) {
       throw new Error('Invalid preview interval or timeout.');
     }
     this.options = Object.freeze({ ...options });
@@ -144,7 +153,7 @@ export class PreviewCoordinator {
     this.active = operation;
     // Schedule the body so reentrant Stop sees the real promise before acquire runs.
     operation.done = Promise.resolve().then(() => this.execute(operation));
-    operation.deadline = this.clock.set(this.timeoutMs, () => this.fail('timeout'));
+    operation.deadline = this.clock.set(this.timeoutMs, () => this.timeout(operation));
   }
 
   private current(operation: ActivePreview): boolean {
@@ -168,13 +177,18 @@ export class PreviewCoordinator {
       if (!this.current(operation)) return;
       stage = 'invalid-text';
       if (typeof text !== 'string' || text.length > 16_384) throw new Error('Invalid preview text.');
+      // A successful decode (including silence) restores the one-time retry budget.
+      this.consecutiveTimeouts = 0;
       if (!text.trim()) return;
       stage = 'display';
       this.options.onPreview(Object.freeze({ sessionId: this.options.sessionId,
         revision: ++this.revision, startFrame: lease.audio.startFrame,
         endFrame: lease.audio.endFrame, text }));
-    } catch {
-      if (this.current(operation)) this.fail(stage);
+    } catch (error) {
+      if (this.current(operation)) {
+        if (stage === 'decode' && error instanceof LocalWhisperRequestTimeoutError) this.timeout(operation);
+        else this.fail(stage);
+      }
     } finally {
       if (lease) {
         try { await lease.release(); }
@@ -184,6 +198,21 @@ export class PreviewCoordinator {
       if (this.active === operation) this.active = undefined;
       this.schedule();
     }
+  }
+
+  /** Abort one speculative update and wait for actual worker/audio cleanup before retrying. */
+  private timeout(operation: ActivePreview): void {
+    if (!this.current(operation)) return;
+    if (this.consecutiveTimeouts >= this.maxTimeoutRetries) {
+      this.fail('timeout');
+      return;
+    }
+    this.consecutiveTimeouts++;
+    this.clearDeadline(operation);
+    operation.controller.abort();
+    // Keep the failure visible to diagnostic/performance gates without telling
+    // the user that preview permanently stopped. No immediate retry loop.
+    try { this.options.onTransientTimeout?.(); } catch { /* Observer is best effort. */ }
   }
 
   private fail(failure: PreviewFailure, reportAfterStop = false): void {

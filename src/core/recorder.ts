@@ -2,9 +2,11 @@ import * as childProcess from 'node:child_process';
 import * as fs from 'node:fs';
 import { RecorderPauseChannel } from './recorder-pause';
 import { MAX_PREVIEW_LINE, RecorderLines, RecorderPreviewChannel, validPreviewSession } from './preview-recorder';
+import { normalizeOverlayTheme, type OverlayTheme } from './overlay-theme';
 import type { PreviewUpdate } from './preview-coordinator';
 import type { PreviewLease } from './preview-audio';
 import { normalizeOverlaySize, type OverlaySize } from './overlay-size';
+import { normalizeOverlayVisualization, type OverlayVisualization } from './overlay-visualization';
 
 const START_TIMEOUT_MS = 10000;
 const STOP_TIMEOUT_MS = 10000;
@@ -26,6 +28,8 @@ export interface RecorderStartOptions {
   readonly overlayStyle?: RecorderOverlayStyle;
   readonly waveformTimeSpanSeconds?: number;
   readonly overlaySize?: OverlaySize | string;
+  readonly enhancedOverlayVisualization?: OverlayVisualization | string;
+  readonly overlayColorTheme?: OverlayTheme | string;
 }
 
 /**
@@ -56,6 +60,8 @@ export function buildRecorderArguments(options: RecorderStartOptions): string[] 
 
     args.push('--waveform-timespan-ms', String(Math.round(waveformTimeSpanSeconds * 1000)));
     args.push('--overlay-size', normalizeOverlaySize(options.overlaySize));
+    args.push('--overlay-visualization', normalizeOverlayVisualization(options.enhancedOverlayVisualization));
+    args.push('--overlay-theme', normalizeOverlayTheme(options.overlayColorTheme));
     if (options.previewSessionId && validPreviewSession(options.previewSessionId))
       args.push('--preview-session', options.previewSessionId);
   }

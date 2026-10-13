@@ -14,15 +14,12 @@
  *   LEVEL <0.000..1.000>
  *   ACTION STOP
  *   ACTION CANCEL
- *   ACTION PAUSE / ACTION RESUME
- *   PAUSED <request-id> / RESUMED <request-id>
  *   STOPPED <output-path>
  *   CANCELLED
  *
  * Commands (stdin):
  *   STOP
  *   CANCEL
- *   PAUSE <request-id> / RESUME <request-id>
  *
  * SPDX-License-Identifier: MIT
  */
@@ -44,7 +41,11 @@
 #include "preview-text.h"
 #include "recording-pause.h"
 #include "overlay-buttons.h"
+#include "circular-layout.h"
+#include "overlay-theme.h"
 #include "waveform-history.h"
+#include "spectral-render-win32.h"
+#include "recorder-streams.h"
 #include <memory>
 
 #include <algorithm>
@@ -139,6 +140,7 @@ struct CaptureState {
     universal_dictate::WaveformHistory enhancedHistory;
     std::uint32_t enhancedBucketTargetFrames = universal_dictate::waveformBucketFrames(kDefaultWaveformTimeSpanMs);
     universal_dictate::WaveformBucket enhancedBucket;
+    universal_dictate::visualization::SpectralVisualizer* visualizer = nullptr;
 };
 
 void captureCallback(
@@ -157,6 +159,8 @@ void captureCallback(
     if (!lease) return;
     ma_encoder_write_pcm_frames(state->encoder->get(), input, frameCount, nullptr);
     if (state->preview) state->preview->audio.push(static_cast<const std::int16_t*>(input), frameCount);
+    // Bounded copy only: no transforms, allocation, waiting or WAV changes here.
+    if (state->visualizer) state->visualizer->push(static_cast<const std::int16_t*>(input), frameCount);
 
     const auto* samples = static_cast<const ma_int16*>(input);
     int peak = 0;
@@ -229,6 +233,8 @@ struct OverlayState {
     std::array<int, kSignalPoints> levelHistory{};
     std::array<int, kEnhancedSignalPoints> enhancedSignalHistory{};
     bool enhanced = false;
+    universal_dictate::OverlayTheme theme = universal_dictate::OverlayTheme::Blue;
+    universal_dictate::visualization::SpectralVisualizer* visualizer = nullptr;
     bool paused = false;
     bool pausePending = false;
     universal_dictate::ButtonTooltips buttonTooltips;
@@ -262,15 +268,6 @@ RECT cancelRect(const RECT& client) {
     return RECT{client.right - 46, 30, client.right - 6, client.bottom - 30};
 }
 
-RECT pauseRect() { return winRect(g_overlay.enhancedLayout.pauseButton); }
-
-void emitPauseAction() {
-    if (g_overlay.actionSent.load(std::memory_order_acquire) || g_overlay.pausePending) return;
-    g_overlay.pausePending = true;
-    g_overlay.buttonTooltips.hide();
-    std::cout << (g_overlay.paused ? "ACTION RESUME\n" : "ACTION PAUSE\n") << std::flush;
-    if (g_overlay.window) InvalidateRect(g_overlay.window, nullptr, FALSE);
-}
 
 void emitOverlayAction(const char* action) {
     if (g_overlay.actionSent.exchange(true, std::memory_order_acq_rel)) {
@@ -487,10 +484,11 @@ void drawEnhancedWaveform(HDC dc) {
     graphics.SetClip(Gdiplus::Rect(left, top, right - left, bottom - top));
     graphics.SetPixelOffsetMode(Gdiplus::PixelOffsetModeHighQuality);
 
-    const Gdiplus::Color axisColor(115, 41, 82, 58);
-    const Gdiplus::Color envelopeOuterColor(130, 36, 118, 72);
-    const Gdiplus::Color envelopeInnerColor(85, 45, 145, 88);
-    const Gdiplus::Color mainWaveColor(245, 66, 205, 118);
+    const auto colors = universal_dictate::waveformColors(g_overlay.theme);
+    const Gdiplus::Color axisColor((115U << 24) | colors.axis);
+    const Gdiplus::Color envelopeOuterColor((130U << 24) | colors.outer);
+    const Gdiplus::Color envelopeInnerColor((85U << 24) | colors.inner);
+    const Gdiplus::Color mainWaveColor((245U << 24) | colors.trace);
     const Gdiplus::REAL dpiScale =
         static_cast<Gdiplus::REAL>(g_overlay.dpi) / static_cast<Gdiplus::REAL>(kLogicalDpi);
 
@@ -530,6 +528,36 @@ void drawEnhancedWaveform(HDC dc) {
     graphics.DrawLines(&wavePen, wave.data(), static_cast<INT>(wave.size()));
 }
 
+bool circularOverlay() noexcept {
+    return g_overlay.visualizer &&
+        g_overlay.visualizer->mode() == universal_dictate::visualization::Mode::CircularSpectrum;
+}
+
+universal_dictate::preview::TextLayout activePreviewLayout() {
+    return circularOverlay()
+        ? universal_dictate::calculateCircularPreviewLayout(g_overlay.overlaySize, g_overlay.dpi)
+        : universal_dictate::preview::calculateTextLayout(g_overlay.overlaySize, g_overlay.dpi);
+}
+
+universal_dictate::EnhancedOverlayLayout activeOverlayLayout() {
+    return circularOverlay()
+        ? universal_dictate::calculateCircularOverlayLayout(g_overlay.overlaySize, g_overlay.dpi, g_overlay.previewEnabled)
+        : calculateEnhancedOverlayLayout(g_overlay.overlaySize, g_overlay.dpi, g_overlay.previewEnabled);
+}
+
+OverlayRect activeVisualizationRect() {
+    return g_overlay.previewEnabled ? activePreviewLayout().waveform : g_overlay.enhancedLayout.waveform;
+}
+
+void drawEnhancedVisualization(HDC dc) {
+    if (!g_overlay.visualizer) {
+        drawEnhancedWaveform(dc);
+        return;
+    }
+    const OverlayRect rect = activeVisualizationRect();
+    universal_dictate::visualization::drawSpectralVisualization(dc, rect, g_overlay.dpi, *g_overlay.visualizer, g_overlay.theme);
+}
+
 void drawEnhancedOverlay(HDC dc, const RECT& client) {
     const EnhancedOverlayLayout& layout = g_overlay.enhancedLayout;
     const RECT panel{0, 0, client.right - 1, client.bottom - 1};
@@ -546,7 +574,7 @@ void drawEnhancedOverlay(HDC dc, const RECT& client) {
         graphics.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
         graphics.SetPixelOffsetMode(Gdiplus::PixelOffsetModeHighQuality);
         const Gdiplus::REAL centerX = static_cast<Gdiplus::REAL>(layout.indicatorCenterX);
-        const Gdiplus::REAL centerY = static_cast<Gdiplus::REAL>(client.bottom) / 2.0f;
+        const Gdiplus::REAL centerY = static_cast<Gdiplus::REAL>(layout.indicatorCenterY);
         const Gdiplus::REAL outerRadius =
             static_cast<Gdiplus::REAL>(layout.indicatorOuterRadius);
         const Gdiplus::REAL innerRadius =
@@ -554,7 +582,7 @@ void drawEnhancedOverlay(HDC dc, const RECT& client) {
         const Gdiplus::REAL dotRadius =
             static_cast<Gdiplus::REAL>(layout.indicatorDotRadius);
 
-        Gdiplus::SolidBrush outerBrush(gdiplusColor(g_overlay.paused ? RGB(217, 162, 48) : RGB(49, 190, 105), 240));
+        Gdiplus::SolidBrush outerBrush(Gdiplus::Color((240U << 24) | universal_dictate::waveformColors(g_overlay.theme).outer));
         graphics.FillEllipse(
             &outerBrush,
             centerX - outerRadius,
@@ -570,7 +598,7 @@ void drawEnhancedOverlay(HDC dc, const RECT& client) {
             innerRadius * 2.0f,
             innerRadius * 2.0f);
 
-        Gdiplus::SolidBrush dotBrush(gdiplusColor(g_overlay.paused ? RGB(240, 188, 67) : RGB(66, 205, 118)));
+        Gdiplus::SolidBrush dotBrush(Gdiplus::Color(0xff000000U | universal_dictate::waveformColors(g_overlay.theme).trace));
         graphics.FillEllipse(
             &dotBrush,
             centerX - dotRadius,
@@ -582,9 +610,9 @@ void drawEnhancedOverlay(HDC dc, const RECT& client) {
     SetBkMode(dc, TRANSPARENT);
     SetTextColor(dc, RGB(244, 246, 250));
     HFONT previousFont = reinterpret_cast<HFONT>(SelectObject(dc, g_overlay.enhancedTitleFont));
-    const auto previewLayout = universal_dictate::preview::calculateTextLayout(g_overlay.overlaySize, g_overlay.dpi);
+    const auto previewLayout = activePreviewLayout();
     RECT title = winRect(g_overlay.previewEnabled ? previewLayout.title : layout.title);
-    DrawTextW(dc, g_overlay.paused ? L"Paused" : L"Listening", -1, &title, DT_LEFT | DT_SINGLELINE | DT_VCENTER);
+    DrawTextW(dc, L"Listening", -1, &title, DT_LEFT | DT_SINGLELINE | DT_VCENTER);
 
     if (layout.showSubtitle && !g_overlay.previewEnabled) {
         SelectObject(dc, g_overlay.enhancedSubtitleFont);
@@ -593,12 +621,12 @@ void drawEnhancedOverlay(HDC dc, const RECT& client) {
         DrawTextW(dc, L"Universal Dictate", -1, &subtitle, DT_LEFT | DT_SINGLELINE | DT_VCENTER);
     }
 
-    drawEnhancedWaveform(dc);
+    drawEnhancedVisualization(dc);
 
     if (g_overlay.previewEnabled) {
         const std::wstring& text = g_overlay.previewText;
         const bool rendered = g_overlay.previewRenderer.draw(dc, previewLayout,
-            text.empty() ? (g_overlay.paused ? L"Paused" : L"Listening…") : text);
+            text.empty() ? L"Listening…" : text);
         SelectObject(dc, g_overlay.enhancedSubtitleFont);
         SetTextColor(dc, RGB(151, 164, 184));
         RECT label = winRect(previewLayout.label);
@@ -617,27 +645,30 @@ void drawEnhancedOverlay(HDC dc, const RECT& client) {
         std::max(1, scaleLogical(1, g_overlay.dpi)),
         RGB(44, 53, 69));
     HGDIOBJ previousPen = SelectObject(dc, dividerPen);
-    MoveToEx(dc, layout.dividerX, layout.dividerTop, nullptr);
-    LineTo(dc, layout.dividerX, layout.dividerBottom);
+    if (circularOverlay()) {
+        const int y = layout.confirmButton.top - scaleLogical(6, g_overlay.dpi);
+        MoveToEx(dc, scaleLogical(12, g_overlay.dpi), y, nullptr);
+        LineTo(dc, layout.width - scaleLogical(12, g_overlay.dpi), y);
+    } else {
+        MoveToEx(dc, layout.dividerX, layout.dividerTop, nullptr);
+        LineTo(dc, layout.dividerX, layout.dividerBottom);
+    }
     SelectObject(dc, previousPen);
     DeleteObject(dividerPen);
 
     const bool actionSent = g_overlay.actionSent.load(std::memory_order_acquire);
-    const RECT boxes[]{confirmRect(client), pauseRect(), cancelRect(client)};
-    const COLORREF fills[]{RGB(17, 54, 37), RGB(72, 51, 15), RGB(66, 25, 31)};
-    const COLORREF borders[]{RGB(47, 151, 91), RGB(210, 155, 43), RGB(190, 78, 89)};
-    const COLORREF inks[]{RGB(222, 245, 230), RGB(255, 235, 186), RGB(255, 225, 229)};
-    using universal_dictate::ButtonSymbol;
-    const ButtonSymbol symbols[]{ButtonSymbol::Insert,
-        g_overlay.paused ? ButtonSymbol::Resume : ButtonSymbol::Pause, ButtonSymbol::Discard};
-    for (int i = 0; i < 3; ++i) {
-        const bool disabled = actionSent || (i == 1 && g_overlay.pausePending);
-        drawAntialiasedRoundedButton(dc, boxes[i], disabled ? RGB(35,39,46) : fills[i],
-            disabled ? RGB(71,75,82) : borders[i], disabled);
-        const COLORREF ink = disabled ? RGB(150,150,150) : inks[i];
-        universal_dictate::drawButtonSymbol(dc, boxes[i], symbols[i], g_overlay.dpi, ink);
+    const RECT boxes[]{confirmRect(client), cancelRect(client)};
+    const COLORREF fills[]{RGB(17, 54, 37), RGB(66, 25, 31)};
+    const COLORREF borders[]{RGB(47, 151, 91), RGB(190, 78, 89)};
+    const COLORREF inks[]{RGB(222, 245, 230), RGB(255, 225, 229)};
+    const universal_dictate::ButtonSymbol symbols[]{universal_dictate::ButtonSymbol::Insert,
+        universal_dictate::ButtonSymbol::Discard};
+    for (int i = 0; i < 2; ++i) {
+        drawAntialiasedRoundedButton(dc, boxes[i], actionSent ? RGB(35,39,46) : fills[i],
+            actionSent ? RGB(71,75,82) : borders[i], actionSent);
+        universal_dictate::drawButtonSymbol(dc, boxes[i], symbols[i], g_overlay.dpi,
+            actionSent ? RGB(150,150,150) : inks[i]);
     }
-
     SelectObject(dc, previousFont);
 }
 
@@ -655,7 +686,7 @@ void drawCompactOverlay(HDC dc, const RECT& client) {
 
     RECT subtitle{14, 58, 98, 84};
     SetTextColor(dc, RGB(183, 191, 194));
-    DrawTextW(dc, g_overlay.paused ? L"Paused" : L"Recording", -1, &subtitle, DT_LEFT | DT_SINGLELINE | DT_VCENTER);
+    DrawTextW(dc, L"Recording", -1, &subtitle, DT_LEFT | DT_SINGLELINE | DT_VCENTER);
 
     drawSignalField(dc, client);
 
@@ -733,10 +764,9 @@ void updateEnhancedRegion() {
 
 void applyEnhancedDpi(UINT dpi) {
     g_overlay.dpi = dpi == 0 ? kLogicalDpi : dpi;
-    g_overlay.enhancedLayout =
-        calculateEnhancedOverlayLayout(g_overlay.overlaySize, g_overlay.dpi, g_overlay.previewEnabled);
+    g_overlay.enhancedLayout = activeOverlayLayout();
     createEnhancedFonts();
-    g_overlay.buttonTooltips.update(g_overlay.enhancedLayout, g_overlay.paused);
+    g_overlay.buttonTooltips.update(g_overlay.enhancedLayout);
 }
 
 void enableEnhancedOverlayDpiAwareness() noexcept {
@@ -798,11 +828,6 @@ LRESULT CALLBACK overlayWindowProc(HWND window, UINT message, WPARAM wParam, LPA
 
             if (PtInRect(&okRect, point)) {
                 emitOverlayAction("STOP");
-                return 0;
-            }
-            const RECT middle = pauseRect();
-            if (g_overlay.enhanced && PtInRect(&middle, point)) {
-                emitPauseAction();
                 return 0;
             }
             if (PtInRect(&xRect, point)) {
@@ -889,7 +914,9 @@ RECT overlayWorkArea(HMONITOR monitor) {
 }
 
 bool createOverlay(HMONITOR targetMonitor, bool enhanced, OverlaySize overlaySize,
-                   bool previewEnabled = false) {
+                   bool previewEnabled = false,
+                   universal_dictate::visualization::SpectralVisualizer* visualizer = nullptr,
+                   universal_dictate::OverlayTheme theme = universal_dictate::OverlayTheme::Blue) {
     HINSTANCE instance = GetModuleHandleW(nullptr);
 
     WNDCLASSEXW windowClass{};
@@ -905,6 +932,9 @@ bool createOverlay(HMONITOR targetMonitor, bool enhanced, OverlaySize overlaySiz
     }
 
     g_overlay.enhanced = enhanced;
+    g_overlay.theme = theme;
+    g_overlay.visualizer = enhanced ? visualizer : nullptr;
+    if (g_overlay.visualizer) universal_dictate::visualization::prepareSpectrogramPixels(*g_overlay.visualizer, 0, 0, g_overlay.theme);
     g_overlay.paused = false;
     g_overlay.pausePending = false;
     g_overlay.previewEnabled = enhanced && previewEnabled;
@@ -923,8 +953,11 @@ bool createOverlay(HMONITOR targetMonitor, bool enhanced, OverlaySize overlaySiz
     }
 
     const RECT initialWorkArea = overlayWorkArea(targetMonitor);
-    const int initialWidth = enhanced ? universal_dictate::enhancedOverlaySpec(overlaySize).width : kOverlayWidth;
-    const int initialHeight = enhanced ? universal_dictate::enhancedOverlayHeight(overlaySize, g_overlay.previewEnabled) : kOverlayHeight;
+    const auto initialLayout = circularOverlay()
+        ? universal_dictate::calculateCircularOverlayLayout(overlaySize, 96, g_overlay.previewEnabled)
+        : calculateEnhancedOverlayLayout(overlaySize, 96, g_overlay.previewEnabled);
+    const int initialWidth = enhanced ? initialLayout.width : kOverlayWidth;
+    const int initialHeight = enhanced ? initialLayout.height : kOverlayHeight;
     int x = std::max(
         initialWorkArea.left,
         initialWorkArea.right - initialWidth - kOverlayMargin);
@@ -1007,6 +1040,7 @@ bool createOverlay(HMONITOR targetMonitor, bool enhanced, OverlaySize overlaySiz
 }
 
 void destroyOverlay() noexcept {
+    g_overlay.visualizer = nullptr;
     g_overlay.buttonTooltips.reset();
     g_overlay.paused = false;
     g_overlay.pausePending = false;
@@ -1060,7 +1094,14 @@ void updateOverlayLevel(int levelMilli, const CaptureState* captureState) {
     g_overlay.levelHistory.back() = g_overlay.levelMilli;
 
     if (g_overlay.enhanced && captureState != nullptr) {
-        snapshotEnhancedSignal(*captureState);
+        if (g_overlay.visualizer) {
+            const auto revision = g_overlay.visualizer->revision();
+            g_overlay.visualizer->update();
+            if (g_overlay.visualizer->revision() != revision)
+                universal_dictate::visualization::prepareSpectrogramPixels(*g_overlay.visualizer, 0, 0, g_overlay.theme);
+        } else {
+            snapshotEnhancedSignal(*captureState);
+        }
     }
 
     if (g_overlay.window != nullptr) {
@@ -1076,7 +1117,7 @@ void applyPauseAcknowledgement(universal_dictate::PauseAcknowledgement acknowled
         // All preceding TEXT commands used the same FIFO as PAUSE/RESUME.
         // Discard any queued display before acknowledging this boundary.
         if (preview) { std::string ignored; preview->takeText(ignored); }
-        g_overlay.buttonTooltips.update(g_overlay.enhancedLayout, g_overlay.paused);
+        g_overlay.buttonTooltips.update(g_overlay.enhancedLayout);
         if (overlayAvailable) {
             SetWindowTextW(g_overlay.window, g_overlay.paused ? L"Universal Dictate - Paused" : L"Universal Dictate");
             InvalidateRect(g_overlay.window, nullptr, FALSE);
@@ -1158,6 +1199,7 @@ bool hasFlag(int argc, char** argv, std::string_view flag) {
 }  // namespace
 
 int main(int argc, char** argv) {
+    universal_dictate::configureRecorderCommandInput(std::cin);
     const std::string outputPath = parseOutputPath(argc, argv);
     if (outputPath.empty()) {
         std::cerr << "ERROR missing --output path\n";
@@ -1168,6 +1210,15 @@ int main(int argc, char** argv) {
     const bool enhancedOverlay = hasFlag(argc, argv, "--enhanced-overlay");
     const OverlaySize overlaySize = parseOverlaySize(argc, argv);
     const int waveformTimeSpanMs = parseWaveformTimeSpanMs(argc, argv);
+    const auto visualization = universal_dictate::visualization::parseArgument(argc, argv);
+    std::unique_ptr<universal_dictate::visualization::SpectralVisualizer> visualizer;
+    if (overlayEnabled && enhancedOverlay && visualization != universal_dictate::visualization::Mode::Waveform) {
+        try {
+            visualizer = std::make_unique<universal_dictate::visualization::SpectralVisualizer>(visualization, waveformTimeSpanMs);
+        } catch (const std::exception&) {
+            std::cerr << "WARNING spectral visualization unavailable; using waveform instead\n";
+        }
+    }
     std::unique_ptr<universal_dictate::preview::Bridge> preview;
     if (overlayEnabled && enhancedOverlay) {
         for (int i = 1; i + 1 < argc; ++i) {
@@ -1194,6 +1245,7 @@ int main(int argc, char** argv) {
 
     CaptureState captureState{&encoder};
     captureState.preview = preview.get();
+    captureState.visualizer = visualizer.get();
     captureState.enhancedBucketTargetFrames = universal_dictate::waveformBucketFrames(waveformTimeSpanMs);
 
     CaptureDevice device;
@@ -1214,9 +1266,8 @@ int main(int argc, char** argv) {
         return 5;
     }
 
-    universal_dictate::RecordingPause pause(captureState.gate);
     std::atomic<RecorderCommand> command{RecorderCommand::Record};
-    std::thread commandThread([&command, &preview, &pause]() {
+    std::thread commandThread([&command, &preview]() {
         std::string line;
         // Bound nonterminal text commands. STOP/CANCEL still use the same pipe.
         char c = 0;
@@ -1240,7 +1291,6 @@ int main(int argc, char** argv) {
                 command.store(RecorderCommand::Stop, std::memory_order_release);
                 return;
             }
-            if (pause.command(line)) { line.clear(); continue; }
             if (preview) {
                 try { preview->command(line); }
                 catch (...) { /* Preview-only command failure must not stop recording. */ }
@@ -1258,12 +1308,14 @@ int main(int argc, char** argv) {
 
     bool overlayAvailable = false;
     if (overlayEnabled) {
-        overlayAvailable = createOverlay(overlayMonitor, enhancedOverlay, overlaySize, preview != nullptr);
+        overlayAvailable = createOverlay(overlayMonitor, enhancedOverlay, overlaySize, preview != nullptr, visualizer.get(),
+            universal_dictate::parseOverlayThemeArgument(argc, argv));
         if (!overlayAvailable) {
             std::cerr << "WARNING recording overlay could not be created; keyboard controls remain available\n";
         }
     }
 
+    if (!overlayAvailable && visualizer) visualizer->disable();
     g_overlay.previewEnabled = preview != nullptr && overlayAvailable;
     g_overlay.previewText.clear();
     std::cout << "READY\n" << std::flush;
@@ -1273,9 +1325,6 @@ int main(int argc, char** argv) {
         if (overlayAvailable) {
             pumpOverlayMessages();
         }
-
-        const auto acknowledgement = pause.poll();
-        applyPauseAcknowledgement(acknowledgement, preview.get(), overlayAvailable);
 
         if (preview) {
             // PCM serialization and pipe writes occur here, never in the audio callback.

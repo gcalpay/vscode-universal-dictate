@@ -1,24 +1,29 @@
 # VS Code Universal Dictate
 
-**Local, offline dictation for VS Code on Windows, including Remote - WSL. Dictate into editors and agent/chat prompts such as Codex, then review the transcript before sending. 99 Whisper languages.**
+**Local, offline dictation for VS Code on Windows, including Remote - WSL. Dictate into editors and agent/chat prompts such as Codex or Claude Code, then review the transcript before sending. 99 Whisper languages.**
 
 **Open source · MIT · [GitHub](https://github.com/gcalpay/vscode-universal-dictate)**
 
-![Universal Dictate status-bar controls](media/status-bar-controls.webp)
+![Universal Dictate status-bar controls](https://raw.githubusercontent.com/gcalpay/vscode-universal-dictate/5673f406b250781c23923bb810c95a42f496d1b1/media/status-bar-controls.webp)
 
-![Universal Dictate settings menu](media/settings-menu.webp)
 
-*Example settings with Live preview enabled; the defaults are listed below.*
-
-![Recording overlay with live transcript preview](media/live-preview.webp)
-
-![Waveform-only recording overlay with Live preview off](media/enhanced-overlay.webp)
-
-Universal Dictate transcribes locally with the multilingual Whisper `base` model through `whisper.cpp`, including automatic punctuation, and sends the completed transcript as Unicode text to the input that owns keyboard focus at insertion time. It works in VS Code editors and agent/chat prompts and can also insert into compatible text fields in other Windows applications while Universal Dictate is running. **It never submits or sends dictated text automatically.**
+Universal Dictate transcribes locally with the multilingual Whisper `base` model through `whisper.cpp`, including automatic punctuation and live text preview while speaking, and sends the completed transcript as Unicode text to the input that owns keyboard focus at insertion time. It works in VS Code editors and agent/chat prompts and can also insert into compatible text fields in other Windows applications while Universal Dictate is running. **It never submits or sends dictated text automatically.**
 
 **Other Windows applications:** Start dictation from Universal Dictate, then focus a compatible text field in another app. The final text is inserted there while VS Code remains running. The overlay controls work there too; keyboard shortcuts are local to VS Code, not system-wide.
 
 Available from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=gcalpay.vscode-universal-dictate).
+
+## Enhanced overlay screenshots
+
+The following screenshots show the **original native Windows overlay**, captured during natural speech. Waveform and Log-Frequency Power Spectrogram have different visualizations but the same Insert/Discard controls. The Circular Spectrum is the third available visualization.
+
+**Waveform / Oscillogram**
+
+![Waveform oscillogram with Insert and Discard controls](https://raw.githubusercontent.com/gcalpay/vscode-universal-dictate/5673f406b250781c23923bb810c95a42f496d1b1/media/waveform-original.png)
+
+**Log-Frequency Power Spectrogram**
+
+![Log-frequency power spectrogram with Insert and Discard controls](https://raw.githubusercontent.com/gcalpay/vscode-universal-dictate/5673f406b250781c23923bb810c95a42f496d1b1/media/log-spectrogram-original.png)
 
 ## Settings
 
@@ -28,18 +33,30 @@ Open the settings gear next to **Dictate**, or find **Universal Dictate** in VS 
 | --- | --- | --- |
 | **Language** | Choose the language you intend to speak, or Auto-detect. All 99 Whisper languages are available. | **English** |
 | **Audio visualization** | Choose Enhanced overlay, Both (overlay and status-bar waveform), Status bar only, or Off. | **Enhanced overlay** |
+| **Enhanced Overlay Visualization** | Choose Waveform / Oscillogram, Log-Frequency Power Spectrogram or Circular Spectrum. Affects the enhanced overlay only. | **Waveform / Oscillogram** |
+| **Colors** | Blue, Green (restrained emerald), Dark (graphite/silver), Amber, or Slate. Colors affect visualizations, not microphone gain or controls. | **Blue** |
 | **Overlay size** | Choose Small, Medium or Large. | **Medium** |
-| **Waveform time span** | Show the latest 1, 3, 5, 10 or 20 seconds of accepted audio in the overlay waveform. This does not limit recording length. | **10 seconds** |
+| **Overlay history** | Show the latest 1, 3, 5, 10 or 20 seconds of accepted audio in Waveform or a scrolling spectrogram. Circular Spectrum shows the latest frame instead. This does not limit recording length. | **10 seconds** |
 | **Overwrite clipboard** | Also copy the final transcript to the clipboard, replacing its previous contents. Automatic insertion still uses direct text input. | **Off** |
 | **Live preview** | Show provisional text while speaking. Requires Enhanced overlay or Both. | **Off** |
 
 Change settings before starting a recording. Changes made during a recording apply to the next one. Saved choices take precedence over the defaults. Medium is the default overlay size. With Live preview Off, the overlay is shorter; enabling preview reserves room for readable text without narrowing the waveform.
 
+### Enhanced overlay visualizations
+
+**Audio visualization** controls *where* feedback appears. **Enhanced Overlay Visualization** controls *what the native overlay draws*. The status-bar waveform is independent. Selecting a renderer neither enables a disabled overlay nor changes the current recording; the preference is retained for the next session using Enhanced overlay or Both.
+
+**Waveform / Oscillogram** uses fixed amplitude mapping and immutable scrolling history; its default color is blue. It performs no spectral analysis. **Log-Frequency Power Spectrogram** displays FFT power over time with lower frequencies at the bottom. Blue keeps the original spectrogram palette. **Circular Spectrum** displays the latest FFT bands clockwise, low to high, in its own compact square panel. It is a spectrum, not a scrolling spectrogram or musical chromagram. Its rays use a fixed visual response that makes moderate levels easier to see without changing microphone gain or FFT colors. Silence does not create artificial motion.
+
+Small, Medium and Large apply to each layout. Circular panels stay square with preview Off or On; the latter reserves readable text beneath the circle. Rectangular modes retain their waveform/preview viewport, with the unused Pause-button column removed. Controls are Insert and Discard only.
+
+All five palettes use a fixed digital scale, not calibrated loudness or automatic gain. Changing Colors does not recolor an active recording or change audio. Removed Linear/Constant-Q saved preferences fall back to Log-Frequency Power Spectrogram without rewriting preferences. No new model or runtime dependencies are introduced.
+
 ### Live preview
 
 When enabled, the overlay shows recent provisional words, which may be revised as recognition continues. It is not a complete transcript history. After Stop, Universal Dictate transcribes the **complete recording** and inserts the final transcript once.
 
-Preview and final transcription both run locally. Preview adds processing work and some delay, particularly with Auto-detect. Turning it Off removes the extra preview processing; Status bar only and Off visualization do not run invisible previews.
+Preview and final transcription both run locally. Preview uses a separate on-demand worker (up to two threads) so final transcription does not share its inference queue. Stop or Discard retires the preview worker; the final worker stays warm. The extra model instance uses additional memory while preview is active: a controlled Windows benchmark observed about 256 MiB of preview-process working set, which is not a measurement of additional unique physical RAM. Worker startup and the thread cap can delay the first preview. Turning preview Off avoids the second worker; Status bar only and Off visualization do not run invisible previews. See [architecture](docs/ARCHITECTURE.md) for worker lifecycle and resource constraints.
 
 ## Controls
 
@@ -48,25 +65,17 @@ Preview and final transcription both run locally. Preview adds processing work a
 | Status bar: **Dictate** | Start recording |
 | Status bar: **Stop** | Stop, transcribe locally and insert |
 | **Ctrl+Alt+D** | Start or stop dictation |
-| **Ctrl+Alt+P** | Pause or resume recording within VS Code |
-| **Esc** | Cancel the current recording, including while paused |
+| **Esc** | Cancel the current recording, without inserting text |
 | Overlay: **Insert** | Stop, transcribe and insert |
-| Overlay: **Pause / Resume** | Pause or continue the same recording |
 | Overlay: **Discard** | Cancel and discard |
 
-The compact overlay buttons are **✓ Insert / Ⅱ Pause (or ▶ Resume) / ✕ Discard**, colored green, amber and red, with descriptive hover labels. The recording overlay does not take keyboard focus when clicked. Review the inserted text before sending it.
-
-### Pause and resume
-
-Pause to think, then Resume to continue the same recording. Audio received while paused is ignored: it is not saved in the WAV, added to the waveform or sent to preview recognition. The waveform and provisional text freeze; Stop/Insert still transcribes the accepted speech once, and Discard still cancels. There is no silence gap added for the paused time.
-
-The microphone device stays open while paused, so Windows may continue to show its microphone-use indicator. Pause is not a hardware mute. Use Discard to end the session.
+The overlay has two controls: **✓ Insert** (green) and **✕ Discard** (red), with descriptive hover labels. It does not take keyboard focus when clicked. Review the inserted text before sending it. Pause/Resume and its keyboard command have been removed: finish with Insert, then start a new recording when ready.
 
 ## Languages
 
 English is selected by default. Choose another language or **Auto-detect** from the settings gear or **Universal Dictate: Select Language** in the Command Palette (`Ctrl+Shift+P`). Recognition quality varies by language and audio conditions.
 
-**Note:** Select the language you intend to speak, or use Auto-detect. If you select a different language from the one being spoken, Whisper can translate the speech into the selected language. This translation is performed entirely offline by the local multilingual Whisper model; no audio or text is sent to an online translation service.
+Select the language you intend to speak, or use Auto-detect. The language setting controls recognition; Universal Dictate does not provide a supported translation mode. Selecting a language different from the spoken language can produce unreliable output.
 
 ## Clipboard and transcript recovery
 
@@ -80,13 +89,13 @@ With no usable focused input, insertion may do nothing. The clipboard option pro
 
 Universal Dictate uses the Windows default microphone. On first use, it downloads the multilingual Whisper `base` model (about 148 MB), verifies the download's SHA-256 checksum and stores it locally. **After model setup, normal dictation and live preview can run offline.** No API key or cloud account is required.
 
-Speech recognition runs on the CPU through the bundled `whisper.cpp` runtime. Its worker communicates over the computer's local loopback interface, not a remote transcription service. Audio and transcripts are not uploaded for transcription or translation. The complete recording is a temporary local WAV file that is cleaned up after processing; preview uses a bounded in-memory audio buffer.
+Speech recognition runs on the CPU through the bundled `whisper.cpp` runtime. Its workers communicate over the computer's local loopback interface, not a remote transcription service. Audio and transcripts are not uploaded for recognition. The complete recording is a temporary local WAV file that is cleaned up after processing; preview uses a bounded in-memory audio buffer. Timing diagnostics contain neither audio nor transcript text.
 
 For **Remote - WSL**, the extension runs in the local Windows VS Code host while your workspace stays in WSL. It is not a native Linux extension and does not need a separate WSL-side microphone setup.
 
 ## Known insertion-target limitation
 
-Clicking VS Code's status-bar Dictate or Stop control can move focus away from inputs such as the Codex composer, so insertion may miss the intended caret. Use the keyboard shortcut or overlay controls where appropriate, or enable **Overwrite clipboard** to retain a manual-paste backup. [Issue 38](https://github.com/gcalpay/vscode-universal-dictate/issues/38) tracks this limitation; clipboard recovery does not fix focus preservation.
+Clicking VS Code's status-bar Dictate or Stop control can move focus away from inputs such as the Codex composer, so insertion may miss the intended caret. Use the keyboard shortcut or overlay controls where appropriate, or enable **Overwrite clipboard** to retain a manual-paste backup. Clipboard recovery does not fix focus preservation.
 
 ## Attribution
 
@@ -95,6 +104,8 @@ Universal Dictate uses OpenAI Whisper, whisper.cpp and miniaudio, and retains at
 ## Support and release notes
 
 Report problems or request features through [GitHub Issues](https://github.com/gcalpay/vscode-universal-dictate/issues). See [support information](SUPPORT.md) for useful diagnostic details and the [Changelog](CHANGELOG.md) for version history.
+
+If timing evidence is needed, **Universal Dictate: Show Latency Report** opens the latest 100 completed measurements in one document. Records stay in the current extension-host session and are lost on reload unless that document is saved.
 
 ## License
 

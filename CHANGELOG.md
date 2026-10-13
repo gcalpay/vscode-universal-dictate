@@ -1,5 +1,49 @@
 # Changelog
 
+## 1.2.0
+
+### Added
+
+- Three enhanced-overlay visualizations: Waveform / Oscillogram, Log-Frequency
+  Power Spectrogram and Circular Spectrum.
+- Five selectable palettes: Blue (default), Green, Dark, Amber and Slate.
+- A square Circular Spectrum viewport at every overlay size, including with
+  optional Live preview.
+- Local latency reports with retained measurements from the current session.
+- A separately owned, on-demand preview Whisper worker, keeping the final
+  transcription worker independent.
+
+### Changed
+
+- Circular Spectrum uses more of the square panel, with longer fixed-response
+  rays, a compact header and preserved preview text and two-button controls.
+
+- The native recording overlay now has Insert and Discard controls only; the
+  former Pause/Resume button, command and shortcut are no longer exposed.
+- Linear-Frequency and Constant-Q visualizations are no longer selectable.
+  Previously saved values use the supported Log-Frequency mode.
+- Visualization styling is independent of microphone gain and input settings.
+
+### Fixed
+
+- Live Preview can recover from one consecutive transient 10-second inference timeout. The timed-out speculative request is aborted and its worker retired before the next scheduled update; a second consecutive timeout still stops preview. Successful decodes reset the allowance. The complete final transcription remains independent.
+- This improves timeout recovery, **not** raw inference speed or the previously observed intermittent drawing stall.
+
+### Compatibility notes
+
+- Pause/Resume controls introduced in 1.1.0 are no longer available. Stop and
+  Insert finish the recording; Discard cancels it.
+- Clicking VS Code's native status-bar Dictate/Stop item may move keyboard
+  focus away from a chat composer. Use the shortcut or non-activating native
+  overlay controls when retaining insertion focus is important.
+
+### Preserved
+
+- Waveform amplitude mapping and immutable scrolling history, as well as the
+  pinned local model and runtime.
+- Complete final-recording transcription, Unicode insertion without default
+  clipboard access, optional Live preview and explicit transcript recovery.
+
 ## 1.1.0
 
 ### Added
@@ -29,7 +73,7 @@
 - The microphone device stays open while paused; paused samples are ignored rather
   than saved or transcribed. Pause does not act as a hardware microphone mute.
 - No new model download, global hotkey, native platform support or status-bar focus
-  fix is introduced. Issue #38 remains unresolved.
+  fix is introduced. Issue [#38](https://github.com/gcalpay/vscode-universal-dictate/issues/38) remains unresolved.
 
 ## 1.0.0
 
@@ -55,7 +99,7 @@
 
 - Local/offline recognition after the initial model download, Windows/Remote - WSL support and no automatic submission remain unchanged.
 - Live preview adds CPU work and recognition delay; it is not instantaneous captioning or full transcript history.
-- The status-bar focus limitation in Issue #38 remains. Keyboard/overlay controls and clipboard recovery are workarounds, not a focus-preservation fix.
+- The status-bar focus limitation in Issue [#38](https://github.com/gcalpay/vscode-universal-dictate/issues/38) remains. Keyboard/overlay controls and clipboard recovery are workarounds, not a focus-preservation fix.
 
 ## 0.1.5
 

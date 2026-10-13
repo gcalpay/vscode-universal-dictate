@@ -173,7 +173,7 @@ int waveformInkHeight(const Canvas& canvas, const OverlayRect& box) {
         const int red = (pixel >> 16) & 255, green = (pixel >> 8) & 255, blue = pixel & 255;
         // Include the original subtle envelope inks as well as the bright center trace.
         // The axis/background stay below this threshold.
-        if (green > 55 && green > red + 15 && green > blue + 5) {
+        if (std::max({red, green, blue}) > 70) {
             first = std::min(first, y); last = std::max(last, y);
         }
     }
@@ -216,7 +216,7 @@ void checkNoMirroredLowerEnvelope(OverlaySize size, unsigned int dpi) {
         for (int x = box.left + scaleLogical(3, dpi); x < box.right - scaleLogical(3, dpi); ++x) {
             const auto pixel = pixels[y * layout.width + x];
             const int red = (pixel >> 16) & 255, green = (pixel >> 8) & 255, blue = pixel & 255;
-            check(!(green > 55 && green > red + 15 && green > blue + 5),
+            check(!(std::max({red, green, blue}) > 70),
                   "positive waveform produced mirrored lower-envelope ink");
         }
     }
@@ -344,9 +344,9 @@ void renderWaveformCases(const std::filesystem::path& output, OverlaySize size, 
 
 void checkControlSymbols(const universal_dictate::EnhancedOverlayLayout& layout, unsigned int dpi) {
     using universal_dictate::ButtonSymbol;
-    const OverlayRect boxes[]{layout.confirmButton, layout.pauseButton, layout.pauseButton, layout.cancelButton};
-    const ButtonSymbol symbols[]{ButtonSymbol::Insert, ButtonSymbol::Pause, ButtonSymbol::Resume, ButtonSymbol::Discard};
-    for (int i = 0; i < 4; ++i) {
+    const OverlayRect boxes[]{layout.confirmButton, layout.cancelButton};
+    const ButtonSymbol symbols[]{ButtonSymbol::Insert, ButtonSymbol::Discard};
+    for (int i = 0; i < 2; ++i) {
         Canvas canvas(layout.width, layout.height);
         const RECT box = winRect(boxes[i]);
         universal_dictate::drawButtonSymbol(canvas.dc, box, symbols[i], dpi, RGB(240, 240, 240));
@@ -360,13 +360,13 @@ void checkControlSymbols(const universal_dictate::EnhancedOverlayLayout& layout,
     }
 }
 
-void checkControlTooltips(const universal_dictate::EnhancedOverlayLayout& layout, bool paused) {
+void checkControlTooltips(const universal_dictate::EnhancedOverlayLayout& layout) {
     HWND tooltip = g_overlay.buttonTooltips.window();
     check(tooltip != nullptr, "labelled control tooltips missing");
     check((GetWindowLongPtrW(tooltip, GWL_EXSTYLE) & WS_EX_NOACTIVATE) != 0, "tooltip activation policy");
-    const OverlayRect boxes[]{layout.confirmButton, layout.pauseButton, layout.cancelButton};
-    const wchar_t* labels[]{L"Insert:", paused ? L"Resume recording" : L"Pause recording", L"Discard:"};
-    for (UINT_PTR id = 1; id <= 3; ++id) {
+    const OverlayRect boxes[]{layout.confirmButton, layout.cancelButton};
+    const wchar_t* labels[]{L"Insert:", L"Discard:"};
+    for (UINT_PTR id = 1; id <= 2; ++id) {
         wchar_t text[256]{};
         TOOLINFOW info{}; info.cbSize = sizeof(info); info.hwnd = g_overlay.window; info.uId = id;
         check(SendMessageW(tooltip, TTM_GETTOOLINFOW, 0, reinterpret_cast<LPARAM>(&info)) != 0, "tooltip registration missing");
@@ -384,40 +384,38 @@ void renderControlCases(const std::filesystem::path& output, OverlaySize size, u
         checkControlSymbols(layout, dpi);
         Canvas canvas(layout.width, layout.height);
         RECT client{0, 0, layout.width, layout.height};
-        for (bool paused : {false, true}) {
-            applyPauseAcknowledgement({1, paused}, nullptr, true);
-            g_overlay.previewText = L"Recent provisional words stay visible while paused.";
-            drawEnhancedOverlay(canvas.dc, client);
-            canvas.save(output / ("controls-" + std::to_string(static_cast<int>(size)) + "-" + std::to_string(dpi) +
-                (enabled ? "-preview-" : "-off-") + (paused ? "paused.bmp" : "recording.bmp")));
-            checkControlTooltips(layout, paused);
-        }
+        g_overlay.previewText = L"Provisional text; Insert or Discard.";
+        drawEnhancedOverlay(canvas.dc, client);
+        canvas.save(output / ("controls-" + std::to_string(static_cast<int>(size)) + "-" + std::to_string(dpi) +
+            (enabled ? "-preview.bmp" : "-off.bmp")));
+        checkControlTooltips(layout);
+        check(SendMessageW(g_overlay.buttonTooltips.window(), TTM_GETTOOLCOUNT, 0, 0) == 2,
+              "obsolete Pause tooltip remains registered");
     }
-    applyPauseAcknowledgement({1, false}, nullptr, true);
 }
 
-void clickPauseControls(HWND scratch, HWND edit) {
-    g_overlay.actionSent.store(false);
-    applyPauseAcknowledgement({1, false}, nullptr, true);
-    UpdateWindow(g_overlay.window);
-    clickOwnRect(g_overlay.window, g_overlay.enhancedLayout.pauseButton); checkFocus(scratch, edit);
-    check(g_overlay.pausePending && !g_overlay.paused && !g_overlay.actionSent.load(), "Pause must await capture acknowledgement");
-    clickOwnRect(g_overlay.window, g_overlay.enhancedLayout.pauseButton); checkFocus(scratch, edit);
-    check(g_overlay.pausePending && !g_overlay.actionSent.load(), "duplicate Pause consumed terminal action");
-    applyPauseAcknowledgement({2, true}, nullptr, true); UpdateWindow(g_overlay.window);
-    check(g_overlay.paused && !g_overlay.pausePending, "paused renderer acknowledgement");
-    clickOwnRect(g_overlay.window, g_overlay.enhancedLayout.pauseButton); checkFocus(scratch, edit);
-    check(g_overlay.pausePending && g_overlay.paused && !g_overlay.actionSent.load(), "Resume must await capture acknowledgement");
-    applyPauseAcknowledgement({3, false}, nullptr, true); UpdateWindow(g_overlay.window);
-    check(!g_overlay.paused && !g_overlay.pausePending, "resumed renderer acknowledgement");
-    applyPauseAcknowledgement({4, true}, nullptr, true); UpdateWindow(g_overlay.window);
-    clickOwnRect(g_overlay.window, g_overlay.enhancedLayout.confirmButton); checkFocus(scratch, edit);
-    check(g_overlay.actionSent.load(), "Insert unavailable while paused");
-    g_overlay.actionSent.store(false); UpdateWindow(g_overlay.window);
-    clickOwnRect(g_overlay.window, g_overlay.enhancedLayout.cancelButton); checkFocus(scratch, edit);
-    check(g_overlay.actionSent.load(), "Discard unavailable while paused");
-    g_overlay.actionSent.store(false);
-    applyPauseAcknowledgement({5, false}, nullptr, true);
+void checkCircularControls(HWND scratch, HWND edit, OverlaySize size, bool preview) {
+    auto visualizer = std::make_unique<universal_dictate::visualization::SpectralVisualizer>(
+        universal_dictate::visualization::Mode::CircularSpectrum);
+    check(createOverlay(MonitorFromWindow(scratch,MONITOR_DEFAULTTONEAREST),true,size,preview,visualizer.get()), "square overlay creation");
+    for (unsigned dpi : {96U,144U}) {
+        applyEnhancedDpi(dpi);
+        const auto layout = activeOverlayLayout();
+        RECT suggested{70,220,70+layout.width,220+layout.height};
+        SendMessageW(g_overlay.window,WM_DPICHANGED,MAKELONG(dpi,dpi),reinterpret_cast<LPARAM>(&suggested));
+        updateEnhancedRegion(); UpdateWindow(g_overlay.window);
+        checkControlTooltips(layout);
+        check(layout.width == layout.height, "Circular Spectrum is not square");
+        g_overlay.actionSent.store(false);
+        clickOwnRect(g_overlay.window,layout.waveform); checkFocus(scratch,edit);
+        check(!g_overlay.actionSent.load(), "circular display click triggered Insert/Discard");
+        clickOwnRect(g_overlay.window,layout.confirmButton); checkFocus(scratch,edit);
+        check(g_overlay.actionSent.load(), "square Insert hit area");
+        g_overlay.actionSent.store(false); UpdateWindow(g_overlay.window);
+        clickOwnRect(g_overlay.window,layout.cancelButton); checkFocus(scratch,edit);
+        check(g_overlay.actionSent.load(), "square Discard hit area");
+    }
+    destroyOverlay();
 }
 } // namespace
 
@@ -455,6 +453,7 @@ int main(int argc, char** argv) {
             // Actual clicks at both heights, not synthetic DOM events.
             for (bool enabled : {false, true}) {
                 const auto layout = configurePresentation(size, 96, enabled);
+                g_overlay.actionSent.store(false);
                 updateEnhancedRegion(); UpdateWindow(g_overlay.window);
                 const auto body = enabled ? universal_dictate::preview::calculateTextLayout(size,96).text : layout.waveform;
                 clickOwnRect(g_overlay.window,body); checkFocus(scratch,edit);
@@ -464,7 +463,6 @@ int main(int argc, char** argv) {
                 g_overlay.actionSent.store(false);
                 clickOwnRect(g_overlay.window,layout.cancelButton); checkFocus(scratch,edit);
                 check(g_overlay.actionSent.load(), "Discard button hit area");
-                clickPauseControls(scratch,edit);
             }
             destroyOverlay();
             check(createOverlay(MonitorFromWindow(scratch,MONITOR_DEFAULTTONEAREST),true,size), "create compact production overlay");
@@ -473,10 +471,11 @@ int main(int argc, char** argv) {
             check(compact.bottom == scaleLogical(universal_dictate::enhancedOverlayHeight(size,false),g_overlay.dpi), "compact startup height");
             checkFocus(scratch,edit);
             destroyOverlay();
+            for (bool preview : {false,true}) checkCircularControls(scratch,edit,size,preview);
         }
         DestroyWindow(scratch); scratch = nullptr;
         SetCursorPos(originalCursor.x,originalCursor.y);
-        std::cout << count << " production-renderer cases passed; 12 Off renders, 12 clipping checks, 48 preview/control-state renders, 96 symbol bounds checks, 24 waveform renders with 72 level checks, 12 top-alignment checks, 24 measured stable-PCM renders/clipping checks, 48 real own-overlay clicks; no microphone or Codex test\n";
+        std::cout << count << " multilingual production-renderer cases; waveform, clipping, two-control and square-panel focus checks passed\n";
         return 0;
     } catch (const std::exception& error) {
         destroyOverlay(); if (scratch) DestroyWindow(scratch);
