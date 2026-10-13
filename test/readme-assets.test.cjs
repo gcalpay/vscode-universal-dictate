@@ -36,3 +36,14 @@ test('README preserves the approved agent examples, preview wording and optional
   assert.equal(manifest.contributes.configuration.properties['universalDictate.livePreview'].default, false);
   assert.match(readme, /\| \*\*Live preview\*\* \|[^\n]+\| \*\*Off\*\* \|/);
 });
+
+
+test('README document links resolve from the current source checkout', () => {
+  const links = [...readme.matchAll(/(?<!!)\[[^\]]*\]\(([^)\s]+)\)/g)].map(match => match[1]);
+  for (const link of links) {
+    assert.doesNotMatch(link, /github\.com\/gcalpay\/vscode-universal-dictate\/blob\/[0-9a-f]{40}\//,
+      'document links must follow the release source, not an older build');
+    if (/^https?:/.test(link)) continue;
+    assert.ok(fs.existsSync(path.join(root, link)), `missing linked document: ${link}`);
+  }
+});

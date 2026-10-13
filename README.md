@@ -56,7 +56,7 @@ All five palettes use a fixed digital scale, not calibrated loudness or automati
 
 When enabled, the overlay shows recent provisional words, which may be revised as recognition continues. It is not a complete transcript history. After Stop, Universal Dictate transcribes the **complete recording** and inserts the final transcript once.
 
-Preview and final transcription both run locally. Preview uses a separate on-demand worker (up to two threads) so final transcription does not share its inference queue. Stop or Discard retires the preview worker; the final worker stays warm. The extra model instance uses additional memory while preview is active: a controlled Windows benchmark observed about 256 MiB of preview-process working set, which is not a measurement of additional unique physical RAM. Worker startup and the thread cap can delay the first preview. Turning preview Off avoids the second worker; Status bar only and Off visualization do not run invisible previews. See [architecture](https://github.com/gcalpay/vscode-universal-dictate/blob/866062cfc2933fd8e6d6fc0bc69917eac79ad6a0/docs/ARCHITECTURE.md) for worker lifecycle and resource constraints.
+Preview and final transcription both run locally. Preview uses a separate on-demand worker (up to two threads) so final transcription does not share its inference queue. Stop or Discard retires the preview worker; the final worker stays warm. The extra model instance uses additional memory while preview is active: a controlled Windows benchmark observed about 256 MiB of preview-process working set, which is not a measurement of additional unique physical RAM. Worker startup and the thread cap can delay the first preview. Turning preview Off avoids the second worker; Status bar only and Off visualization do not run invisible previews. See [architecture](docs/ARCHITECTURE.md) for worker lifecycle and resource constraints.
 
 ## Controls
 
@@ -99,14 +99,14 @@ Clicking VS Code's status-bar Dictate or Stop control can move focus away from i
 
 ## Attribution
 
-Universal Dictate uses OpenAI Whisper, whisper.cpp and miniaudio, and retains attribution for the historical OpenWhispr input-helper lineage. See [third-party notices](https://github.com/gcalpay/vscode-universal-dictate/blob/866062cfc2933fd8e6d6fc0bc69917eac79ad6a0/THIRD_PARTY_NOTICES.md) and [dependency details](https://github.com/gcalpay/vscode-universal-dictate/blob/866062cfc2933fd8e6d6fc0bc69917eac79ad6a0/docs/DEPENDENCIES.md) for licenses and provenance.
+Universal Dictate uses OpenAI Whisper, whisper.cpp and miniaudio, and retains attribution for the historical OpenWhispr input-helper lineage. See [third-party notices](THIRD_PARTY_NOTICES.md) and [dependency details](docs/DEPENDENCIES.md) for licenses and provenance.
 
 ## Support and release notes
 
-Report problems or request features through [GitHub Issues](https://github.com/gcalpay/vscode-universal-dictate/issues). See [support information](https://github.com/gcalpay/vscode-universal-dictate/blob/866062cfc2933fd8e6d6fc0bc69917eac79ad6a0/SUPPORT.md) for useful diagnostic details and the [Changelog](https://github.com/gcalpay/vscode-universal-dictate/blob/866062cfc2933fd8e6d6fc0bc69917eac79ad6a0/CHANGELOG.md) for version history.
+Report problems or request features through [GitHub Issues](https://github.com/gcalpay/vscode-universal-dictate/issues). See [support information](SUPPORT.md) for useful diagnostic details and the [Changelog](CHANGELOG.md) for version history.
 
 If timing evidence is needed, **Universal Dictate: Show Latency Report** opens the latest 100 completed measurements in one document. Records stay in the current extension-host session and are lost on reload unless that document is saved.
 
 ## License
 
-MIT licensed. See [LICENSE](https://github.com/gcalpay/vscode-universal-dictate/blob/866062cfc2933fd8e6d6fc0bc69917eac79ad6a0/LICENSE).
+MIT licensed. See [LICENSE](LICENSE).
