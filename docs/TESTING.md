@@ -1,178 +1,63 @@
-# Manual and release test procedure
+# Testing and verification
 
-This document describes the 1.1 Windows candidate behavior (user acceptance pending). Milestone-specific
-historical evidence remains in `docs/DICTATION_RELIABILITY_PLAN.md` and its linked
-ledgers. A compile result or mocked control is not a substitute for a real Windows
-interaction test.
+Universal Dictate includes TypeScript, Node, portable native C++ and Windows-only
+integration checks. Linux tests do not substitute for real Win32 focus, recorder,
+clipboard, native overlay or Windows packaging behavior.
 
-## Environment record
+## Development commands
 
-For every manual run record:
+From a checkout with Node.js 24:
 
-- Windows version and VS Code version
-- branch/commit or exact VSIX identity
-- local Windows vs Remote - WSL workspace
-- target control
-- Language, visualization, overlay size, waveform span, clipboard mode and preview
-- start/finish controls
-- display scaling/monitor arrangement when testing the native overlay
+	npm ci --no-audit --no-fund
+	npm run check
+	npm run compile
+	node --unhandled-rejections=strict --test test/*.test.cjs test/visualizations/*.test.cjs
 
-## Defaults and upgrade behavior
+Targeted scripts in `package.json` provide additional suites for overlay sizing,
+transcript recovery, preview, latency and visualizations. The native C++ tests and
+Windows VSIX build are defined in `.github/workflows/ci.yml` and
+`.github/workflows/windows-package.yml`.
 
-For a clean configuration, verify:
+## Product regressions
 
-- Language: English
-- Visualization: Enhanced overlay
-- Overlay size: Medium
-- Waveform time span: 10 seconds
-- Overlay controls: Symbols only (no style setting)
-- Overwrite clipboard: Off
-- Live preview: Off
+- **Capture and lifecycle:** accepted PCM/WAV continuity, bounded buffers,
+  cancellation/disposal, no duplicate finalization and recorder IPC ownership.
+- **Inference:** independent warm final and optional preview processes; no stale
+  hypotheses, final-only CLI fallback and no automatic preview worker when Off.
+- **Input and clipboard:** Unicode into focused Windows controls, modifiers,
+  explicit clipboard actions and no clipboard access with automatic overwrite Off.
+- **Presentation:** waveform sample history and amplitude, three enhanced-overlay
+  modes, five palettes, all size/DPI combinations, square circular geometry and
+  native non-activating Insert/Discard hit targets.
+- **Packaging:** locked dependency installation, compiler identity, pinned
+  Whisper and SDL2 binaries, retained licenses and precise included VSIX payloads.
 
-A user with an explicit saved value must retain it after upgrade. Do not reset an
-existing non-English language, preview choice or other saved preference merely to
-demonstrate the new default.
+The internal audio-admission regression tests may use Pause-related identifiers;
+they do not imply that the public extension exposes Pause/Resume.
 
-## Basic dictation
+The source build script `npm run package:vsix` expects compiled native helpers
+and runtime files to be present. It does not independently fetch, compile and
+audit the complete Windows release payload. Use the Windows package workflow to
+validate a distributable artifact.
 
-1. Focus an editable target.
-2. Start with `Ctrl+Alt+D`.
-3. On first use, allow the model download/checksum verification to finish.
-4. Speak synthetic test text.
-5. Stop with `Ctrl+Alt+D`.
-6. Confirm the final transcript is inserted exactly once and no Enter/submission
-   occurs.
-7. Repeat with the enhanced overlay **Insert** button.
-8. Separately exercise the genuine status-bar Dictate/Stop mouse paths and record
-   focus/placement results; do not assume they preserve the previous target.
+Before a release, compare the packaged JavaScript/native/runtime contents and
+README/license/notice assets against the approved source. Compiler timestamps and
+packager metadata can change binary archive hashes without changing code; record
+such differences rather than claiming byte-for-byte identity without evidence.
+Avoid tests that capture private speech. Synthetic fixtures and disposable Win32
+test controls are used for reproducibility.
 
-After the model exists, normal dictation should work without network access.
+## Continuous checks
 
-## Cancellation and duplicate controls
+CI runs the complete Node suite, portable native regressions and spectral cost
+checks on pull requests and changes to main. The Windows package workflow builds
+the actual source commit and exercises native input/clipboard behavior, recording
+admission, preview/cache rendering, and the real local Whisper preview adapter.
+Both workflows can also be started manually. Their tokens are read-only and action
+revisions are pinned; publication is never performed by these checks.
 
-While recording, test `Esc` and overlay **Discard** independently. No transcript
-should be inserted, copied automatically or submitted.
-
-Exercise repeated/near-simultaneous Stop/Insert actions. Only one finalization path
-may win; stale callbacks/results must not produce duplicate insertion.
-
-## Visualization, size and DPI regression
-
-Exercise Both, Enhanced overlay, Status bar only and Off. Verify waveform spans
-1, 3, 5, 10 and 20 seconds do not change recording length or final transcription.
-
-Test Small/Medium/Large at 100%, 125%, 150% and 200% scaling and, when available,
-mixed-DPI/multi-monitor placement. Drawing and Insert/Discard hit areas must remain
-aligned and the overlay must stay non-activating.
-
-## Clipboard and transcript recovery
-
-With **Overwrite clipboard Off**, automatic dictation must leave existing clipboard
-content untouched. With it **On**, the exact final transcript is copied once before
-the same direct-input attempt and old clipboard contents are not restored. A later
-manual/application copy must win.
-
-After a successful non-empty dictation, **Universal Dictate: Copy Last Transcript**
-must explicitly copy the retained final transcript even when automatic overwrite is
-Off. Empty/cancelled/failed dictation must not erase the latest successful retained
-transcript. Reload/restart clears this memory-only state.
-
-## Live preview
-
-With the default **Off**, no provisional text or preview decoding should occur.
-
-Turn Live preview **On** with Enhanced overlay or Both and verify:
-
-1. provisional words can appear and revise without being inserted;
-2. Stop transcribes the complete recording and inserts one final transcript;
-3. preview failure leaves recording/final transcription available;
-4. Language/preview settings are snapshotted per session;
-5. Small/Medium/Large remain within their chosen bounds;
-6. Status bar only / Off do not run invisible preview work.
-
-## Pause/Resume acceptance
-
-With symbol controls and preview Off and On, test each size. Dictate a first
-sentence, Pause, deliberately speak an unrelated sentence while Paused, Resume,
-and dictate a final sentence. Only the first and final sentence should be inserted,
-exactly once, after Stop. The paused period should not lengthen the recorded audio.
-
-Check Pause becomes Resume, the waveform and provisional text freeze, hover help
-names every symbol, and the target caret remains where it was for overlay clicks.
-The microphone-use indicator can remain active: the device stays open.
-
-Repeat with Insert while paused, Discard while paused, repeated middle-button clicks,
-Ctrl+Alt+P while VS Code owns focus, and Stop/Cancel during the pending transition.
-No late acknowledgement may restart capture or cause a second insertion. Check both
-Windows and Remote-WSL workflows and an external compatible focused Windows input.
-Existing Issue #38 is not a failed promise of new status-bar focus preservation.
-
-Run the existing automated checks plus `test/pause-controls.test.cjs`, portable
-`recording-pause-test.cpp`, Windows `recorder-pause-capture-test.cpp`,
-`pause-native-ipc.cjs`, and the extended production renderer/Whisper replay. Synthetic
-PCM and a disposable scratch EDIT are not substitutes for the manual test above.
-
-## Diagnostics
-
-Run:
-
-```text
-Universal Dictate: Show Diagnostics
-```
-
-A packaged Windows build should report the Windows UI-host placement, direct-input
-helper, recorder and whisper runtime. After setup, the model should report installed.
-Diagnostics should reflect the effective preview and clipboard settings.
-
-## Release package audit
-
-For the exact final VSIX verify:
-
-- version/publisher/extension identity and win32-x64 target;
-- English / Medium / Live preview Off / symbol controls / 10-second waveform defaults;
-- all four release screenshots and icon match source;
-- obsolete overview image is absent;
-- only `windows-text-input.exe`, `universal-dictate-recorder.exe`,
-  `whisper-cli.exe` and `whisper-server.exe` are executables;
-- no source/test/development directories, font files, model files or audio fixtures
-  are packaged;
-- compiled JavaScript and native helper hashes match the verified build.
-
-## Failure classification
-
-Recorder failures are microphone/privacy problems until evidence shows otherwise.
-Transcription failures should distinguish warm-server from CLI fallback. Preview
-failure is separate from final transcription. Wrong text is an ASR/language/audio
-issue until evidence shows otherwise. Correct text in the wrong control is a
-target-preservation/focus issue; Issue #38 concerns the genuine status-bar mouse path.
-
-## Waveform visibility regression (1.1.0)
-
-In each overlay size, test Live preview On and Off. Speak quietly, normally and
-loudly, then quietly again without changing microphone gain. The waveform should
-show distinct heights and should not rescale old samples or the second quiet part.
-Pause should freeze both waveform and preview. A short one-line hypothesis should
-sit directly beneath the waveform instead of being centered in a tall blank area;
-long preview text should show one complete line in Small or up to two in Medium/Large.
-Check 100/125/150/200% scaling where available; symbol ink, clicks and hover help
-must stay aligned. Preview Off uses a shorter window than Preview On. Pause/Resume
-and changing provisional text must not resize the active window. Medium remains the
-default; saved size/span/preview/clipboard values must not be reset.
-The gear has six entries, including Live preview, and no Text/Symbols selector.
-The accepted six-entry menu screenshot stays unchanged.
-Automated signed-peak/PCM/renderer evidence does not replace this microphone-level check.
-
-### Temporal waveform regression (required before another test VSIX)
-
-Watch an already-created syllable while continuing to speak: it may move left but
-must retain its height and shape. Speak quietly, then louder; older quiet speech
-must not grow, shrink or flip polarity. Check before the history fills, across the
-first full span, through Pause/Resume, and with preview Off/On. Use the saved span;
-there is no requirement to switch to one second to get stable rendering.
-
-Portable CI compares completed samples before/after 3,840 appends and verifies that
-partial buckets change nothing. The Windows renderer test verifies translated
-pixel identity for old strokes and an unchanged frame while the next bucket is
-incomplete. These motion checks supplement, not replace, the existing static
-multilingual, DPI, clipping, loudness and control tests. Scripted captures are not
-public screenshots or a substitute for the user's real-microphone visual review.
+A green run confirms the configured checks, not error-free software or identical
+latency on every computer. Preserve failed observations and assess shared-runner
+noise separately from regressions. Do not weaken a threshold merely to obtain a
+passing run. Package reports distinguish the actual checked-out commit from the
+workflow event commit.

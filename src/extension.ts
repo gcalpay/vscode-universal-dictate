@@ -1,9 +1,19 @@
 import * as fs from 'node:fs';
+import { normalizeOverlayTheme, OVERLAY_THEMES, OVERLAY_THEME_LABELS, OVERLAY_THEME_DETAILS, type OverlayTheme } from './core/overlay-theme';
+import { performance } from 'node:perf_hooks';
 import * as vscode from 'vscode';
-import { DictationEngine, DictationState, type DictationSession, type PreviewControl } from './core/dictation';
+import { DictationEngine, DictationState, type DictationLatencyEvent, type DictationLatencyStage, type DictationSession, type PreviewControl } from './core/dictation';
 import { PreviewCoordinator } from './core/preview-coordinator';
+import type { WhisperInferencePath } from './core/whisper';
 import { TranscriptRecoveryController } from './transcript-recovery';
 import { normalizeOverlaySize, OVERLAY_SIZES, type OverlaySize } from './core/overlay-size';
+import {
+  normalizeOverlayVisualization,
+  OVERLAY_VISUALIZATIONS,
+  OVERLAY_VISUALIZATION_LABELS,
+  OVERLAY_VISUALIZATION_DETAILS,
+  type OverlayVisualization
+} from './core/overlay-visualization';
 import {
   getWhisperLanguageName,
   normalizeWhisperLanguage,
@@ -17,6 +27,7 @@ import {
   getWhisperCliPath,
   getWhisperServerPath,
   isWhisperWarm,
+  stopWhisperPreview,
   transcribe,
   warmWhisper,
   previewWhisper
@@ -39,6 +50,7 @@ const OVERLAY_SIZE_LABELS: Record<OverlaySize, string> = {
 };
 
 const WAVEFORM_TIME_SPANS: readonly WaveformTimeSpanSeconds[] = [1, 3, 5, 10, 20];
+const LATENCY_STAGES: readonly DictationLatencyStage[] = ['T0','T1','T2','T3','T4','T5','T6'];
 
 function getConfiguredVisualization(): VisualizationMode {
   const value = vscode.workspace
@@ -63,6 +75,16 @@ function getConfiguredOverlaySize(): OverlaySize {
   return normalizeOverlaySize(
     vscode.workspace.getConfiguration('universalDictate').get<string>('overlaySize', 'medium')
   );
+}
+
+function getConfiguredOverlayVisualization(): OverlayVisualization {
+  return normalizeOverlayVisualization(
+    vscode.workspace.getConfiguration('universalDictate').get<unknown>('enhancedOverlayVisualization')
+  );
+}
+
+function getConfiguredOverlayTheme(): OverlayTheme {
+  return normalizeOverlayTheme(vscode.workspace.getConfiguration('universalDictate').get<unknown>('overlayColorTheme'));
 }
 
 function getConfiguredLivePreview(): boolean {
@@ -100,13 +122,21 @@ class DictationController implements vscode.Disposable {
   private readonly settingsStatusBar: vscode.StatusBarItem;
   private readonly levelHistory = Array<number>(9).fill(0);
   private readonly engine: DictationEngine;
+  private readonly latencyOutput: vscode.OutputChannel;
   readonly recovery: TranscriptRecoveryController;
   private activeVisualization: VisualizationMode = 'enhancedOverlay';
   private activeOverwriteClipboard = false;
   private activeLivePreview = false;
   private activeLanguage = 'en';
   private activeOverlaySize: OverlaySize = 'medium';
+  private activeOverlayVisualization: OverlayVisualization = 'waveform';
+  private activeOverlayTheme: OverlayTheme = 'blue';
   private activeWaveformSpan: WaveformTimeSpanSeconds = 10;
+  private latencyTrace: { operationId: number; stages: Partial<Record<DictationLatencyStage, number>>; preview: boolean; language: string; display: VisualizationMode; overlayStyle: OverlayVisualization; warm: boolean; previewActiveAtStop: boolean; previewActiveForMs?: number; sincePreviewFinishedMs?: number; path?: WhisperInferencePath } | undefined;
+  private previewInferenceStartedAt: number | undefined;
+  private previewInferenceFinishedAt: number | undefined;
+  private lastLatencySummary = 'not measured';
+  private readonly latencyHistory: string[] = [];
 
   constructor(private readonly context: vscode.ExtensionContext) {
     // Use distinct stable IDs so VS Code can track the Dictate and settings
@@ -118,6 +148,7 @@ class DictationController implements vscode.Disposable {
       0
     );
     this.statusBar.name = 'Universal Dictate';
+    this.latencyOutput = vscode.window.createOutputChannel('Universal Dictate Latency');
 
     // A slightly lower priority keeps this separate, content-sized gear
     // immediately to the right of the Dictate item.
@@ -139,7 +170,11 @@ class DictationController implements vscode.Disposable {
         this.activeLivePreview = getConfiguredLivePreview() && showsOverlay(this.activeVisualization);
         this.activeLanguage = normalizeWhisperLanguage(vscode.workspace.getConfiguration('universalDictate').get<string>('language', 'en'));
         this.activeOverlaySize = getConfiguredOverlaySize();
+        this.activeOverlayVisualization = getConfiguredOverlayVisualization();
+        this.activeOverlayTheme = getConfiguredOverlayTheme();
         this.activeWaveformSpan = getConfiguredWaveformTimeSpanSeconds();
+        this.previewInferenceStartedAt = undefined;
+        this.previewInferenceFinishedAt = undefined;
         await ensureModel(this.context);
       },
       warm: () => warmWhisper(this.context),
@@ -152,10 +187,12 @@ class DictationController implements vscode.Disposable {
           this.activeWaveformSpan,
           this.activeOverlaySize,
           signal,
-          this.activeLivePreview
+          this.activeLivePreview,
+          this.activeOverlayVisualization,
+          this.activeOverlayTheme
         );
       },
-      transcribe: (audioPath) => transcribe(this.context, audioPath, this.activeLanguage),
+      transcribe: (audioPath) => transcribe(this.context, audioPath, this.activeLanguage, path => { if (this.latencyTrace) this.latencyTrace.path = path; }),
       startPreview: (session, signal) => this.startPreview(session, signal),
       insert: (transcript, signal) => pasteIntoFocusedControl(this.context, transcript, signal, this.activeOverwriteClipboard),
       onStateChanged: (state) => this.renderState(state),
@@ -170,7 +207,8 @@ class DictationController implements vscode.Disposable {
       onNoSpeech: () => {
         void vscode.window.showInformationMessage('Universal Dictate: no speech detected.');
       },
-      onError: (error) => this.showError(error)
+      onError: (error) => this.showError(error),
+      onLatencyEvent: event => this.recordLatency(event)
     });
 
     this.recovery = new TranscriptRecoveryController(this.engine);
@@ -180,25 +218,55 @@ class DictationController implements vscode.Disposable {
   private startPreview(session: DictationSession, signal: AbortSignal): PreviewControl | undefined {
     if (!this.activeLivePreview || !session.previewSessionId || !session.acquirePreview || !session.showPreview) return undefined;
     const coordinator = new PreviewCoordinator({ sessionId: session.previewSessionId,
-      language: this.activeLanguage,
+      language: this.activeLanguage, maxTimeoutRetries: 1,
       acquire: previewSignal => session.acquirePreview!(previewSignal),
-      decode: (audio, language, previewSignal) => previewWhisper(this.context, audio, language, previewSignal),
+      decode: async (audio, language, previewSignal) => {
+        const startedAt = performance.now();
+        this.previewInferenceStartedAt = startedAt;
+        try {
+          return await previewWhisper(this.context, audio, language, previewSignal);
+        } finally {
+          if (this.previewInferenceStartedAt === startedAt) this.previewInferenceStartedAt = undefined;
+          this.previewInferenceFinishedAt = performance.now();
+        }
+      },
       onPreview: update => { if (!signal.aborted) session.showPreview!(update); },
       onFailure: () => { if (!signal.aborted) void vscode.window.showInformationMessage('Universal Dictate: live preview stopped. Final dictation remains available.'); }
     });
-    const abort = () => { void coordinator.stop(); };
+    const stop = (): Promise<void> => {
+      // Stop scheduling first, then retire preview even when no request is active.
+      const scheduled = coordinator.stop();
+      const worker = stopWhisperPreview();
+      return Promise.all([scheduled, worker]).then(() => undefined);
+    };
+    const abort = () => { void stop(); };
     signal.addEventListener('abort', abort, { once: true });
-    if (signal.aborted) { signal.removeEventListener('abort', abort); return undefined; }
+    if (signal.aborted) { signal.removeEventListener('abort', abort); void stop(); return undefined; }
     coordinator.start();
     return {
       pause: () => coordinator.pause(),
       resume: () => coordinator.resume(),
-      stop: () => { signal.removeEventListener('abort', abort); return coordinator.stop(); }
+      stop: () => { signal.removeEventListener('abort', abort); return stop(); }
     };
   }
 
   initialize(): void {
     this.showIdleStatus();
+  }
+
+  getLastLatencySummary(): string { return this.lastLatencySummary; }
+
+  async showLatencyReport(): Promise<void> {
+    const version = this.context.extension?.packageJSON?.version ?? 'unknown';
+    const header = `Universal Dictate ${version} — isolated-preview-v1
+Timings are from engine Stop acceptance to input-helper completion, not target-app paint.
+Preview-active markers describe the host request, not confirmed native computation.
+Last 100 completed dictations; no audio or transcript text.
+
+`;
+    const document = await vscode.workspace.openTextDocument({ language: 'plaintext',
+      content: header + (this.latencyHistory.join('\n') || 'No completed dictation in this window yet.') });
+    await vscode.window.showTextDocument(document, { preview: false });
   }
 
   async toggle(): Promise<void> {
@@ -212,8 +280,6 @@ class DictationController implements vscode.Disposable {
     await this.engine.toggle();
   }
 
-  async togglePause(): Promise<void> { await this.engine.togglePause(); }
-
   async cancel(): Promise<void> {
     await this.engine.cancel();
   }
@@ -223,6 +289,7 @@ class DictationController implements vscode.Disposable {
     this.engine.dispose();
     this.statusBar.dispose();
     this.settingsStatusBar.dispose();
+    this.latencyOutput.dispose();
   }
 
   private renderState(state: DictationState): void {
@@ -248,15 +315,6 @@ class DictationController implements vscode.Disposable {
           this.showStaticRecordingStatus();
         }
         return;
-      case 'pausing':
-      case 'resuming':
-      case 'paused':
-        this.statusBar.command = 'universalDictate.toggle';
-        this.statusBar.text = state === 'paused' ? '$(debug-pause) Paused · Stop (Ctrl+Alt+D)'
-          : `$(loading~spin) ${state === 'pausing' ? 'Pausing' : 'Resuming'} · Stop (Ctrl+Alt+D)`;
-        this.statusBar.tooltip = 'Paused audio is not saved or transcribed; the microphone device stays open. Ctrl+Alt+P to pause/resume, Ctrl+Alt+D to finish, Esc to discard.';
-        this.statusBar.show();
-        return;
       case 'cancelling':
         this.statusBar.command = undefined;
         this.statusBar.text = '$(circle-slash) Universal Dictate: cancelling';
@@ -271,6 +329,58 @@ class DictationController implements vscode.Disposable {
         this.statusBar.text = '$(check) Universal Dictate: inserting';
         return;
     }
+  }
+
+  private recordLatency(event: DictationLatencyEvent): void {
+    if (event.stage === 'T0') {
+      const activeStartedAt = this.previewInferenceStartedAt;
+      const finishedAt = this.previewInferenceFinishedAt;
+      this.latencyTrace = {
+        operationId: event.operationId,
+        stages: {},
+        preview: this.activeLivePreview,
+        language: this.activeLanguage,
+        display: this.activeVisualization,
+        overlayStyle: this.activeOverlayVisualization,
+        warm: isWhisperWarm(),
+        previewActiveAtStop: activeStartedAt !== undefined,
+        previewActiveForMs: activeStartedAt === undefined ? undefined : Math.max(0, event.atMs - activeStartedAt),
+        sincePreviewFinishedMs: activeStartedAt !== undefined || finishedAt === undefined ? undefined : Math.max(0, event.atMs - finishedAt)
+      };
+    }
+    const trace = this.latencyTrace;
+    if (!trace || trace.operationId !== event.operationId) return;
+    trace.stages[event.stage] = event.atMs;
+    if (event.stage !== 'T6') return;
+    const elapsed = (a: DictationLatencyStage, b: DictationLatencyStage) => {
+      const x = trace.stages[a], y = trace.stages[b];
+      return x === undefined || y === undefined ? 'n/a' : `${Math.max(0, y - x).toFixed(1)}ms`;
+    };
+    const last = LATENCY_STAGES.filter(stage => trace.stages[stage] !== undefined).at(-1) ?? 'T0';
+    const summary = [
+      `preview=${trace.preview ? 'on' : 'off'}`,
+      `language=${trace.language}`,
+      `display=${trace.display}`,
+      `overlayStyle=${trace.overlayStyle}`,
+      `workerAtStop=${trace.warm ? 'warm' : 'cold'}`,
+      `path=${trace.path ?? 'unknown'}`,
+      `previewActiveAtStop=${trace.previewActiveAtStop ? 'yes' : 'no'}`,
+      `previewActiveFor=${trace.previewActiveForMs === undefined ? 'n/a' : `${trace.previewActiveForMs.toFixed(1)}ms`}`,
+      `sincePreviewFinished=${trace.sincePreviewFinishedMs === undefined ? 'n/a' : `${trace.sincePreviewFinishedMs.toFixed(1)}ms`}`,
+      `T0-T1=${elapsed('T0','T1')}`,
+      `T1-T2=${elapsed('T1','T2')}`,
+      `T2-T3=${elapsed('T2','T3')}`,
+      `T3-T4=${elapsed('T3','T4')}`,
+      `T4-T5=${elapsed('T4','T5')}`,
+      `T5-T6=${elapsed('T5','T6')}`,
+      `T0-${last}=${elapsed('T0', last)}`
+    ].join(' | ');
+    this.lastLatencySummary = summary;
+    const line = `[${new Date().toISOString()}] policy=isolated-preview-v1 | ${summary}`;
+    this.latencyHistory.push(line);
+    if (this.latencyHistory.length > 100) this.latencyHistory.shift();
+    this.latencyOutput.appendLine(line);
+    this.latencyTrace = undefined;
   }
 
   private updateRecordingLevel(level: number): void {
@@ -321,9 +431,10 @@ class DictationController implements vscode.Disposable {
 
 type LanguageQuickPickItem = vscode.QuickPickItem & { code: string };
 type SettingsQuickPickItem = vscode.QuickPickItem & {
-  action: 'language' | 'visualization' | 'overlaySize' | 'waveformTimeSpan' | 'overwriteClipboard' | 'livePreview';
+  action: 'language' | 'visualization' | 'enhancedOverlayVisualization' | 'overlayColorTheme' | 'overlaySize' | 'waveformTimeSpan' | 'overwriteClipboard' | 'livePreview';
 };
 type VisualizationQuickPickItem = vscode.QuickPickItem & { mode: VisualizationMode };
+type OverlayVisualizationQuickPickItem = vscode.QuickPickItem & { visualization: OverlayVisualization };
 type OverlaySizeQuickPickItem = vscode.QuickPickItem & { size: OverlaySize };
 type WaveformTimeSpanQuickPickItem = vscode.QuickPickItem & {
   seconds: WaveformTimeSpanSeconds;
@@ -386,7 +497,7 @@ async function selectVisualization(): Promise<void> {
     },
     {
       mode: 'off',
-      detail: 'Disable both waveform visualizations; keep static recording feedback in the status bar.'
+      detail: 'Disable overlay and status-bar audio visualizations; keep static recording feedback in the status bar.'
     }
   ];
 
@@ -410,6 +521,48 @@ async function selectVisualization(): Promise<void> {
   await configuration.update('visualization', selected.mode, vscode.ConfigurationTarget.Global);
   void vscode.window.showInformationMessage(
     `Universal Dictate audio visualization: ${VISUALIZATION_LABELS[selected.mode]}. Applies from the next dictation session.`
+  );
+}
+
+async function selectOverlayVisualization(): Promise<void> {
+  const configuration = vscode.workspace.getConfiguration('universalDictate');
+  const current = getConfiguredOverlayVisualization();
+  const items: OverlayVisualizationQuickPickItem[] = OVERLAY_VISUALIZATIONS.map(visualization => ({
+    label: OVERLAY_VISUALIZATION_LABELS[visualization],
+    description: visualization === current ? 'Current' : undefined,
+    detail: OVERLAY_VISUALIZATION_DETAILS[visualization],
+    visualization
+  }));
+  const selected = await vscode.window.showQuickPick(items, {
+    placeHolder: 'Enhanced Overlay Visualization · overlay only · applies from next dictation',
+    matchOnDescription: true,
+    matchOnDetail: true
+  });
+  if (!selected) return;
+  await configuration.update('enhancedOverlayVisualization', selected.visualization, vscode.ConfigurationTarget.Global);
+  const effective = getConfiguredOverlayVisualization();
+  const inactive = !showsOverlay(getConfiguredVisualization());
+  void vscode.window.showInformationMessage(
+    `Universal Dictate enhanced overlay visualization: ${OVERLAY_VISUALIZATION_LABELS[effective]}. Applies from the next dictation session.${inactive ? ' The overlay is currently disabled; this preference is retained.' : ''}${effective !== selected.visualization ? ' A workspace setting overrides the user setting.' : ''}`
+  );
+}
+
+async function selectOverlayTheme(): Promise<void> {
+  const configuration = vscode.workspace.getConfiguration('universalDictate');
+  const current = getConfiguredOverlayTheme();
+  const items = OVERLAY_THEMES.map(theme => ({
+    label: OVERLAY_THEME_LABELS[theme], description: theme === current ? 'Current' : undefined,
+    detail: OVERLAY_THEME_DETAILS[theme], theme
+  }));
+  const selected = await vscode.window.showQuickPick(items, {
+    placeHolder: 'Colors · enhanced overlay only · applies from next recording',
+    matchOnDescription: true, matchOnDetail: true
+  });
+  if (!selected) return;
+  await configuration.update('overlayColorTheme', selected.theme, vscode.ConfigurationTarget.Global);
+  const effective = getConfiguredOverlayTheme();
+  void vscode.window.showInformationMessage(
+    `Universal Dictate colors: ${OVERLAY_THEME_LABELS[effective]}. Applies from the next recording.${!showsOverlay(getConfiguredVisualization()) ? ' The overlay is disabled; this preference is retained.' : ''}${effective !== selected.theme ? ' A workspace setting overrides the user setting.' : ''}`
   );
 }
 
@@ -448,12 +601,12 @@ async function selectWaveformTimeSpan(): Promise<void> {
   const items: WaveformTimeSpanQuickPickItem[] = WAVEFORM_TIME_SPANS.map((seconds) => ({
     label: waveformTimeSpanLabel(seconds),
     description: current === seconds ? 'Current' : undefined,
-    detail: 'Amount of recent audio visible across the enhanced native waveform.',
+    detail: 'Recent active audio shown by Waveform and spectrograms. Circular Spectrum ignores this preference.',
     seconds
   }));
 
   const selected = await vscode.window.showQuickPick(items, {
-    placeHolder: 'Waveform time span · enhanced overlay only · changes apply from next dictation',
+    placeHolder: 'Overlay history · waveform and spectrograms only · changes apply from next dictation',
     matchOnDescription: true,
     matchOnDetail: true
   });
@@ -468,7 +621,7 @@ async function selectWaveformTimeSpan(): Promise<void> {
     vscode.ConfigurationTarget.Global
   );
   void vscode.window.showInformationMessage(
-    `Universal Dictate waveform time span: ${waveformTimeSpanLabel(selected.seconds)}. Applies from the next dictation session.`
+    `Universal Dictate overlay history: ${waveformTimeSpanLabel(selected.seconds)}. Applies from the next dictation session.`
   );
 }
 
@@ -479,6 +632,7 @@ async function openSettings(): Promise<void> {
   );
   const currentVisualization = getConfiguredVisualization();
   const currentOverlaySize = getConfiguredOverlaySize();
+  const currentOverlayVisualization = getConfiguredOverlayVisualization();
   const currentWaveformTimeSpan = getConfiguredWaveformTimeSpanSeconds();
   const overwriteClipboard = getConfiguredOverwriteClipboard();
 
@@ -496,15 +650,29 @@ async function openSettings(): Promise<void> {
       action: 'visualization'
     },
     {
+      label: '$(graph) Enhanced Overlay Visualization',
+      description: `${OVERLAY_VISUALIZATION_LABELS[currentOverlayVisualization]}${showsOverlay(currentVisualization) ? '' : ' (overlay disabled)'}`,
+      detail: 'Choose the enhanced overlay renderer. The status bar is unchanged; selecting a style does not enable the overlay.',
+      action: 'enhancedOverlayVisualization'
+    },
+    {
+      label: '$(symbol-color) Colors',
+      description: OVERLAY_THEME_LABELS[getConfiguredOverlayTheme()],
+      detail: 'Five fixed palettes. Does not change microphone gain or enable the overlay.',
+      action: 'overlayColorTheme'
+    },
+    {
       label: '$(screen-full) Overlay size',
       description: OVERLAY_SIZE_LABELS[currentOverlaySize],
       detail: 'Choose Small, Medium or Large for the enhanced native recording overlay.',
       action: 'overlaySize'
     },
     {
-      label: '$(graph-line) Waveform time span',
+      label: '$(history) Overlay history',
       description: waveformTimeSpanLabel(currentWaveformTimeSpan),
-      detail: 'Choose how much recent audio is visible across the enhanced native waveform.',
+      detail: currentOverlayVisualization === 'circularSpectrum'
+        ? 'Saved for Waveform and spectrograms; Circular Spectrum shows the latest frame only.'
+        : 'Choose how much recent active audio is visible across the waveform or scrolling spectrogram.',
       action: 'waveformTimeSpan'
     },
     {
@@ -538,6 +706,16 @@ async function openSettings(): Promise<void> {
 
   if (selected.action === 'visualization') {
     await selectVisualization();
+    return;
+  }
+
+  if (selected.action === 'enhancedOverlayVisualization') {
+    await selectOverlayVisualization();
+    return;
+  }
+
+  if (selected.action === 'overlayColorTheme') {
+    await selectOverlayTheme();
     return;
   }
 
@@ -582,10 +760,6 @@ export function activate(context: vscode.ExtensionContext): void {
     await controller.cancel();
   });
 
-  const pauseResume = vscode.commands.registerCommand('universalDictate.pauseResume', async () => {
-    await controller.togglePause();
-  });
-
   const selectLanguageCommand = vscode.commands.registerCommand(
     'universalDictate.selectLanguage',
     selectLanguage
@@ -594,6 +768,10 @@ export function activate(context: vscode.ExtensionContext): void {
   const openSettingsCommand = vscode.commands.registerCommand(
     'universalDictate.openSettings',
     openSettings
+  );
+
+  const latencyReport = vscode.commands.registerCommand(
+    'universalDictate.showLatencyReport', () => controller.showLatencyReport()
   );
 
   const showDiagnostics = vscode.commands.registerCommand(
@@ -611,12 +789,16 @@ export function activate(context: vscode.ExtensionContext): void {
 
       await vscode.window.showInformationMessage(
         [
+          `version=${extension?.packageJSON?.version ?? 'unknown'}`,
+          'latencyPolicy=isolated-preview-v1',
           `platform=${process.platform}`,
           `arch=${process.arch}`,
           `remote=${remoteName}`,
           `extensionKind=${extensionKind}`,
           `language=${configuredLanguage}`,
           `overlaySize=${getConfiguredOverlaySize()}`,
+          `enhancedOverlayVisualization=${getConfiguredOverlayVisualization()}`,
+          `overlayColorTheme=${getConfiguredOverlayTheme()}`,
           `waveformSeconds=${getConfiguredWaveformTimeSpanSeconds()}`,
           `livePreview=${getConfiguredLivePreview()}`,
           `previewEffective=${getConfiguredLivePreview() && showsOverlay(getConfiguredVisualization())}`,
@@ -627,7 +809,8 @@ export function activate(context: vscode.ExtensionContext): void {
           `whisperCli=${fs.existsSync(getWhisperCliPath(context)) ? 'available' : 'missing'}`,
           `whisperServer=${fs.existsSync(getWhisperServerPath(context)) ? 'available' : 'missing'}`,
           `worker=${isWhisperWarm() ? 'warm' : 'cold'}`,
-          `model=${fs.existsSync(getModelPath(context)) ? 'installed' : 'not-installed'}`
+          `model=${fs.existsSync(getModelPath(context)) ? 'installed' : 'not-installed'}`,
+          `lastLatency=${controller.getLastLatencySummary()}`
         ].join(' | '),
         { modal: true }
       );
@@ -639,10 +822,10 @@ export function activate(context: vscode.ExtensionContext): void {
     controller,
     toggle,
     cancel,
-    pauseResume,
     selectLanguageCommand,
     openSettingsCommand,
     showDiagnostics,
+    latencyReport,
     whisperDisposable
   );
 

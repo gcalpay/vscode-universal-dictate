@@ -2,6 +2,7 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 const { createPreviewAudio, validatePreviewAudio, PREVIEW_WINDOW_FRAMES } = require('../dist/core/preview-audio');
 const { PreviewCoordinator } = require('../dist/core/preview-coordinator');
+const { LocalWhisperRequestTimeoutError } = require('../dist/core/whisper-transport');
 
 function deferred() {
   let resolve, reject;
@@ -262,6 +263,88 @@ test('timeout aborts cooperative adapters and releases audio once', async () => 
   h.coordinator.start(); await tick(h); await tick(h, 500);
   assert.deepEqual(h.errors, ['timeout']); assert.equal(h.updates.length, 0);
   assert.equal(h.released.length, 1); await h.coordinator.stop();
+});
+
+test('one transient deadline miss retires its adapter before a new snapshot is attempted', async () => {
+  const released = deferred();
+  const transient = [];
+  let calls = 0, aborted = false;
+  const h = setup({ timeoutMs: 500, maxTimeoutRetries: 1,
+    onTransientTimeout: () => transient.push('timeout'),
+    decode: async (_audio, _lang, signal) => {
+      if (++calls === 1) return await new Promise((_resolve, reject) => {
+        signal.addEventListener('abort', () => { aborted = true; reject(new Error('cancelled')); }, { once: true });
+      });
+      return 'next current words';
+    },
+    acquire: async (signal) => {
+      const audio = createPreviewAudio('session-a', ++callsAcquired * 32000, Buffer.alloc(64000));
+      return { audio, release: () => callsAcquired === 1 ? released.promise : Promise.resolve() };
+    }
+  });
+  let callsAcquired = 0;
+  h.coordinator.start(); await tick(h); await tick(h, 500);
+  assert.equal(aborted, true); assert.deepEqual(transient, ['timeout']);
+  assert.deepEqual(h.errors, []); assert.equal(h.updates.length, 0);
+  await tick(h, 1500); // A retry must not start while the first audio lease is held.
+  assert.equal(callsAcquired, 1);
+  released.resolve(); await flush();
+  await tick(h, 2000);
+  assert.equal(callsAcquired, 2); assert.equal(calls, 2);
+  assert.deepEqual(h.updates.map(x => x.text), ['next current words']);
+  assert.deepEqual(h.errors, []); await h.coordinator.stop();
+  assert.equal(h.clock.tasks.size, 0);
+});
+
+test('second consecutive deadline miss terminates preview rather than retrying indefinitely', async () => {
+  const transient = [];
+  const h = setup({ timeoutMs: 500, maxTimeoutRetries: 1,
+    onTransientTimeout: () => transient.push('timeout'),
+    decode: (_audio, _lang, signal) => new Promise((_resolve, reject) => {
+      signal.addEventListener('abort', () => reject(new Error('cancelled')), { once: true });
+    }) });
+  h.coordinator.start(); await tick(h); await tick(h, 500);
+  assert.deepEqual(transient, ['timeout']); assert.deepEqual(h.errors, []);
+  await tick(h, 1500); await tick(h, 500);
+  assert.deepEqual(h.errors, ['timeout']); assert.deepEqual(transient, ['timeout']);
+  assert.equal(h.released.length, 2); assert.equal(h.clock.tasks.size, 0);
+  await h.coordinator.stop();
+});
+
+test('successful preview resets transient-timeout budget, including HTTP deadline errors', async () => {
+  let calls = 0, transient = 0;
+  const h = setup({ maxTimeoutRetries: 1, onTransientTimeout: () => transient++,
+    decode: async () => {
+      if (++calls !== 2) throw new LocalWhisperRequestTimeoutError();
+      return 'recovered';
+    } });
+  h.coordinator.start(); await tick(h);
+  assert.equal(transient, 1); assert.deepEqual(h.errors, []);
+  await tick(h); assert.deepEqual(h.updates.map(x => x.text), ['recovered']);
+  await tick(h); assert.equal(transient, 2); assert.deepEqual(h.errors, []);
+  await h.coordinator.stop(); assert.equal(h.clock.tasks.size, 0);
+});
+
+test('stop during a retry interval prevents late acquisition', async () => {
+  let transient = 0;
+  const h = setup({ maxTimeoutRetries: 1, onTransientTimeout: () => transient++,
+    decode: async () => { throw new LocalWhisperRequestTimeoutError(); } });
+  h.coordinator.start(); await tick(h);
+  assert.equal(transient, 1); await h.coordinator.stop();
+  await tick(h, 10_000);
+  assert.equal(h.acquired.length, 1); assert.equal(h.updates.length, 0);
+  assert.deepEqual(h.errors, []);
+});
+
+test('unexpected decode failures still stop immediately when a timeout retry is enabled', async () => {
+  const h = setup({ maxTimeoutRetries: 1, decode: async () => { throw Error('bad local reply'); } });
+  h.coordinator.start(); await tick(h);
+  assert.deepEqual(h.errors, ['decode']); assert.equal(h.clock.tasks.size, 0);
+  await h.coordinator.stop();
+});
+
+test('only zero or one transient timeout retries may be configured', () => {
+  for (const count of [-1, 2, 1.5, NaN]) assert.throws(() => setup({ maxTimeoutRetries: count }));
 });
 
 test('timeout cannot pretend an adapter ignoring abort has stopped using audio', async () => {

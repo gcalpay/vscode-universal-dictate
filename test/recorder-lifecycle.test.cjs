@@ -55,6 +55,8 @@ function harness(settings = {}) {
       if (id === 'node:fs') return filesystem;
       if (id === 'node:readline') return readline;
       if (id === './overlay-size') return overlay;
+      if (id === './overlay-theme') return require('../dist/core/overlay-theme');
+      if (id === './overlay-visualization') return require('../dist/core/overlay-visualization');
       if (id === './recorder-pause') return require('../dist/core/recorder-pause');
       if (id === './preview-recorder') return require('../dist/core/preview-recorder');
       throw Error(`Unexpected require ${id}`);

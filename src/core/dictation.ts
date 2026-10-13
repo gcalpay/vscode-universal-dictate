@@ -1,9 +1,12 @@
 import * as fs from 'node:fs';
+import { performance } from 'node:perf_hooks';
 import type { PreviewLease } from './preview-audio';
 import type { PreviewUpdate } from './preview-coordinator';
 
 export type DictationRecorderAction = 'stop' | 'cancel' | 'pause' | 'resume';
 export type TranscriptRecoveryResult = 'completed' | 'empty' | 'busy' | 'disposed';
+export type DictationLatencyStage = 'T0' | 'T1' | 'T2' | 'T3' | 'T4' | 'T5' | 'T6';
+export interface DictationLatencyEvent { readonly operationId: number; readonly stage: DictationLatencyStage; readonly atMs: number; }
 
 export interface DictationSession {
   readonly outputPath: string;
@@ -55,6 +58,7 @@ export interface DictationEngineOptions {
   readonly onRecordingChanged?: (recording: boolean) => PromiseLike<void> | void;
   readonly onNoSpeech?: () => void;
   readonly onError?: (error: unknown) => void;
+  readonly onLatencyEvent?: (event: DictationLatencyEvent) => void;
 }
 
 /** One operation owns its recorder, pending work and cleanup until it settles. */
@@ -297,6 +301,7 @@ export class DictationEngine {
   private stopAndTranscribe(op: Operation): Promise<void> {
     if (op.terminal) return op.terminal;
     if (!this.current(op) || !op.session || op.phase !== 'recording') return Promise.resolve();
+    this.emitLatency(op, 'T0');
     op.phase = 'stopping';
     void this.stopPreview(op);
     this.notifyRecordingChanged(false);
@@ -313,11 +318,15 @@ export class DictationEngine {
       this.emitSafely(op, 'transcribing');
       audioPath = await stopping;
       writerClosed = true;
+      this.emitLatency(op, 'T1');
       if (!this.current(op)) return;
       await this.stopPreview(op);
+      this.emitLatency(op, 'T2');
       if (!this.current(op)) return;
       op.phase = 'transcribing';
+      this.emitLatency(op, 'T3');
       const transcript = await this.options.transcribe(audioPath);
+      this.emitLatency(op, 'T4');
       if (!this.current(op)) return;
       if (transcript.trim().length === 0) {
         this.options.onNoSpeech?.();
@@ -326,7 +335,8 @@ export class DictationEngine {
       this.lastTranscript = transcript;
       op.phase = 'inserting';
       this.emitState(op, 'inserting');
-      if (this.current(op)) await this.options.insert(transcript, op.abort.signal);
+      this.emitLatency(op, 'T5');
+      if (this.current(op)) { await this.options.insert(transcript, op.abort.signal); this.emitLatency(op, 'T6'); }
     } catch (error) {
       if (this.current(op)) this.reportError(error);
     } finally {
@@ -357,6 +367,11 @@ export class DictationEngine {
   private emitSafely(op: Operation, state: DictationState): void {
     if (this.disposed || !this.owns(op)) return;
     try { this.options.onStateChanged?.(state); } catch (error) { this.reportError(error); }
+  }
+
+  private emitLatency(op: Operation, stage: DictationLatencyStage): void {
+    if (this.disposed || !this.owns(op)) return;
+    try { this.options.onLatencyEvent?.(Object.freeze({ operationId: op.id, stage, atMs: performance.now() })); } catch { }
   }
 
   private reportError(error: unknown): void {

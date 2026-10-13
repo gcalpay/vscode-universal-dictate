@@ -7,7 +7,9 @@ import {
   RecorderAction,
   RecorderOverlayStyle
 } from './core/recorder';
+import type { OverlayTheme } from './core/overlay-theme';
 import type { OverlaySize } from './core/overlay-size';
+import type { OverlayVisualization } from './core/overlay-visualization';
 import type { PreviewLease } from './core/preview-audio';
 import type { PreviewUpdate } from './core/preview-coordinator';
 
@@ -42,7 +44,9 @@ export class RecorderSession {
     waveformTimeSpanSeconds = 10,
     overlaySize: OverlaySize = 'medium',
     signal?: AbortSignal,
-    livePreview = false
+    livePreview = false,
+    enhancedOverlayVisualization: OverlayVisualization = 'waveform',
+    overlayColorTheme: OverlayTheme = 'blue'
   ): Promise<RecorderSession> {
     signal?.throwIfAborted();
     const recorderPath = getRecorderPath(context);
@@ -64,6 +68,8 @@ export class RecorderSession {
         overlayStyle,
         waveformTimeSpanSeconds,
         overlaySize,
+        enhancedOverlayVisualization,
+        overlayColorTheme,
         signal,
         previewSessionId: livePreview && showOverlay && overlayStyle === 'enhanced' ? sessionId : undefined
       },
@@ -79,8 +85,6 @@ export class RecorderSession {
   onFailure(listener: (error: Error) => void): void {
     this.core.onFailure(listener);
   }
-
-  setPaused(paused: boolean): Promise<void> { return this.core.setPaused(paused); }
 
   async stop(): Promise<string> {
     return await this.core.stop();

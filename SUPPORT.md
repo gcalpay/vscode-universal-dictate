@@ -1,23 +1,24 @@
 # Support
 
-Use GitHub Issues for bug reports, compatibility problems and feature requests.
+Use [GitHub Issues](https://github.com/gcalpay/vscode-universal-dictate/issues)
+for bug reports, compatibility questions and feature requests.
 
-When reporting a dictation problem, include:
+For actionable reports, include the Windows and VS Code versions, Universal
+Dictate version, local Windows or Remote - WSL workspace, recognition language,
+audio-visualization mode, whether Live preview is enabled, and how recording was
+started and finished (status bar, keyboard shortcut, Insert or Discard). State
+whether the transcript was wrong or correct text appeared in the wrong place.
 
-- Windows version
-- VS Code version
-- Universal Dictate version
-- whether the workspace is local Windows or Remote - WSL
-- selected Universal Dictate language, or `auto`
-- visualization mode and enhanced waveform time span
-- the exact start method: status-bar Dictate or `Ctrl+Alt+D`
-- the exact finish method: status-bar Stop, `Ctrl+Alt+D`, overlay Insert, `Esc` or overlay Discard
-- target type: editor, Codex/chat composer, another VS Code input or external Windows text field
-- whether the transcript itself was correct but appeared in the wrong place
-- output from `Universal Dictate: Show Diagnostics`
+If relevant, include output from **Universal Dictate: Show Diagnostics** or
+**Universal Dictate: Show Latency Report** (timings only).
+A correct transcript inserted into the wrong control is often a focus/target
+problem rather than a recognition error. Clicking VS Code's real status-bar item
+can move focus before dictation finishes; keyboard and native overlay controls
+are available alternatives.
 
-A correct transcript appearing in the wrong control is an insertion-target/focus problem, not an ASR problem. Mouse clicks on the genuine VS Code status-bar Dictate/Stop item have a known target-preservation limitation tracked in Issue #38; report the exact control path rather than describing that as a recognition error.
+Never include private dictated text, microphone recordings, passwords, access
+tokens or other credentials in an issue. Reproduce with synthetic text where
+possible.
 
-Do not include private dictated text, microphone recordings, access tokens or other credentials in an issue. Use synthetic text when a reproduction needs exact content.
-
-Universal Dictate performs normal transcription locally. The initial Whisper model download is the network operation required for normal setup; after the model is installed, dictation can operate offline.
+Recognition runs locally. Initial setup downloads the Whisper model; after it is
+cached, normal dictation can operate offline.
