@@ -1,0 +1,97 @@
+name: Assemble approved 1.2.0 source
+
+on:
+  push:
+    branches: [release/1.2.0-assembly]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  assemble:
+    if: github.repository == 'gcalpay/vscode-universal-dictate' && github.actor == 'gcalpay'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Reconstruct and verify approved source objects without changing branches
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin '+refs/heads/*:refs/remotes/origin/*'
+          python3 - <<'PY'
+          import base64, hashlib, json, lzma, os, re, subprocess, time
+          import urllib.request, urllib.error
+          from pathlib import Path, PurePosixPath
+          base = 'https://api.github.com/repos/gcalpay/vscode-universal-dictate/'
+          expected_main = '8017f1950bbacb67c37add2c31315e7a6139bcd3'
+          expected_tree = '549f4f02db1ab648ab45d68ab1b791a89b1e104e'
+          def api(route, value=None):
+              data = None if value is None else json.dumps(value).encode()
+              for attempt in range(3):
+                  request = urllib.request.Request(base + route, data=data, headers={
+                      'Authorization': 'Bearer ' + os.environ['GH_TOKEN'],
+                      'Accept': 'application/vnd.github+json',
+                      'Content-Type': 'application/json',
+                      'User-Agent': 'Universal-Dictate-release-assembly',
+                      'X-GitHub-Api-Version': '2022-11-28'
+                  })
+                  try:
+                      with urllib.request.urlopen(request, timeout=30) as response:
+                          return json.load(response)
+                  except urllib.error.HTTPError as error:
+                      if error.code < 500 or attempt == 2:
+                          raise
+                      time.sleep(2 ** attempt)
+          assert api('git/ref/heads/main')['object']['sha'] == expected_main, 'public main moved'
+          encoded = ''.join(Path(f'.release-assembly/part-{i}.b64').read_text() for i in range(1,5))
+          compressed = base64.b64decode(encoded, validate=True)
+          assert hashlib.sha256(compressed).hexdigest() == '9dc8a85b41a17752ae52bd16225929eb345b13cfbcd39c627f109ba0d8d29712', 'source transfer checksum mismatch'
+          transfer = json.loads(lzma.decompress(compressed))
+          assert transfer['tree'] == expected_tree
+          def blob_hash(data):
+              return hashlib.sha1(b'blob ' + str(len(data)).encode() + b'\0' + data).hexdigest()
+          for sha, recipe in transfer['objects'].items():
+              assert re.fullmatch('[0-9a-f]{40}', sha)
+              if 'text' in recipe:
+                  data = recipe['text'].encode('utf-8')
+              else:
+                  prior = recipe['base']
+                  assert re.fullmatch('[0-9a-f]{40}', prior)
+                  original = subprocess.check_output(['git','cat-file','blob',prior])
+                  assert blob_hash(original) == prior
+                  lines = original.decode('utf-8').splitlines(keepends=True)
+                  for start, end, text in reversed(recipe['edits']):
+                      assert 0 <= start <= end <= len(lines)
+                      lines[start:end] = [text]
+                  data = ''.join(lines).encode('utf-8')
+              assert blob_hash(data) == sha, 'source object differs from approved bytes'
+              created = api('git/blobs', {'content': base64.b64encode(data).decode(), 'encoding': 'base64'})
+              assert created['sha'] == sha, 'GitHub object identity mismatch'
+          entries = []
+          paths = set()
+          for path, sha in transfer['files']:
+              assert path not in paths and not path.startswith('/') and '..' not in PurePosixPath(path).parts
+              assert re.fullmatch('[0-9a-f]{40}', sha) and '\n' not in path and '\t' not in path
+              assert not path.startswith(('.release-assembly/', '.git/'))
+              paths.add(path)
+              entries.append(dict(path=path, mode='100644', type='blob', sha=sha))
+          assert len(entries) == 123
+          tree = api('git/trees', {'tree': entries})
+          assert tree['sha'] == expected_tree, 'release tree differs from approved source'
+          result = dict(baseCommit=expected_main, tree=tree['sha'], files=len(entries), createdBlobs=len(transfer['objects']), branchesChanged=False)
+          Path('release-assembly-result.json').write_text(json.dumps(result,indent=2)+'\n')
+          print(json.dumps(result))
+          PY
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: release-assembly-identity
+          path: release-assembly-result.json
+          if-no-files-found: error
+          retention-days: 90
